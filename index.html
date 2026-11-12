@@ -458,11 +458,22 @@ function hasBackup(){
         导入复用长码的 importCode 落地：校验 → 当前档自动备份到 BACKUP_KEY → normalize/save） ---- */
 /* 请求层双路（同一文件双用途：Pages 试玩 + Shaper 包，靠能力检测分支，不写死壳内）：
    壳内有 window.ColorboxAI.cloud.request 时优先走平台请求 SDK（照三国 v216 过检形态，
-   BFF 路由 /api/yzvault/put|get，应答 r.data.shortCode / r.data.payload）；
+   BFF 路由 /api/yzvault/put|get，应答 r.data 为信封 {code,data:{shortCode|payload}}，
+   经 vaultShellData 剥层（信封 code 非 0 即失败，错码在 get 侧走此路）；
    非壳环境回退 fetch(CONFIG.vaultApi + '/yzvault/put|get')，协议与码制不变。 */
 function shellVault(){
   return (typeof window !== 'undefined' && window.ColorboxAI && window.ColorboxAI.cloud &&
     typeof window.ColorboxAI.cloud.request === 'function') ? window.ColorboxAI.cloud : null;
+}
+/* 壳内应答剥层：r.data 可能是信封 {code,message,data:{...}}（错误走信封内 code、HTTP 仍 200），
+   信封 code 非 0 即失败、返回 null；也兼容 r.data 直达数据对象。 */
+function vaultShellData(r){
+  let d = (r && typeof r === 'object') ? (('data' in r) ? r.data : r) : null;
+  if(d && typeof d === 'object' && d.code !== undefined && d.code !== null){
+    if(Number(d.code) !== 0) return null;
+    d = d.data || null;
+  }
+  return (d && typeof d === 'object') ? d : null;
 }
 function vaultConfigured(){
   if(shellVault()) return true;
@@ -472,7 +483,7 @@ async function vaultPut(payload){
   const cloud = shellVault();
   if(cloud){
     const r = await cloud.request({ path:'/api/yzvault/put', method:'POST', data:{ payload } });
-    const d = (r && r.data) || null;
+    const d = vaultShellData(r);
     if(!d || !d.shortCode) throw new Error('vault_put_fail');   /* 内部码仅供调用方归类，绝不原样弹给玩家 */
     return d.shortCode;
   }
@@ -485,7 +496,7 @@ async function vaultGet(code){
   const cloud = shellVault();
   if(cloud){
     const r = await cloud.request({ path:'/api/yzvault/get', method:'POST', data:{ code } });
-    const d = (r && r.data) || null;
+    const d = vaultShellData(r);
     if(!d || typeof d.payload !== 'string') throw new Error('vault_get_fail');
     return d.payload;
   }
