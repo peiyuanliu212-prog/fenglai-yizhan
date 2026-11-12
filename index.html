@@ -135,11 +135,14 @@
 /* ================= 配置表（全部数值单一出处，禁魔法数散落） ================= */
 const CONFIG = {
   version: 4,
-  /* 云端短码后端（三国 sgvault 同路：拼将系列 CloudBase activity_api 公开路由，短码即凭证、无平台登录态）。
-     请求层双路：壳内优先 window.ColorboxAI.cloud.request（/api/yzvault/*），非壳回退 fetch(vaultApi)。
-     部署完成后由总台把网关地址填入 vaultApi（与三国客户端同一个网关）；无壳且留空 = 未配置，
-     客户端会明确提示「尚未开通」且长码通道照常可用，绝不假装成功。部署清单见工程根目录《云端短码部署说明》。 */
+  /* 云端短码后端（拼将系列 CloudBase activity_api 公开路由，短码即凭证、无平台登录态）。
+     请求层双路：壳内走 window.ColorboxAI.cloud.request 官方形态（url＝vaultShellBase＋/api/yzvault/*、带
+     vaultShellEnvId，落驿站应用 env）；非壳回退 fetch(vaultApi 共用网关)。两路网关分开配置、不许串。
+     无壳且 vaultApi 非法 = 未配置，客户端会明确提示「尚未开通」且长码通道照常可用，绝不假装成功。
+     部署清单见工程根目录《云端短码部署说明》。 */
   vaultApi: 'https://app-6577eaef3c-d1gmtlqu9702c7de1-1252166086.ap-shanghai.app.tcloudbase.com/api',
+  vaultShellBase: 'https://app-6951e65789-d6g3ox54lee460989-1252166086.ap-shanghai.app.tcloudbase.com',
+  vaultShellEnvId: 'app-6951e65789-d6g3ox54lee460989',
   vaultPrefix: 'YZ-',
   vaultPayloadMax: 262144,
   startCoins: 100,
@@ -457,23 +460,34 @@ function hasBackup(){
         8 位短码（去易混字符）即凭证，展示加 YZ- 前缀、不入库；
         导入复用长码的 importCode 落地：校验 → 当前档自动备份到 BACKUP_KEY → normalize/save） ---- */
 /* 请求层双路（同一文件双用途：Pages 试玩 + Shaper 包，靠能力检测分支，不写死壳内）：
-   壳内有 window.ColorboxAI.cloud.request 时优先走平台请求 SDK（照三国 v216 过检形态，
-   BFF 路由 /api/yzvault/put|get，应答 r.data 为信封 {code,data:{shortCode|payload}}，
-   经 vaultShellData 剥层（信封 code 非 0 即失败，错码在 get 侧走此路）；
-   非壳环境回退 fetch(CONFIG.vaultApi + '/yzvault/put|get')，协议与码制不变。 */
+   壳内有 window.ColorboxAI.cloud.request 时走平台请求 SDK 官方形态（act-cloudbase 技能包示例原文，
+   照开宗门已验口径）：request({ url: CONFIG.vaultShellBase + '/api/yzvault/put|get', method:'POST',
+   data, envId: CONFIG.vaultShellEnvId })；只给 path 会被真 SDK 拒「Missing parameter: url is required」
+   （2026-11-12 开宗门预览实测，非预览伪影）。短码路由公开口径、不传 auth。
+   应答经 vaultShellData 剥层（见其注释）；非壳环境回退 fetch(CONFIG.vaultApi + '/yzvault/put|get')，
+   协议与码制不变。 */
 function shellVault(){
   return (typeof window !== 'undefined' && window.ColorboxAI && window.ColorboxAI.cloud &&
     typeof window.ColorboxAI.cloud.request === 'function') ? window.ColorboxAI.cloud : null;
 }
-/* 壳内应答剥层：r.data 可能是信封 {code,message,data:{...}}（错误走信封内 code、HTTP 仍 200），
-   信封 code 非 0 即失败、返回 null；也兼容 r.data 直达数据对象。 */
+/* 壳内应答剥层（照开宗门已验口径，对齐 res.statusCode/res.code/res.data）：
+   statusCode 存在且非 200 即失败；res 本层或 r.data 层带信封 code 时，code 非 0/200 即失败
+   （错码走 get 侧信封 code 404、HTTP 仍 200）、剥到 data 继续；最终落到带 shortCode/payload
+   的业务对象才算成功，其余一律 null。 */
 function vaultShellData(r){
-  let d = (r && typeof r === 'object') ? (('data' in r) ? r.data : r) : null;
-  if(d && typeof d === 'object' && d.code !== undefined && d.code !== null){
-    if(Number(d.code) !== 0) return null;
-    d = d.data || null;
+  if(!r || typeof r !== 'object') return null;
+  if(typeof r.statusCode === 'number' && r.statusCode !== 200) return null;
+  let d = r;
+  for(let i = 0; i < 3 && d && typeof d === 'object'; i++){
+    if(d.code !== undefined && d.code !== null){
+      if(String(d.code) !== '0' && String(d.code) !== '200') return null;
+      d = d.data; continue;
+    }
+    if(typeof d.shortCode === 'string' || typeof d.payload === 'string') return d;
+    if(d.data && typeof d.data === 'object'){ d = d.data; continue; }
+    break;
   }
-  return (d && typeof d === 'object') ? d : null;
+  return (d && typeof d === 'object' && (typeof d.shortCode === 'string' || typeof d.payload === 'string')) ? d : null;
 }
 function vaultConfigured(){
   if(shellVault()) return true;
@@ -482,7 +496,9 @@ function vaultConfigured(){
 async function vaultPut(payload){
   const cloud = shellVault();
   if(cloud){
-    const r = await cloud.request({ path:'/api/yzvault/put', method:'POST', data:{ payload } });
+    const req = { url: CONFIG.vaultShellBase + '/api/yzvault/put', method:'POST', data:{ payload } };
+    if(CONFIG.vaultShellEnvId) req.envId = CONFIG.vaultShellEnvId;
+    const r = await cloud.request(req);
     const d = vaultShellData(r);
     if(!d || !d.shortCode) throw new Error('vault_put_fail');   /* 内部码仅供调用方归类，绝不原样弹给玩家 */
     return d.shortCode;
@@ -495,7 +511,9 @@ async function vaultPut(payload){
 async function vaultGet(code){
   const cloud = shellVault();
   if(cloud){
-    const r = await cloud.request({ path:'/api/yzvault/get', method:'POST', data:{ code } });
+    const req = { url: CONFIG.vaultShellBase + '/api/yzvault/get', method:'POST', data:{ code } };
+    if(CONFIG.vaultShellEnvId) req.envId = CONFIG.vaultShellEnvId;
+    const r = await cloud.request(req);
     const d = vaultShellData(r);
     if(!d || typeof d.payload !== 'string') throw new Error('vault_get_fail');
     return d.payload;
