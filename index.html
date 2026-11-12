@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>风来驿站</title>
+<style>
+  :root{
+    --paper:#F4EFE4; --card:#FBF8F0; --ink:#2B2620; --ink2:#6B6151;
+    --line:#D8CFBB; --accent:#A93226; --accent-ink:#8C2B20; --ok:#3E6B34;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:"Noto Serif SC","Songti SC","STSong",serif;
+    font-size:15px; line-height:1.55;
+  }
+  #app{max-width:480px; margin:0 auto; padding:14px 14px 40px;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:12px; box-shadow:0 1px 2px rgba(43,38,32,.05);}
+  .card h3{margin:0 0 10px; font-size:15px; letter-spacing:2px; border-bottom:1px solid var(--line); padding-bottom:8px;}
+  .sign{text-align:center; padding:18px 10px 14px; border:2px solid var(--ink); border-radius:8px; background:var(--card); margin-bottom:12px;}
+  .sign .inn-name{font-size:26px; letter-spacing:6px; font-weight:700;}
+  .sign .inn-sub{color:var(--ink2); font-size:13px; letter-spacing:3px; margin-top:4px;}
+  .sign .seal{display:inline-block; margin-top:8px; color:var(--accent-ink); border:1px solid var(--accent); border-radius:4px; padding:0 8px; font-size:12px; letter-spacing:2px;}
+  .wallet{display:flex; gap:8px; margin-bottom:12px;}
+  .wallet .cell{flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 6px; text-align:center;}
+  .wallet .k{font-size:12px; color:var(--ink2); letter-spacing:2px;}
+  .wallet .v{font-size:19px; font-weight:700;}
+  .wallet .v.coin{color:var(--accent-ink);}
+  .rooms{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .room{border:1px solid var(--line); border-radius:8px; padding:8px 4px 6px; text-align:center; min-height:96px; background:var(--paper);}
+  .room.empty{color:var(--ink2); display:flex; align-items:center; justify-content:center; font-size:12px; letter-spacing:2px;}
+  .room .gname{font-size:13px; font-weight:700; margin-top:2px;}
+  .room .gtype{font-size:11px; color:var(--ink2); letter-spacing:1px;}
+  .room .gstay{font-size:11px; color:var(--accent-ink);}
+  .rate-line{margin-top:10px; font-size:13px; color:var(--ink2); text-align:center;}
+  .rate-line b{color:var(--ink);}
+  .up-row{display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px dashed var(--line);}
+  .up-row:last-child{border-bottom:none; padding-bottom:2px;}
+  .up-row .info{flex:1;}
+  .up-row .info .t{font-weight:700;}
+  .up-row .info .d{font-size:12px; color:var(--ink2);}
+  button{
+    font-family:inherit; font-size:14px; letter-spacing:1px;
+    background:var(--ink); color:var(--paper); border:1px solid var(--ink);
+    border-radius:8px; padding:9px 14px; cursor:pointer;
+  }
+  button.accent{background:var(--accent); border-color:var(--accent-ink); color:#FBF3E4;}
+  button.small{font-size:12px; padding:6px 10px;}
+  button.ghost{background:transparent; color:var(--ink); border-color:var(--line);}
+  button:disabled{background:#CFC6B0; border-color:#CFC6B0; color:#7A7261; cursor:not-allowed;}
+  button:active{transform:translateY(1px);}
+  #offlineCard{border-color:var(--accent);}
+  #offlineCard .amt{font-size:22px; font-weight:700; color:var(--accent-ink);}
+  #morningCard{border-color:var(--accent); display:none;}
+  .log{list-style:none; margin:0; padding:0; font-size:13px; color:var(--ink2);}
+  .log li{padding:3px 0; border-bottom:1px dashed var(--line);}
+  .log li:last-child{border-bottom:none;}
+  .open-wrap{padding-top:12vh; text-align:center;}
+  .open-wrap .big{font-size:30px; letter-spacing:8px; font-weight:700; margin-bottom:6px;}
+  .open-wrap .sub{color:var(--ink2); letter-spacing:2px; margin-bottom:26px; font-size:13px;}
+  .open-wrap input{
+    font-family:inherit; font-size:17px; text-align:center; letter-spacing:3px;
+    width:80%; max-width:300px; padding:11px 8px; border:1px solid var(--ink);
+    border-radius:8px; background:var(--card); color:var(--ink); margin-bottom:16px;
+  }
+  .foot{text-align:center; color:var(--ink2); font-size:12px; letter-spacing:2px; margin-top:18px;}
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+  .tag{display:inline-block; border:1px solid var(--line); border-radius:4px; padding:0 6px; font-size:11px; color:var(--ink2); margin:2px 2px 2px 0;}
+  .tag.seen{border-color:var(--accent); color:var(--accent-ink);}
+  .tag.lock{opacity:.55;}
+  textarea{
+    font-family:inherit; font-size:12px; width:100%; min-height:64px;
+    border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--ink); padding:8px;
+  }
+  .small-note{font-size:12px; color:var(--ink2);}
+  .sect{font-size:12px; letter-spacing:3px; color:var(--ink2); margin:14px 0 6px; padding-top:12px; border-top:1px dashed var(--line);}
+  .sect:first-child{margin-top:0; padding-top:0; border-top:none;}
+  .code-in{
+    font-family:inherit; font-size:14px; letter-spacing:2px; width:100%;
+    border:1px solid var(--line); border-radius:8px; background:var(--paper);
+    color:var(--ink); padding:9px 10px; margin-top:8px; text-transform:uppercase;
+  }
+  .cloud-code{font-size:20px; font-weight:700; letter-spacing:3px; color:var(--accent-ink); padding:4px 0 2px;}
+  .nav{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+  .nav a{
+    flex:1 1 auto; text-align:center; text-decoration:none; color:var(--ink);
+    background:var(--card); border:1px solid var(--line); border-radius:8px;
+    padding:7px 4px; font-size:12px; letter-spacing:1px; white-space:nowrap;
+  }
+  .nav a:active{transform:translateY(1px);}
+  .bar{height:8px; background:var(--paper); border:1px solid var(--line); border-radius:5px; overflow:hidden; margin:6px 0 4px;}
+  .bar i{display:block; height:100%; background:var(--accent); width:0;}
+  .group-line{font-size:13px; font-weight:700; letter-spacing:2px; margin:10px 0 4px; border-top:1px dashed var(--line); padding-top:8px;}
+  .group-line:first-child{border-top:none; margin-top:0; padding-top:0;}
+  .modal-mask{
+    position:fixed; inset:0; background:rgba(43,38,32,.45); z-index:60;
+    display:flex; align-items:center; justify-content:center; padding:18px;
+  }
+  .modal-box{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; max-width:420px; width:100%;}
+  .modal-box h3{margin:0 0 10px; font-size:15px; letter-spacing:2px; border-bottom:1px solid var(--line); padding-bottom:8px;}
+  @keyframes toastpop{0%{transform:translateX(-50%) translateY(8px);}100%{transform:translateX(-50%) translateY(0);}}
+  #toast.pop{animation:toastpop .18s ease-out;}
+  textarea:focus, .code-in:focus, .open-wrap input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  /* ---- 新手引导（照联赛 v58 底部讲解台形态）：气泡固定停靠底部同一处永不移动，位置零计算 ---- */
+  .tourRing{position:fixed; z-index:300; border:2px solid var(--accent); border-radius:12px; box-shadow:0 0 0 9999px rgba(43,38,32,.48); pointer-events:none; animation:tourPulse 1.6s ease-in-out infinite;}
+  @keyframes tourPulse{0%,100%{outline:0 solid rgba(169,50,38,0)}50%{outline:6px solid rgba(169,50,38,.18)}}
+  #tourBubble{position:fixed; z-index:310; left:50%; transform:translateX(-50%); width:100%; max-width:480px; bottom:0; max-height:36vh; overflow-y:auto; background:var(--card); color:var(--ink); border-top:2px solid var(--accent); border-radius:16px 16px 0 0; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); box-shadow:0 -8px 28px rgba(43,38,32,.35); pointer-events:none;}
+  #tourBubble button{pointer-events:auto;}
+  #tourBubble .tmeta{color:var(--ink2); font-size:12px; letter-spacing:1px;}
+  #tourBubble .ttitle{font-size:15px; font-weight:700; margin:3px 0;}
+  #tourBubble .tbody{font-size:13px; color:var(--ink2); line-height:1.6;}
+  #tourBubble .tourDots{font-size:8px; letter-spacing:2px; color:var(--accent); white-space:nowrap;}
+  #tourBubble .tourDots .off{color:var(--line);}
+  #tourBubble .trow{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  #tourBubble .tbtns{display:flex; gap:8px; align-items:center; margin-top:9px;}
+  body.touring #app{padding-bottom:330px;}
+  #toast{
+    position:fixed; left:50%; bottom:34px; transform:translateX(-50%);
+    background:var(--ink); color:var(--paper); padding:9px 18px; border-radius:8px;
+    font-size:14px; letter-spacing:1px; display:none; z-index:50; max-width:86vw; text-align:center;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<div id="tourRing" class="tourRing" style="display:none"></div>
+<div id="tourBubble" style="display:none"></div>
+
+<script>
+'use strict';
+/* ================= 配置表（全部数值单一出处，禁魔法数散落） ================= */
+const CONFIG = {
+  version: 4,
+  /* 云端短码后端（三国 sgvault 同路：拼将系列 CloudBase activity_api 公开路由，短码即凭证、无平台登录态）。
+     请求层双路：壳内优先 window.ColorboxAI.cloud.request（/api/yzvault/*），非壳回退 fetch(vaultApi)。
+     部署完成后由总台把网关地址填入 vaultApi（与三国客户端同一个网关）；无壳且留空 = 未配置，
+     客户端会明确提示「尚未开通」且长码通道照常可用，绝不假装成功。部署清单见工程根目录《云端短码部署说明》。 */
+  vaultApi: '',
+  vaultPrefix: 'YZ-',
+  vaultPayloadMax: 262144,
+  startCoins: 100,
+  startRooms: 2,
+  tickMs: 2000,
+  roomPriceBase: 5,
+  qualityMult: [0, 1, 1.5, 2.2, 3.0, 4.0],
+  qualityNames: ['', '粗布陋室', '整洁客房', '雅致客房', '上房', '天字号上房'],
+  maxRooms: 12,
+  maxQuality: 5,
+  addRoomCostBase: 80,  addRoomCostGrowth: 1.55,
+  qualityCostBase: 120, qualityCostGrowth: 1.8,
+  arrivalChancePerTick: 0.45,
+  stayMinTicks: 3, stayMaxTicks: 8,
+  famePerCheckout: 1,
+  famePerCheckoutChance: 0.5,
+  fameThresholds: [0, 25, 70, 150, 260, 420, 650, 950, 1350, 1900],
+  offlineRate: 0.55,
+  offlineCapHours: 12,
+  offlineMinMinutes: 1,
+  /* 厨房：餐饮附加 = 基础房费收入 × kitchenLv × kitchenMultPerLv（并入 incomeRate） */
+  kitchenMax: 10, kitchenCostBase: 100, kitchenCostGrowth: 1.6, kitchenMultPerLv: 0.08,
+  /* 马厩：委托报酬 ×(1+stableLv×stableRewardPerLv)，到访率 +stableLv×stableArrivalPerLv（并入公式） */
+  stableMax: 10, stableCostBase: 100, stableCostGrowth: 1.6, stableRewardPerLv: 0.10, stableArrivalPerLv: 0.02,
+  /* 设施等级上限随驿站等级细化：厨房上限=min(kitchenMax, level+2)，马厩上限=min(stableMax, level+1) */
+  /* 伙计：hire 雇佣费，upBase/upGrowth 升级费；bonusPerLv 并入对应公式
+     innkeeper 掌柜→总收入 / waiter 小二→总收入(服务) / cook 厨子→餐饮收入 / groom 马夫→委托报酬 */
+  staffTypes: [
+    { id:'innkeeper', label:'掌柜', desc:'总收入 +6%/级', hire:150, upBase:90,  upGrowth:1.7, maxLv:5, incomePerLv:0.06 },
+    { id:'waiter',    label:'小二', desc:'总收入 +4%/级', hire:100, upBase:70,  upGrowth:1.7, maxLv:5, incomePerLv:0.04 },
+    { id:'cook',      label:'厨子', desc:'总收入 +5%/级（餐饮）', hire:120, upBase:80, upGrowth:1.7, maxLv:5, incomePerLv:0.05 },
+    { id:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  upGrowth:1.7, maxLv:5, commissionPerLv:0.08 }
+  ],
+  /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
+  gates: { commission:'2026-11-19', banquet:'2026-11-22', noble:'2026-11-26' },
+  /* 商队委托三档 */
+  commissionTiers: [
+    { id:'c2',  hours:2,  coins:120, fame:2 },
+    { id:'c6',  hours:6,  coins:400, fame:6 },
+    { id:'c12', hours:12, coins:900, fame:14 }
+  ],
+  commissionMaxActive: 3,
+  /* 广告点位与日限 */
+  adsLimit: { gift:2, instant:3 },
+  giftReward: 150,
+  adSimMs: 900,
+  /* 每日事件张数 */
+  eventsPerDay: 3,
+  /* 新手引导走完谢礼（走 ledger 发放，仅一次） */
+  guideReward: 30,
+  /* 旅客池 32 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
+  guestTypes: [
+    { id:'scholar',   label:'书生',     weight:30, priceMult:0.9, minLevel:1 },
+    { id:'hunter',    label:'猎户',     weight:20, priceMult:0.8, minLevel:1 },
+    { id:'monk',      label:'僧人',     weight:16, priceMult:0.7, minLevel:1 },
+    { id:'escort',    label:'镖师',     weight:22, priceMult:1.1, minLevel:1 },
+    { id:'hero',      label:'侠客',     weight:14, priceMult:1.2, minLevel:1 },
+    { id:'peddler',   label:'货郎',     weight:18, priceMult:0.9, minLevel:1 },
+    { id:'porter',    label:'脚夫',     weight:18, priceMult:0.7, minLevel:1 },
+    { id:'farmer',    label:'老农',     weight:16, priceMult:0.7, minLevel:1 },
+    { id:'merchant',  label:'商贾',     weight:18, priceMult:1.6, minLevel:2 },
+    { id:'examiner',  label:'赶考举子', weight:14, priceMult:1.0, minLevel:2 },
+    { id:'teamerchant',label:'茶商',    weight:14, priceMult:1.4, minLevel:2, minStable:1 },
+    { id:'doctor',    label:'游方郎中', weight:12, priceMult:1.1, minLevel:2 },
+    { id:'musician',  label:'乐师',     weight:12, priceMult:1.1, minLevel:3 },
+    { id:'painter',   label:'画师',     weight:11, priceMult:1.2, minLevel:3 },
+    { id:'storyteller',label:'说书人',  weight:12, priceMult:1.0, minLevel:3 },
+    { id:'singer',    label:'歌姬',     weight:10, priceMult:1.5, minLevel:3, minKitchen:2 },
+    { id:'blacksmith',label:'铁匠',     weight:11, priceMult:1.0, minLevel:3 },
+    { id:'fortune',   label:'算命先生', weight:9,  priceMult:1.0, minLevel:4 },
+    { id:'saltmerchant',label:'盐商',   weight:11, priceMult:1.7, minLevel:4, minStable:2 },
+    { id:'herbmerchant',label:'药商',   weight:11, priceMult:1.5, minLevel:4, minKitchen:2 },
+    { id:'tailor',    label:'裁缝',     weight:10, priceMult:1.1, minLevel:4 },
+    { id:'constable', label:'捕快',     weight:10, priceMult:1.1, minLevel:5 },
+    { id:'richman',   label:'富商',     weight:9,  priceMult:2.0, minLevel:5, minKitchen:3 },
+    { id:'escortboss',label:'镖头',     weight:9,  priceMult:1.6, minLevel:5, minStable:3 },
+    { id:'magistrate',label:'县官',     weight:7,  priceMult:1.8, minLevel:6 },
+    { id:'foreign',   label:'外邦商人', weight:8,  priceMult:2.2, minLevel:6, minStable:4 },
+    { id:'hermit',    label:'隐士',     weight:6,  priceMult:1.3, minLevel:7 },
+    { id:'zhuangyuan',label:'新科状元', weight:5,  priceMult:2.0, minLevel:8, gate:'noble' },
+    { id:'inspector', label:'钦差大臣', weight:4,  priceMult:2.4, minLevel:8, gate:'noble' },
+    { id:'junzhu',    label:'郡主',     weight:4,  priceMult:2.6, minLevel:9, gate:'noble' },
+    { id:'wangye',    label:'王爷',     weight:3,  priceMult:3.0, minLevel:9, gate:'noble' },
+    { id:'richest',   label:'江南首富', weight:4,  priceMult:2.8, minLevel:10, gate:'noble' }
+  ],
+  /* 旅客事件抉择池：choices 各含 coins/fame/favor 增减（走 ledger） */
+  events: [
+    { id:'e_rain', pool:'daily', title:'夜雨留客', text:'大雨封路，一位旅客想多住一晚却囊中羞涩。', choices:[
+      { label:'免一晚房钱结善缘', coins:0, fame:3, favor:2 }, { label:'照价收钱', coins:20, fame:0, favor:-1 } ] },
+    { id:'e_wine', pool:'daily', title:'讨酒的侠客', text:'侠客拍下碎银，要烫一壶好酒。', choices:[
+      { label:'烫酒相赠', coins:-10, fame:2, favor:2 }, { label:'按牌价卖酒', coins:25, fame:0, favor:0 } ] },
+    { id:'e_lost', pool:'daily', title:'遗落的钱袋', text:'小二在房里拾到一只沉甸甸的钱袋。', choices:[
+      { label:'挂出招领', coins:0, fame:4, favor:1 }, { label:'悄悄收起', coins:40, fame:-2, favor:-2 } ] },
+    { id:'e_sick', pool:'daily', title:'染病的旅客', text:'一位旅客半夜发热，需要熬药照料。', choices:[
+      { label:'熬药守夜', coins:-15, fame:3, favor:3 }, { label:'请他另投别家', coins:0, fame:-2, favor:-2 } ] },
+    { id:'e_quarrel', pool:'daily', title:'堂前争执', text:'两名旅客为一间上房争执不下。', choices:[
+      { label:'掌柜出面调解', coins:0, fame:2, favor:2 }, { label:'谁出价高谁住', coins:30, fame:-1, favor:-1 } ] },
+    { id:'e_letter', pool:'daily', title:'捎一封家书', text:'书生托你把家书捎去邻县。', choices:[
+      { label:'让脚夫顺路捎去', coins:-5, fame:2, favor:2 }, { label:'婉言谢绝', coins:0, fame:0, favor:0 } ] },
+    { id:'e_horse', pool:'daily', title:'受惊的马匹', text:'马厩里一匹马受惊，踢坏了栏杆。', choices:[
+      { label:'赔钱安抚马主', coins:-20, fame:1, favor:2 }, { label:'据理不赔', coins:0, fame:-2, favor:-1 } ] },
+    { id:'e_tip', pool:'daily', title:'丰厚的赏钱', text:'富商对饭菜满意，留下赏钱，指名赏给厨子。', choices:[
+      { label:'全数转交厨子', coins:10, fame:1, favor:3 }, { label:'驿站留一半', coins:25, fame:0, favor:-1 } ] },
+    { id:'b_feast', pool:'banquet', title:'宴会厅·乡绅寿宴', text:'本地乡绅要借宴会厅办六十寿宴。', choices:[
+      { label:'精心筹备', coins:60, fame:5, favor:2 }, { label:'简单操办', coins:90, fame:1, favor:0 } ] },
+    { id:'b_wedding', pool:'banquet', title:'宴会厅·喜宴', text:'一对新人想在驿站办喜宴，图个热闹。', choices:[
+      { label:'挂红贴喜，办得体面', coins:50, fame:4, favor:3 }, { label:'按常价承接', coins:80, fame:1, favor:0 } ] },
+    { id:'b_poet', pool:'banquet', title:'宴会厅·诗会', text:'文人雅士包下宴会厅开诗会。', choices:[
+      { label:'备好笔墨清茶', coins:20, fame:6, favor:2 }, { label:'只管收场地钱', coins:55, fame:1, favor:0 } ] },
+    { id:'b_guild', pool:'banquet', title:'宴会厅·商会年会', text:'商会要在宴会厅议事三日。', choices:[
+      { label:'安排茶点伺候周到', coins:70, fame:4, favor:2 }, { label:'明码标价不多事', coins:100, fame:0, favor:0 } ] }
+  ],
+  /* 旅客类别分组（图鉴套装进度明牌用，纯展示配置：32 种全覆盖，只读 guestsSeen 布尔） */
+  guestGroups: [
+    { label:'文士类', ids:['scholar','examiner','storyteller','painter','zhuangyuan'] },
+    { label:'商贾类', ids:['peddler','merchant','teamerchant','saltmerchant','herbmerchant','foreign','richman','richest'] },
+    { label:'江湖类', ids:['escort','escortboss','hero','hunter','blacksmith'] },
+    { label:'行旅类', ids:['porter','farmer','doctor','tailor','fortune'] },
+    { label:'方外艺人类', ids:['monk','hermit','musician','singer'] },
+    { label:'官贵类', ids:['constable','magistrate','inspector','junzhu','wangye'] }
+  ],
+  /* 里程碑 24 个：metric 指标 / target 目标 / 奖励走 ledger；metricValue() 为指标单一出处；
+     前 4 个为「开张贴士」梯队（引导走完后的常驻复看贴士），tip 为纯展示贴士文案，不影响指标与领取 */
+  milestones: [
+    { id:'m_g10',  label:'累计接待 10 位旅客',   metric:'totalGuests', target:10,   coins:50,  fame:2, tip:'旅客自动推门入住，人在不在都有进账——先稳稳接满头十位客。' },
+    { id:'m_g50',  label:'累计接待 50 位旅客',   metric:'totalGuests', target:50,   coins:120, fame:4, tip:'客房满员就不再进客，手头宽裕先扩建一间，接得越多赚得越快。' },
+    { id:'m_g150', label:'累计接待 150 位旅客',  metric:'totalGuests', target:150,  coins:260, fame:8, tip:'厨房与伙计能抬高每分钟进账，攒够钱优先补上，别只盯着扩房。' },
+    { id:'m_g400', label:'累计接待 400 位旅客',  metric:'totalGuests', target:400,  coins:600, fame:15, tip:'声望越高来的客越金贵，中后期靠品质、图鉴与委托一起滚雪球。' },
+    { id:'m_r4',   label:'客房扩建至 4 间',      metric:'rooms',       target:4,    coins:60,  fame:2 },
+    { id:'m_r6',   label:'客房扩建至 6 间',      metric:'rooms',       target:6,    coins:150, fame:5 },
+    { id:'m_r9',   label:'客房扩建至 9 间',      metric:'rooms',       target:9,    coins:320, fame:10 },
+    { id:'m_r12',  label:'客房扩建至 12 间',     metric:'rooms',       target:12,   coins:700, fame:18 },
+    { id:'m_q3',   label:'客房品质升至 3 档',    metric:'quality',     target:3,    coins:100, fame:3 },
+    { id:'m_q5',   label:'客房品质升至 5 档',    metric:'quality',     target:5,    coins:400, fame:12 },
+    { id:'m_k3',   label:'厨房升至 3 级',        metric:'kitchen',     target:3,    coins:120, fame:4 },
+    { id:'m_k6',   label:'厨房升至 6 级',        metric:'kitchen',     target:6,    coins:350, fame:10 },
+    { id:'m_s3',   label:'马厩升至 3 级',        metric:'stable',      target:3,    coins:120, fame:4 },
+    { id:'m_s6',   label:'马厩升至 6 级',        metric:'stable',      target:6,    coins:350, fame:10 },
+    { id:'m_staff1', label:'雇佣第一位伙计',     metric:'staffCount',  target:1,    coins:60,  fame:2 },
+    { id:'m_staff4', label:'伙计齐员 4 位',      metric:'staffCount',  target:4,    coins:200, fame:6 },
+    { id:'m_stafflv', label:'伙计总等级达 10',   metric:'staffLevels', target:10,   coins:300, fame:8 },
+    { id:'m_seen8',  label:'图鉴收集 8 种旅客',  metric:'seen',        target:8,    coins:80,  fame:3 },
+    { id:'m_seen16', label:'图鉴收集 16 种旅客', metric:'seen',        target:16,   coins:220, fame:8 },
+    { id:'m_seen32', label:'图鉴收集全部 32 种', metric:'seen',        target:32,   coins:800, fame:25 },
+    { id:'m_e1000',  label:'累计收入 1000 铜钱', metric:'totalEarned', target:1000, coins:100, fame:3 },
+    { id:'m_e5000',  label:'累计收入 5000 铜钱', metric:'totalEarned', target:5000, coins:300, fame:10 },
+    { id:'m_c5',     label:'完成商队委托 5 次',  metric:'commissions', target:5,    coins:200, fame:6 },
+    { id:'m_lv6',    label:'驿站升至 6 级',      metric:'level',       target:6,    coins:300, fame:0 }
+  ],
+  surnames: ['赵','钱','孙','李','周','吴','郑','王','林','陈','苏','沈','顾','陆','萧'],
+  givenNames: ['子衿','青山','长风','明轩','若水','云舟','怀瑾','既白','南星','北辰','阿蛮','小六']
+};
+const SAVE_KEY = 'yizhan_save_v1';
+const SLOT_PREFIX = 'yizhan_slot_';
+const BACKUP_KEY = 'yizhan_backup_preimport';
+
+/* ================= 存档层（唯一出入口） ================= */
+function defaultState(){
+  return {
+    v: CONFIG.version,
+    name: '',
+    coins: CONFIG.startCoins,
+    fame: 0,
+    favor: 0,
+    level: 1,
+    rooms: { count: CONFIG.startRooms, quality: 1 },
+    kitchenLv: 0,
+    stableLv: 0,
+    staff: {},
+    guests: [],
+    guestsSeen: {},
+    miles: {},
+    commissions: [],
+    lastSeen: Date.now(),
+    day: dayStr(),
+    ads: {},
+    acc: 0,
+    offlinePending: 0,
+    log: [],
+    totalGuests: 0,
+    totalEarned: 0,
+    totalCommissions: 0,
+    totalEvents: 0,
+    dayStats: { guests: 0, earned: 0 },
+    eventsToday: [],
+    eventsDone: 0,
+    morning: null,
+    guideStep: 0,
+    guideDone: false,
+    guideRewarded: false,
+    settings: { bgm: true, sfx: true }
+  };
+}
+function normalize(raw){
+  const d = defaultState();
+  if(!raw || typeof raw !== 'object') return d;
+  const s = Object.assign({}, d, raw);
+  s.rooms = Object.assign({}, d.rooms, (raw.rooms && typeof raw.rooms === 'object') ? raw.rooms : {});
+  s.rooms.count = clampInt(s.rooms.count, 1, CONFIG.maxRooms, CONFIG.startRooms);
+  s.rooms.quality = clampInt(s.rooms.quality, 1, CONFIG.maxQuality, 1);
+  s.kitchenLv = clampInt(s.kitchenLv, 0, CONFIG.kitchenMax, 0);
+  s.stableLv = clampInt(s.stableLv, 0, CONFIG.stableMax, 0);
+  s.staff = (raw.staff && typeof raw.staff === 'object') ? raw.staff : {};
+  for(const k of Object.keys(s.staff)){
+    const t = CONFIG.staffTypes.find(x => x.id === k);
+    if(!t){ delete s.staff[k]; continue; }
+    s.staff[k] = { lv: clampInt(s.staff[k] && s.staff[k].lv, 1, t.maxLv, 1) };
+  }
+  s.guests = Array.isArray(raw.guests) ? raw.guests.filter(g => g && g.type && g.name) : [];
+  s.guestsSeen = (raw.guestsSeen && typeof raw.guestsSeen === 'object') ? raw.guestsSeen : {};
+  s.miles = (raw.miles && typeof raw.miles === 'object') ? raw.miles : {};
+  s.commissions = Array.isArray(raw.commissions) ? raw.commissions.filter(c => c && c.tierId && !c.claimed) : [];
+  s.ads = (raw.ads && typeof raw.ads === 'object') ? raw.ads : {};
+  s.log = Array.isArray(raw.log) ? raw.log.slice(0, 8) : [];
+  s.coins = Math.max(0, Math.floor(+s.coins || 0));
+  s.fame = Math.max(0, Math.floor(+s.fame || 0));
+  s.favor = Math.floor(+s.favor || 0);
+  s.acc = Math.max(0, +s.acc || 0);
+  s.offlinePending = Math.max(0, +s.offlinePending || 0);
+  s.totalGuests = Math.max(0, Math.floor(+s.totalGuests || 0));
+  s.totalEarned = Math.max(0, Math.floor(+s.totalEarned || 0));
+  s.totalCommissions = Math.max(0, Math.floor(+s.totalCommissions || 0));
+  s.totalEvents = Math.max(0, Math.floor(+s.totalEvents || 0));
+  s.dayStats = (raw.dayStats && typeof raw.dayStats === 'object')
+    ? { guests: Math.max(0, Math.floor(+raw.dayStats.guests || 0)), earned: Math.max(0, Math.floor(+raw.dayStats.earned || 0)) }
+    : { guests: 0, earned: 0 };
+  s.eventsToday = Array.isArray(raw.eventsToday) ? raw.eventsToday.filter(id => CONFIG.events.some(e => e.id === id)) : [];
+  s.eventsDone = clampInt(s.eventsDone, 0, CONFIG.eventsPerDay, 0);
+  s.morning = (raw.morning && typeof raw.morning === 'object') ? raw.morning : null;
+  s.settings = Object.assign({}, d.settings, (raw.settings && typeof raw.settings === 'object') ? raw.settings : {});
+  /* 引导字段（v4 加法加入，不动既有字段语义）：带字段的档照原值；
+     无字段的老档——已开张（有 name）默认标完成不补弹，未开张从头走 */
+  if('guideDone' in raw || 'guideStep' in raw){
+    s.guideDone = raw.guideDone === true;
+    s.guideStep = clampInt(raw.guideStep, 0, TOUR_STEPS.length, 0);
+    if(s.guideDone) s.guideStep = TOUR_STEPS.length;
+  }else if(raw.name){
+    s.guideDone = true;
+    s.guideStep = TOUR_STEPS.length;
+  }else{
+    s.guideDone = false;
+    s.guideStep = 0;
+  }
+  s.guideRewarded = raw.guideRewarded === true;
+  s.lastSeen = (+raw.lastSeen > 0) ? +raw.lastSeen : Date.now();
+  s.day = (typeof raw.day === 'string' && raw.day) ? raw.day : dayStr();
+  s.level = levelForFame(s.fame);
+  s.v = CONFIG.version;
+  return s;
+}
+function save(){
+  if(!S) return;
+  S.lastSeen = Date.now();
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){ /* 存储异常不阻塞游戏 */ }
+}
+function load(){
+  try{
+    const r = localStorage.getItem(SAVE_KEY);
+    return r ? normalize(JSON.parse(r)) : null;
+  }catch(e){ return null; }
+}
+/* ---- 5 档位槽 ---- */
+function saveSlot(i){
+  if(!S || !S.name) return false;
+  try{
+    localStorage.setItem(SLOT_PREFIX + i, JSON.stringify(Object.assign({}, S, { slotSavedAt: Date.now() })));
+    return true;
+  }catch(e){ return false; }
+}
+function slotInfo(i){
+  try{
+    const r = localStorage.getItem(SLOT_PREFIX + i);
+    if(!r) return null;
+    const o = JSON.parse(r);
+    return { name: o.name || '', level: levelForFame(+o.fame || 0), coins: Math.floor(+o.coins || 0), savedAt: +o.slotSavedAt || 0 };
+  }catch(e){ return null; }
+}
+function loadSlot(i){
+  try{
+    const r = localStorage.getItem(SLOT_PREFIX + i);
+    if(!r) return false;
+    S = normalize(JSON.parse(r));
+    save();
+    return true;
+  }catch(e){ return false; }
+}
+/* ---- 长码导出/导入（导入前自动备份当前档到 BACKUP_KEY，可恢复） ---- */
+function exportCode(){
+  if(!S) return '';
+  return btoa(unescape(encodeURIComponent(JSON.stringify(S))));
+}
+function importCode(code){
+  try{
+    const obj = JSON.parse(decodeURIComponent(escape(atob(String(code || '').trim()))));
+    if(!obj || typeof obj !== 'object' || !obj.name) return false;
+    try{ localStorage.setItem(BACKUP_KEY, JSON.stringify(S)); }catch(e){}
+    S = normalize(obj);
+    save();
+    return true;
+  }catch(e){ return false; }
+}
+function restoreBackup(){
+  try{
+    const r = localStorage.getItem(BACKUP_KEY);
+    if(!r) return false;
+    S = normalize(JSON.parse(r));
+    save();
+    return true;
+  }catch(e){ return false; }
+}
+function hasBackup(){
+  try{ return !!localStorage.getItem(BACKUP_KEY); }catch(e){ return false; }
+}
+/* ---- 云端短码（照三国 sgvault 协议形状：POST {vaultApi}/yzvault/put|get，
+        8 位短码（去易混字符）即凭证，展示加 YZ- 前缀、不入库；
+        导入复用长码的 importCode 落地：校验 → 当前档自动备份到 BACKUP_KEY → normalize/save） ---- */
+/* 请求层双路（同一文件双用途：Pages 试玩 + Shaper 包，靠能力检测分支，不写死壳内）：
+   壳内有 window.ColorboxAI.cloud.request 时优先走平台请求 SDK（照三国 v216 过检形态，
+   BFF 路由 /api/yzvault/put|get，应答 r.data.shortCode / r.data.payload）；
+   非壳环境回退 fetch(CONFIG.vaultApi + '/yzvault/put|get')，协议与码制不变。 */
+function shellVault(){
+  return (typeof window !== 'undefined' && window.ColorboxAI && window.ColorboxAI.cloud &&
+    typeof window.ColorboxAI.cloud.request === 'function') ? window.ColorboxAI.cloud : null;
+}
+function vaultConfigured(){
+  if(shellVault()) return true;
+  return typeof CONFIG.vaultApi === 'string' && /^https?:\/\//.test(CONFIG.vaultApi);
+}
+async function vaultPut(payload){
+  const cloud = shellVault();
+  if(cloud){
+    const r = await cloud.request({ path:'/api/yzvault/put', method:'POST', data:{ payload } });
+    const d = (r && r.data) || null;
+    if(!d || !d.shortCode) throw new Error((d && d.message) || '短码生成失败');
+    return d.shortCode;
+  }
+  const res = await fetch(CONFIG.vaultApi + '/yzvault/put', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ payload }) });
+  const j = await res.json().catch(() => null);
+  if(!res.ok || !j || j.code !== 0 || !j.data || !j.data.shortCode) throw new Error((j && j.message) || ('HTTP ' + res.status));
+  return j.data.shortCode;
+}
+async function vaultGet(code){
+  const cloud = shellVault();
+  if(cloud){
+    const r = await cloud.request({ path:'/api/yzvault/get', method:'POST', data:{ code } });
+    const d = (r && r.data) || null;
+    if(!d || typeof d.payload !== 'string') throw new Error((d && d.message) || '短码取档失败');
+    return d.payload;
+  }
+  const res = await fetch(CONFIG.vaultApi + '/yzvault/get', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ code }) });
+  const j = await res.json().catch(() => null);
+  if(!res.ok || !j || j.code !== 0 || !j.data || typeof j.data.payload !== 'string') throw new Error((j && j.message) || ('HTTP ' + res.status));
+  return j.data.payload;
+}
+function normalizeVaultCode(text){
+  return String(text || '').trim().toUpperCase().replace(/^YZ-/, '').replace(/\s+/g, '');
+}
+async function cloudExport(){
+  if(!S || !S.name) return { ok:false, msg:'尚未开张，没有可导出的存档' };
+  if(!vaultConfigured()) return { ok:false, msg:'云端短码尚未开通（后端部署中），请先用下方长码导出' };
+  const payload = JSON.stringify(S);
+  if(payload.length > CONFIG.vaultPayloadMax) return { ok:false, msg:'存档太大了，短码装不下，请用长码导出' };
+  try{
+    const code = await vaultPut(payload);
+    return { ok:true, code: CONFIG.vaultPrefix + code };
+  }catch(e){ return { ok:false, msg:'上传失败：' + (e.message || '网络错误') + '，可改用长码导出' }; }
+}
+async function cloudImport(text){
+  const code = normalizeVaultCode(text);
+  if(!code) return { ok:false, msg:'先输入短码' };
+  if(!/^[A-Z0-9]{8}$/.test(code)) return { ok:false, msg:'短码是 8 位字母数字（可带 YZ- 前缀），长码请用下方长码导入' };
+  if(!vaultConfigured()) return { ok:false, msg:'云端短码尚未开通（后端部署中），请改用长码导入' };
+  let payload = null;
+  try{ payload = await vaultGet(code); }
+  catch(e){ return { ok:false, msg:'取档失败：' + (e.message || '网络错误') }; }
+  /* 落地走 importCode 同一通道：JSON/形状校验不过不动现档，通过则先备份当前档再覆盖 */
+  return importCode(btoa(unescape(encodeURIComponent(payload))))
+    ? { ok:true }
+    : { ok:false, msg:'云端存档内容不对，导入失败（现档未动）' };
+}
+/* ---- 删档重开（两步确认：requestDelete 武装，confirmDelete 执行） ---- */
+let deleteArmedAt = 0;
+function requestDelete(){
+  deleteArmedAt = Date.now();
+  return true;
+}
+function confirmDelete(){
+  if(!deleteArmedAt || Date.now() - deleteArmedAt > 30000) return false;
+  deleteArmedAt = 0;
+  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+  S = defaultState();
+  return true;
+}
+
+/* ================= 账本（铜钱/声望/好感唯一收支口） ================= */
+function ledger(kind, dCoins, dFame, note, dFavor){
+  if(dCoins < 0 && S.coins + dCoins < 0) return false;   /* 余额下限：不许透支 */
+  S.coins += dCoins;
+  if(dCoins > 0){ S.totalEarned += dCoins; S.dayStats.earned += dCoins; }
+  if(dFame) S.fame = Math.max(0, S.fame + dFame);
+  if(dFavor) S.favor += dFavor;
+  S.level = levelForFame(S.fame);
+  if(note) pushLog(note);
+  return true;
+}
+
+/* ================= 公式（单一事实源） ================= */
+function levelForFame(f){
+  let lv = 1;
+  for(let i = 0; i < CONFIG.fameThresholds.length; i++){
+    if(f >= CONFIG.fameThresholds[i]) lv = i + 1;
+  }
+  return Math.min(lv, CONFIG.fameThresholds.length);
+}
+function nextLevelFame(){
+  return S.level < CONFIG.fameThresholds.length ? CONFIG.fameThresholds[S.level] : null;
+}
+function packActive(gateKey, now){
+  const gate = CONFIG.gates[gateKey];
+  if(!gate) return false;
+  return dayStr(now || new Date()) >= gate;   /* 本地日期字符串比较，同主作口径 */
+}
+function staffLv(id){
+  return (S.staff[id] && S.staff[id].lv) || 0;
+}
+function staffIncomeMult(){
+  let m = 0;
+  for(const t of CONFIG.staffTypes) if(t.incomePerLv) m += staffLv(t.id) * t.incomePerLv;
+  return m;
+}
+function roomPrice(){ return CONFIG.roomPriceBase * CONFIG.qualityMult[S.rooms.quality]; }
+function incomeRate(){  /* 每分钟铜钱：在住旅客逐间计价 ×(1+厨房加成+伙计收入加成) */
+  let r = 0;
+  for(const g of S.guests) r += roomPrice() * (g.priceMult || 1);
+  return r * (1 + S.kitchenLv * CONFIG.kitchenMultPerLv + staffIncomeMult());
+}
+function arrivalChance(){
+  return Math.min(0.9, CONFIG.arrivalChancePerTick + S.stableLv * CONFIG.stableArrivalPerLv);
+}
+function commissionReward(tier){
+  const groom = CONFIG.staffTypes.find(t => t.id === 'groom');
+  const mult = 1 + S.stableLv * CONFIG.stableRewardPerLv + staffLv('groom') * (groom ? groom.commissionPerLv : 0);
+  return { coins: Math.round(tier.coins * mult), fame: tier.fame };
+}
+function offlineGain(){
+  const elapsedMin = (Date.now() - S.lastSeen) / 60000;
+  if(elapsedMin < CONFIG.offlineMinMinutes) return 0;
+  const capped = Math.min(elapsedMin, CONFIG.offlineCapHours * 60);
+  return Math.floor(incomeRate() * capped * CONFIG.offlineRate);
+}
+/* 离线明牌派生（纯展示，数字全走 incomeRate()/CONFIG 既有口径，不新造公式）：
+   capAmt = 当前速率满仓（offlineCapHours）可得；累计分钟按待领金额以离线速率折算 */
+function offlineInfo(){
+  const rate = incomeRate();
+  const offRate = rate * CONFIG.offlineRate;
+  const pending = Math.floor(S.offlinePending);
+  const capAmt = Math.floor(rate * CONFIG.offlineCapHours * 60 * CONFIG.offlineRate);
+  const progressPct = capAmt > 0 ? Math.min(100, pending / capAmt * 100) : (pending > 0 ? 100 : 0);
+  const accruedMin = offRate > 0 ? pending / offRate : 0;
+  const remainMin = (capAmt > 0 && offRate > 0) ? Math.max(0, (capAmt - pending) / offRate) : 0;
+  return { rate: rate, offRate: offRate, pending: pending, capAmt: capAmt,
+           progressPct: progressPct, accruedMin: accruedMin, remainMin: remainMin, full: capAmt > 0 && pending >= capAmt };
+}
+function kitchenCap(){ return Math.min(CONFIG.kitchenMax, S.level + 2); }
+function stableCap(){ return Math.min(CONFIG.stableMax, S.level + 1); }
+function upgradeCost(kind){
+  if(kind === 'room'){
+    if(S.rooms.count >= CONFIG.maxRooms) return null;
+    return Math.round(CONFIG.addRoomCostBase * Math.pow(CONFIG.addRoomCostGrowth, S.rooms.count - CONFIG.startRooms));
+  }
+  if(kind === 'quality'){
+    if(S.rooms.quality >= CONFIG.maxQuality) return null;
+    return Math.round(CONFIG.qualityCostBase * Math.pow(CONFIG.qualityCostGrowth, S.rooms.quality - 1));
+  }
+  if(kind === 'kitchen'){
+    if(S.kitchenLv >= kitchenCap()) return null;
+    return Math.round(CONFIG.kitchenCostBase * Math.pow(CONFIG.kitchenCostGrowth, S.kitchenLv));
+  }
+  if(kind === 'stable'){
+    if(S.stableLv >= stableCap()) return null;
+    return Math.round(CONFIG.stableCostBase * Math.pow(CONFIG.stableCostGrowth, S.stableLv));
+  }
+  return null;
+}
+function staffDef(id){ return CONFIG.staffTypes.find(t => t.id === id) || null; }
+function staffCost(id){
+  const t = staffDef(id);
+  if(!t) return null;
+  const cur = S.staff[id];
+  if(!cur) return t.hire;
+  if(cur.lv >= t.maxLv) return null;
+  return Math.round(t.upBase * Math.pow(t.upGrowth, cur.lv - 1));
+}
+function guestPool(){
+  return CONFIG.guestTypes.filter(t =>
+    S.level >= t.minLevel &&
+    S.kitchenLv >= (t.minKitchen || 0) &&
+    S.stableLv >= (t.minStable || 0) &&
+    (!t.gate || packActive(t.gate)));
+}
+function metricValue(metric){
+  switch(metric){
+    case 'totalGuests': return S.totalGuests;
+    case 'rooms': return S.rooms.count;
+    case 'quality': return S.rooms.quality;
+    case 'kitchen': return S.kitchenLv;
+    case 'stable': return S.stableLv;
+    case 'staffCount': return Object.keys(S.staff).length;
+    case 'staffLevels': return CONFIG.staffTypes.reduce((a, t) => a + staffLv(t.id), 0);
+    case 'seen': return Object.keys(S.guestsSeen).length;
+    case 'totalEarned': return S.totalEarned;
+    case 'commissions': return S.totalCommissions;
+    case 'level': return S.level;
+    default: return 0;
+  }
+}
+function eventPool(){
+  const daily = CONFIG.events.filter(e => e.pool === 'daily');
+  if(packActive('banquet')) return daily.concat(CONFIG.events.filter(e => e.pool === 'banquet'));
+  return daily;
+}
+
+/* ================= 旅客 ================= */
+function guestSVG(type){
+  const ink = '#2B2620', acc = '#A93226';
+  const head = '<circle cx="24" cy="13" r="6" fill="none" stroke="' + ink + '" stroke-width="1.8"/>';
+  const body = '<path d="M24 19 L24 34 M24 24 L15 30 M24 24 L33 30 M24 34 L17 45 M24 34 L31 45" fill="none" stroke="' + ink + '" stroke-width="1.8" stroke-linecap="round"/>';
+  let extra = '';
+  if(type === 'scholar' || type === 'examiner' || type === 'zhuangyuan')
+    extra = '<rect x="31" y="26" width="8" height="11" fill="none" stroke="' + acc + '" stroke-width="1.6"/><path d="M24 6 L14 9 L24 11 L34 9 Z" fill="none" stroke="' + ink + '" stroke-width="1.6"/>';
+  if(type === 'escort' || type === 'escortboss' || type === 'constable')
+    extra = '<path d="M35 20 L42 38 M42 38 L39 39" stroke="' + acc + '" stroke-width="1.8" stroke-linecap="round"/>';
+  if(type === 'merchant' || type === 'richman' || type === 'richest' || type === 'foreign' || type === 'teamerchant' || type === 'saltmerchant')
+    extra = '<circle cx="36" cy="30" r="5" fill="none" stroke="' + acc + '" stroke-width="1.6"/><path d="M36 27 L36 33 M33.5 28.5 L38.5 28.5" stroke="' + acc + '" stroke-width="1.4"/>';
+  if(type === 'hero') extra = '<path d="M12 18 L7 40 M7 40 L10.5 41" stroke="' + acc + '" stroke-width="1.8" stroke-linecap="round"/><path d="M15 8 Q24 2 33 8" fill="none" stroke="' + ink + '" stroke-width="1.6"/>';
+  if(type === 'monk' || type === 'hermit') extra = '<path d="M38 12 L38 44" stroke="' + acc + '" stroke-width="1.8" stroke-linecap="round"/><circle cx="38" cy="17" r="2.2" fill="none" stroke="' + acc + '" stroke-width="1.4"/>';
+  if(type === 'hunter') extra = '<path d="M10 12 Q4 26 10 42 M10 12 L13 27 L10 42" fill="none" stroke="' + acc + '" stroke-width="1.6"/>';
+  if(type === 'singer' || type === 'musician') extra = '<path d="M36 22 Q42 28 36 34 M36 22 L36 34" fill="none" stroke="' + acc + '" stroke-width="1.6"/>';
+  if(type === 'magistrate' || type === 'inspector' || type === 'wangye' || type === 'junzhu')
+    extra = '<path d="M16 8 L32 8 L30 3 L24 6 L18 3 Z" fill="none" stroke="' + acc + '" stroke-width="1.6"/>';
+  return '<svg width="46" height="48" viewBox="0 0 48 48">' + head + body + extra + '</svg>';
+}
+function randName(){
+  const sn = CONFIG.surnames[Math.floor(Math.random() * CONFIG.surnames.length)];
+  const gn = CONFIG.givenNames[Math.floor(Math.random() * CONFIG.givenNames.length)];
+  return sn + gn;
+}
+function pickWeighted(pool){
+  let total = 0;
+  for(const t of pool) total += t.weight;
+  let r = Math.random() * total;
+  for(const t of pool){ r -= t.weight; if(r <= 0) return t; }
+  return pool[pool.length - 1];
+}
+function arriveGuest(){
+  if(S.guests.length >= S.rooms.count) return false;
+  const pool = guestPool();
+  if(!pool.length) return false;
+  const t = pickWeighted(pool);
+  const g = {
+    type: t.id, label: t.label, name: randName(),
+    priceMult: t.priceMult,
+    stayLeft: randInt(CONFIG.stayMinTicks, CONFIG.stayMaxTicks)
+  };
+  S.guests.push(g);
+  S.guestsSeen[t.id] = true;
+  S.totalGuests++;
+  S.dayStats.guests++;
+  pushLog(t.label + ' ' + g.name + ' 推门入住');
+  return true;
+}
+
+/* ================= 跨日与晨间小结 ================= */
+function pickEventsForDay(){
+  const pool = eventPool().slice();
+  const picked = [];
+  while(picked.length < CONFIG.eventsPerDay && pool.length){
+    picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0].id);
+  }
+  return picked;
+}
+function rollDayIfNeeded(){
+  const today = dayStr();
+  if(S.day === today) return false;
+  /* 晨间小结：汇总昨夜（上一日）入住与收入，数据卡凭 morning 字段展示 */
+  S.morning = {
+    date: S.day,
+    guests: S.dayStats.guests,
+    earned: S.dayStats.earned,
+    offline: Math.floor(S.offlinePending)
+  };
+  S.day = today;
+  S.dayStats = { guests: 0, earned: 0 };
+  S.ads = {};
+  S.eventsToday = pickEventsForDay();
+  S.eventsDone = 0;
+  pushLog('新的一天，晨间小结已备好');
+  return true;
+}
+function dismissMorning(){
+  S.morning = null;
+  save();
+  renderMorning();
+}
+
+/* ================= 主循环 ================= */
+let S = null;
+let tickTimer = null;
+function tick(){
+  if(!S || !S.name) return;
+  let changed = false;
+  if(rollDayIfNeeded()){ changed = true; renderMorning(); renderEvents(); renderAdsBox(); }
+  if(S.guests.length < S.rooms.count && Math.random() < arrivalChance()){
+    if(arriveGuest()) changed = true;
+  }
+  for(const g of S.guests.slice()){
+    g.stayLeft--;
+    if(g.stayLeft <= 0){
+      S.guests.splice(S.guests.indexOf(g), 1);
+      changed = true;
+      if(Math.random() < CONFIG.famePerCheckoutChance){
+        ledger('fame', 0, CONFIG.famePerCheckout, '旅客 ' + g.name + ' 结账离店，声望 +' + CONFIG.famePerCheckout);
+      }else{
+        pushLog('旅客 ' + g.name + ' 结账离店');
+      }
+    }
+  }
+  S.acc += incomeRate() * (CONFIG.tickMs / 60000);
+  const whole = Math.floor(S.acc);
+  if(whole > 0){ S.acc -= whole; ledger('income', whole, 0, null); }
+  save();
+  updateDynamic();
+  renderRooms();
+  updateCommissionTimes();
+  if(changed) renderLog();
+}
+
+/* ================= 升级与伙计 ================= */
+const UP_LABELS = { room:'扩建客房', quality:'提升客房品质', kitchen:'升级厨房', stable:'整修马厩' };
+function buyUpgrade(kind){
+  const cost = upgradeCost(kind);
+  if(cost === null){ showToast('已至上限（或等级未到）'); return false; }
+  if(!ledger('upgrade', -cost, 0, UP_LABELS[kind] + '，花费 ' + cost + ' 铜钱')){
+    showToast('铜钱不足，还差 ' + (cost - S.coins) + ' 文');
+    return false;
+  }
+  if(kind === 'room') S.rooms.count++;
+  else if(kind === 'quality') S.rooms.quality++;
+  else if(kind === 'kitchen') S.kitchenLv++;
+  else if(kind === 'stable') S.stableLv++;
+  save();
+  renderUpgrades();
+  renderRooms();
+  renderMilestones();
+  updateDynamic();
+  showToast(UP_LABELS[kind] + '完成');
+  return true;
+}
+function buyStaff(id){
+  const t = staffDef(id);
+  if(!t) return false;
+  const cost = staffCost(id);
+  if(cost === null){ showToast(t.label + '已至满级'); return false; }
+  const isHire = !S.staff[id];
+  if(!ledger('staff', -cost, 0, (isHire ? '雇佣' : '升级') + t.label + '，花费 ' + cost + ' 铜钱')){
+    showToast('铜钱不足，还差 ' + (cost - S.coins) + ' 文');
+    return false;
+  }
+  if(isHire) S.staff[id] = { lv: 1 };
+  else S.staff[id].lv++;
+  save();
+  renderStaff();
+  renderMilestones();
+  updateDynamic();
+  showToast(t.label + (isHire ? ' 到店上工' : ' 升至 ' + S.staff[id].lv + ' 级'));
+  return true;
+}
+
+/* ================= 旅客事件抉择 ================= */
+function currentEvent(){
+  if(S.eventsDone >= S.eventsToday.length) return null;
+  return CONFIG.events.find(e => e.id === S.eventsToday[S.eventsDone]) || null;
+}
+function doEventChoice(idx){
+  const ev = currentEvent();
+  if(!ev) return false;
+  const ch = ev.choices[idx];
+  if(!ch) return false;
+  if(ch.coins < 0 && S.coins + ch.coins < 0){ showToast('铜钱不足，选不了这一项'); return false; }
+  ledger('event', ch.coins, ch.fame, '事件「' + ev.title + '」已抉择', ch.favor);
+  S.eventsDone++;
+  S.totalEvents++;
+  save();
+  renderEvents();
+  renderMilestones();
+  updateDynamic();
+  renderLog();
+  const fb = [];
+  if(ch.coins) fb.push((ch.coins > 0 ? '+' : '') + ch.coins + ' 铜钱');
+  if(ch.fame) fb.push((ch.fame > 0 ? '+' : '') + ch.fame + ' 声望');
+  if(ch.favor) fb.push((ch.favor > 0 ? '+' : '') + ch.favor + ' 好感');
+  showToast('「' + ev.title + '」已抉择' + (fb.length ? '：' + fb.join(' / ') : ''));
+  tourHook('event');
+  return true;
+}
+
+/* ================= 商队委托 ================= */
+function startCommission(tierId){
+  if(!packActive('commission')){ showToast('商队委托将于 2026-11-19 开放'); return false; }
+  const tier = CONFIG.commissionTiers.find(t => t.id === tierId);
+  if(!tier) return false;
+  if(S.commissions.length >= CONFIG.commissionMaxActive){ showToast('同时进行的委托已满'); return false; }
+  const now = Date.now();
+  S.commissions.push({
+    id: 'cm' + now + '_' + Math.floor(Math.random() * 100000),
+    tierId: tier.id, hours: tier.hours,
+    start: now, end: now + tier.hours * 3600 * 1000,
+    claimed: false
+  });
+  pushLog('接下商队委托（' + tier.hours + ' 小时）');
+  save();
+  renderCommissions();
+  renderLog();
+  return true;
+}
+function commissionReady(c){ return Date.now() >= c.end; }
+function claimCommission(id){
+  const c = S.commissions.find(x => x.id === id);
+  if(!c || c.claimed) return false;            /* 防重复领取 */
+  if(!commissionReady(c)){ showToast('商队尚未归来'); return false; }
+  const tier = CONFIG.commissionTiers.find(t => t.id === c.tierId);
+  if(!tier) return false;
+  const rw = commissionReward(tier);
+  c.claimed = true;
+  S.commissions = S.commissions.filter(x => x.id !== id);
+  S.totalCommissions++;
+  ledger('commission', rw.coins, rw.fame, '商队委托完成，报酬 +' + rw.coins + ' 铜钱');
+  save();
+  renderCommissions();
+  renderMilestones();
+  updateDynamic();
+  renderLog();
+  showToast('委托报酬到账 +' + rw.coins + ' 铜钱' + (rw.fame ? ' / 声望 +' + rw.fame : ''));
+  return true;
+}
+
+/* ================= 里程碑 ================= */
+function claimMilestone(id){
+  const m = CONFIG.milestones.find(x => x.id === id);
+  if(!m || S.miles[id]) return false;
+  if(metricValue(m.metric) < m.target) return false;
+  S.miles[id] = true;
+  ledger('milestone', m.coins, m.fame, '里程碑达成：' + m.label);
+  save();
+  renderMilestones();
+  updateDynamic();
+  renderLog();
+  showToast('里程碑奖励到账 +' + m.coins + ' 铜钱' + (m.fame ? ' / 声望 +' + m.fame : ''));
+  return true;
+}
+
+/* ================= 广告（vatask 口径） ================= */
+function shellAd(){
+  if(typeof window !== 'undefined'){
+    if(window.vataskAd && typeof window.vataskAd.showRewarded === 'function') return window.vataskAd;
+    if(window.VATASK && typeof window.VATASK.showRewarded === 'function') return window.VATASK;
+  }
+  return null;
+}
+function showRewardAd(placement, onReward){
+  const shell = shellAd();
+  if(shell){
+    let done = false;
+    shell.showRewarded(placement, function(res){
+      if(done) return; done = true;
+      if(res && res.code === 200 && res.rewarded === true) onReward();
+      else showToast('广告未看完，没有奖励');
+    });
+  }else{
+    setTimeout(onReward, CONFIG.adSimMs);   /* 非壳环境模拟 */
+  }
+}
+function adsUsed(kind){ return Math.floor(+S.ads[kind] || 0); }
+function claimOfflineDouble(){
+  if(!S || S.offlinePending < 1) return;
+  if(S.ads.offlineDouble) { showToast('本次离线收益已翻倍过'); return; }
+  showRewardAd('offline_double', function(){
+    const amt = Math.floor(S.offlinePending) * 2;
+    S.offlinePending = 0;
+    S.ads.offlineDouble = 1;
+    ledger('offline_ad', amt, 0, '离线收益翻倍领取 +' + amt + ' 铜钱');
+    save(); renderOffline(); updateDynamic(); renderLog();
+    showToast('翻倍领取到账 +' + amt + ' 铜钱');
+  });
+}
+function claimDailyGift(){
+  if(adsUsed('gift') >= CONFIG.adsLimit.gift){ showToast('今日礼包已领满（2 次）'); return false; }
+  showRewardAd('daily_gift', function(){
+    S.ads.gift = adsUsed('gift') + 1;
+    ledger('gift_ad', CONFIG.giftReward, 0, '每日礼包 +' + CONFIG.giftReward + ' 铜钱');
+    save(); renderAdsBox(); updateDynamic(); renderLog();
+    showToast('礼包到账 +' + CONFIG.giftReward + ' 铜钱');
+  });
+  return true;
+}
+function instantCommission(id){
+  const c = S.commissions.find(x => x.id === id);
+  if(!c || c.claimed) return false;
+  if(adsUsed('instant') >= CONFIG.adsLimit.instant){ showToast('今日立即完成次数已用完（3 次）'); return false; }
+  showRewardAd('commission_instant', function(){
+    const cc = S.commissions.find(x => x.id === id);
+    if(!cc || cc.claimed) return;
+    S.ads.instant = adsUsed('instant') + 1;
+    cc.end = Date.now();
+    save(); renderCommissions(); renderAdsBox();
+    showToast('商队已提前归来，可领取报酬');
+  });
+  return true;
+}
+
+/* ================= 离线领取 ================= */
+function claimOffline(){
+  if(!S || S.offlinePending < 1) return;
+  const amt = Math.floor(S.offlinePending);
+  S.offlinePending = 0;
+  ledger('offline', amt, 0, '领取离线收益 +' + amt + ' 铜钱');
+  save();
+  renderOffline();
+  updateDynamic();
+  renderLog();
+  showToast('离线收益到账 +' + amt + ' 铜钱');
+}
+
+/* ================= 渲染 ================= */
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function renderNaming(){
+  document.getElementById('app').innerHTML =
+    '<div class="open-wrap">' +
+      '<div class="big">风来驿站</div>' +
+      '<div class="sub">官道之旁 · 灯火可亲<br>给你的驿站起个名字，今夜开张</div>' +
+      '<input id="innName" type="text" maxlength="8" placeholder="风来驿站" autocomplete="off">' +
+      '<br><button class="accent" id="openBtn" onclick="openInn()" style="font-size:16px; padding:12px 34px;">开张大吉</button>' +
+      '<div class="foot">旅客自动到访 · 离线也有进账（55% 速率）</div>' +
+    '</div>';
+  const inp = document.getElementById('innName');
+  inp.addEventListener('keydown', e => { if(e.key === 'Enter') openInn(); });
+  inp.focus();
+}
+function openInn(){
+  const inp = document.getElementById('innName');
+  const name = (inp.value || '').trim() || '风来驿站';
+  S.name = name;
+  if(!S.eventsToday.length) S.eventsToday = pickEventsForDay();
+  pushLog('驿站「' + name + '」挂牌开张');
+  save();
+  startApp();
+  tourHook('open');
+}
+function renderMain(){
+  document.getElementById('app').innerHTML =
+    '<div class="sign">' +
+      '<div class="inn-name" id="innNameView"></div>' +
+      '<div class="inn-sub">风 来 驿 站</div>' +
+      '<span class="seal" id="levelSeal"></span>' +
+      '<div class="small-note" id="levelNext"></div>' +
+    '</div>' +
+    '<div class="wallet">' +
+      '<div class="cell"><div class="k">铜 钱</div><div class="v coin" id="coinsVal">0</div></div>' +
+      '<div class="cell"><div class="k">声 望</div><div class="v" id="fameVal">0</div></div>' +
+      '<div class="cell"><div class="k">入 住</div><div class="v" id="occVal">0/0</div></div>' +
+    '</div>' +
+    '<div class="nav">' +
+      '<a href="#offlineCard">离线明牌</a><a href="#todayCard">今日清单</a><a href="#roomsCard">客房</a>' +
+      '<a href="#eventsCard">抉择</a><a href="#commissionsCard">委托</a><a href="#milesCard">里程碑</a>' +
+      '<a href="#codexCard">图鉴</a><a href="#adsCard">礼包</a><a href="#saveCard">存档</a>' +
+    '</div>' +
+    '<div class="card" id="morningCard"><h3>晨 间 小 结</h3><div id="morningBody"></div>' +
+      '<div class="btnrow"><button class="small" onclick="dismissMorning()">收好小结</button></div></div>' +
+    '<div class="card" id="offlineCard">' +
+      '<h3>离 线 明 牌</h3>' +
+      '<div id="offlineBody"></div>' +
+    '</div>' +
+    '<div class="card" id="todayCard"><h3>今 日 清 单</h3><div id="todayBody"></div></div>' +
+    '<div class="card" id="roomsCard"><h3>客 房</h3><div class="rooms" id="roomsGrid"></div>' +
+      '<div class="rate-line">当前房价 <b id="priceVal">0</b> 文/间 · 在住进账约 <b id="rateVal">0</b> 铜钱/分钟（含厨房与伙计加成）</div></div>' +
+    '<div class="card" id="eventsCard"><h3>今 日 抉 择（<span id="evLeft">0</span>/3）</h3><div id="eventsBox"></div></div>' +
+    '<div class="card" id="upgradesCard"><h3>修 缮 与 设 施</h3><div id="upgradesBox"></div></div>' +
+    '<div class="card" id="staffCard"><h3>伙 计</h3><div id="staffBox"></div></div>' +
+    '<div class="card" id="commissionsCard"><h3>商 队 委 托</h3><div id="commissionsBox"></div></div>' +
+    '<div class="card" id="milesCard"><h3>里 程 碑</h3><div id="milesBox"></div></div>' +
+    '<div class="card" id="codexCard"><h3>旅 客 图 鉴（<span id="seenCount">0</span>/32）</h3><div id="codexBox"></div></div>' +
+    '<div class="card" id="adsCard"><h3>每 日 礼 包</h3><div id="adsBox"></div></div>' +
+    '<div class="card" id="settingsCard"><h3>设 置</h3><div id="settingsBox"></div></div>' +
+    '<div class="card" id="saveCard"><h3>存 档</h3><div id="saveBox"></div></div>' +
+    '<div class="card"><h3>驿 站 动 态</h3><ul class="log" id="logList"></ul></div>' +
+    '<div class="foot">自动存档中 · 累计接待 <span id="totalGuestsVal">0</span> 位旅客 · 旅客好感 <span id="favorVal">0</span></div>' +
+    '<div id="rulesMask" class="modal-mask" style="display:none"><div class="modal-box">' +
+      '<h3>离 线 收 益 规 则</h3><div id="rulesBody"></div>' +
+      '<div class="btnrow"><button class="small accent" onclick="hideOfflineRules()">知道了</button></div>' +
+    '</div></div>';
+  document.getElementById('innNameView').textContent = S.name;
+  todaySig = ''; offlineSig = '';
+  renderMorning(); renderOffline(); renderToday(); renderRooms(); renderEvents(); renderUpgrades();
+  renderStaff(); renderCommissions(); renderMilestones(); renderCodex();
+  renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
+}
+const GATE_LABELS = { commission:'商队委托', banquet:'宴会厅事件池', noble:'贵客图鉴段' };
+/* 明日预告（纯展示）：由日期门 gates 与下一等级声望差派生，不发奖、不写存档 */
+function tomorrowPreview(){
+  const parts = [];
+  const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+  const tmrStr = dayStr(tmr);
+  const upcoming = Object.keys(CONFIG.gates)
+    .filter(k => !packActive(k))
+    .sort((a, b) => CONFIG.gates[a] < CONFIG.gates[b] ? -1 : 1);
+  if(upcoming.length){
+    const k = upcoming[0], g = CONFIG.gates[k], label = GATE_LABELS[k] || k;
+    parts.push(tmrStr >= g
+      ? '明日（' + g + '）开启：' + label
+      : '下一站：' + label + ' 将于 ' + g + ' 开启');
+  }else{
+    parts.push('限时内容已全部开启');
+  }
+  const nf = nextLevelFame();
+  if(nf === null) parts.push('驿站已是最高等级');
+  else parts.push('再攒 ' + Math.max(0, nf - S.fame) + ' 声望升至 ' + (S.level + 1) + ' 级（解锁更多旅客与设施上限）');
+  return parts.join('；');
+}
+function renderMorning(){
+  const card = document.getElementById('morningCard');
+  if(!card) return;
+  if(S.morning){
+    card.style.display = 'block';
+    document.getElementById('morningBody').innerHTML =
+      '昨夜（' + esc(S.morning.date) + '）共接待 <b>' + S.morning.guests + '</b> 位旅客，进账 <b>' +
+      S.morning.earned + '</b> 铜钱' + (S.morning.offline > 0 ? '；离线房钱 <b>' + S.morning.offline + '</b> 铜钱待领取（见离线明牌）' : '') + '。' +
+      '<div class="small-note" style="margin-top:6px;">明日预告：' + esc(tomorrowPreview()) + '</div>';
+  }else{
+    card.style.display = 'none';
+  }
+}
+function fmtDurMin(min){
+  min = Math.max(0, Math.round(min));
+  const h = Math.floor(min / 60), m = min % 60;
+  return h > 0 ? (h + ' 小时 ' + (m > 0 ? m + ' 分' : '')) : (m + ' 分钟');
+}
+let offlineSig = '';
+function renderOffline(){
+  const body = document.getElementById('offlineBody');
+  if(!body) return;
+  const card = document.getElementById('offlineCard');
+  if(card) card.style.display = 'block';   /* 明牌卡常驻展示（凭数据渲染，非自动弹窗） */
+  const info = offlineInfo();
+  const sig = [Math.round(info.rate * 10), info.pending, Math.floor(info.progressPct), info.capAmt, S.ads.offlineDouble ? 1 : 0].join('|');
+  if(sig === offlineSig) return;
+  offlineSig = sig;
+  let html =
+    '<div>当前收入速率 <b id="offRateNow">' + (Math.round(info.rate * 10) / 10) + '</b> 铜钱/分钟（在线全额）</div>' +
+    '<div>离线速率 ' + Math.round(CONFIG.offlineRate * 100) + '% · 约 <b>' + (Math.round(info.offRate * 10) / 10) + '</b> 铜钱/分钟</div>';
+  if(info.pending >= 1){
+    html += '<div style="margin-top:6px;">已累计待领</div>' +
+      '<div class="amt" id="offlineAmt">' + info.pending + ' 铜钱</div>' +
+      '<div class="small-note">按当前速率折算约已累计 ' + fmtDurMin(info.accruedMin) + '（封顶 ' + CONFIG.offlineCapHours + ' 小时）</div>';
+  }else{
+    html += '<div class="small-note" style="margin-top:6px;">暂无待领离线收益——离开游戏后，在住旅客的房钱会按离线速率自动累计。</div>';
+  }
+  if(info.capAmt > 0){
+    html += '<div class="bar"><i id="offBar" style="width:' + (Math.round(info.progressPct * 10) / 10) + '%"></i></div>' +
+      '<div class="small-note" id="offBarTxt">' + (info.full
+        ? '已满仓（' + info.capAmt + ' 铜钱封顶），回来晚了会溢出——尽快领取。'
+        : '满仓进度 ' + Math.floor(info.progressPct) + '%（满仓 ' + info.capAmt + ' 铜钱），距满仓还差约 ' + fmtDurMin(info.remainMin)) + '</div>';
+  }else{
+    html += '<div class="small-note" style="margin-top:6px;">暂无在住旅客，离线进账为 0——等旅客入住后开始累计。</div>';
+  }
+  if(info.pending >= 1){
+    html += '<div class="btnrow"><button class="accent" id="claimBtn" onclick="claimOffline()">领取</button>' +
+      '<button id="claimDoubleBtn" onclick="claimOfflineDouble()"' + (S.ads.offlineDouble ? ' disabled' : '') + '>看广告翻倍领取</button></div>';
+  }
+  html += '<div class="btnrow"><button class="small ghost" onclick="showOfflineRules()">离线规则说明</button></div>';
+  body.innerHTML = html;
+}
+/* 规则说明弹窗：只许点击触发（showOfflineRules 由按钮调用），禁自动弹出 */
+function showOfflineRules(){
+  const mask = document.getElementById('rulesMask');
+  if(!mask) return;
+  document.getElementById('rulesBody').innerHTML =
+    '<div>· 离线期间，在住旅客的房钱按当前收入速率的 <b>' + Math.round(CONFIG.offlineRate * 100) + '%</b> 折算累计。</div>' +
+    '<div style="margin-top:6px;">· 累计封顶 <b>' + CONFIG.offlineCapHours + ' 小时</b>：满仓后不再增长，回来领取后重新累计。</div>' +
+    '<div style="margin-top:6px;">· 回来点「领取」即到账；「看广告翻倍领取」每份离线收益限 1 次，到账为待领金额的 2 倍，壳内须看完广告才发放。</div>' +
+    '<div style="margin-top:6px;">· 收入速率随在住旅客、客房品质、厨房与伙计加成变化，明牌卡上的数字与实际结算同源。</div>';
+  mask.style.display = 'flex';
+}
+function hideOfflineRules(){
+  const mask = document.getElementById('rulesMask');
+  if(mask) mask.style.display = 'none';
+}
+/* 今日清单（纯展示派生：读 offlinePending/eventsDone/commissions/ads 现有状态，不写存档） */
+function todaySummary(){
+  return {
+    offline: Math.floor(S.offlinePending),
+    eventsLeft: Math.max(0, S.eventsToday.length - S.eventsDone),
+    eventsTotal: S.eventsToday.length,
+    commissionsActive: S.commissions.length,
+    commissionsReady: S.commissions.filter(c => commissionReady(c)).length,
+    giftLeft: Math.max(0, CONFIG.adsLimit.gift - adsUsed('gift'))
+  };
+}
+let todaySig = '';
+function renderToday(){
+  const box = document.getElementById('todayBody');
+  if(!box) return;
+  const t = todaySummary();
+  const sig = JSON.stringify(t);
+  if(sig === todaySig) return;
+  todaySig = sig;
+  const row = (txt, anchor, btn) =>
+    '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' + txt + '</div></div>' +
+    (anchor ? '<button class="small ghost" onclick="document.getElementById(\'' + anchor + '\').scrollIntoView()">' + btn + '</button>' : '') + '</div>';
+  box.innerHTML =
+    row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'offlineCard', '去领取') +
+    row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'eventsCard', '去处理') +
+    row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'commissionsCard', '去查看') +
+    row('每日礼包剩余：<b>' + t.giftLeft + '</b>/' + CONFIG.adsLimit.gift + ' 次', 'adsCard', '去领取');
+}
+function renderRooms(){
+  const grid = document.getElementById('roomsGrid');
+  if(!grid) return;
+  let html = '';
+  for(let i = 0; i < S.rooms.count; i++){
+    const g = S.guests[i];
+    if(g){
+      html += '<div class="room">' + guestSVG(g.type) +
+        '<div class="gname">' + esc(g.name) + '</div>' +
+        '<div class="gtype">' + esc(g.label) + '</div>' +
+        '<div class="gstay">余 ' + Math.max(1, g.stayLeft) + ' 程</div></div>';
+    }else{
+      html += '<div class="room empty">空 房</div>';
+    }
+  }
+  grid.innerHTML = html;
+}
+function renderEvents(){
+  const box = document.getElementById('eventsBox');
+  if(!box) return;
+  const left = document.getElementById('evLeft');
+  if(left) left.textContent = S.eventsDone;
+  const ev = currentEvent();
+  if(!ev){
+    box.innerHTML = '<div class="small-note">今日 3 次抉择已处理完，明日再来。</div>';
+    return;
+  }
+  box.innerHTML =
+    '<div class="up-row"><div class="info"><div class="t">' + esc(ev.title) + '</div>' +
+    '<div class="d">' + esc(ev.text) + (ev.pool === 'banquet' ? '（宴会厅事件）' : '') + '</div></div></div>' +
+    '<div class="btnrow">' + ev.choices.map((c, i) =>
+      '<button class="small" onclick="doEventChoice(' + i + ')">' + esc(c.label) + '</button>').join('') + '</div>';
+}
+function upRowHtml(kind, title, desc, btnId){
+  const cost = upgradeCost(kind);
+  return '<div class="up-row"><div class="info"><div class="t">' + title + '</div>' +
+    '<div class="d">' + desc + '</div></div>' +
+    (cost === null ? '<button disabled>已满/未解锁</button>'
+      : '<button id="' + btnId + '" onclick="buyUpgrade(\'' + kind + '\')">' + cost + ' 文</button>') + '</div>';
+}
+function renderUpgrades(){
+  const box = document.getElementById('upgradesBox');
+  if(!box) return;
+  box.innerHTML =
+    upRowHtml('room', '扩建客房（现 ' + S.rooms.count + ' 间）', '多一间房，多一份进账', 'upRoomBtn') +
+    upRowHtml('quality', '提升品质（现「' + CONFIG.qualityNames[S.rooms.quality] + '」）',
+      '房价倍率 ×' + CONFIG.qualityMult[S.rooms.quality], 'upQualityBtn') +
+    upRowHtml('kitchen', '升级厨房（现 ' + S.kitchenLv + ' 级，上限 ' + kitchenCap() + ' 级）',
+      '总收入 +' + Math.round(S.kitchenLv * CONFIG.kitchenMultPerLv * 100) + '%（每级 +8%）', 'upKitchenBtn') +
+    upRowHtml('stable', '整修马厩（现 ' + S.stableLv + ' 级，上限 ' + stableCap() + ' 级）',
+      '委托报酬与旅客到访率提升', 'upStableBtn');
+  refreshUpgradeDisabled();
+}
+function refreshUpgradeDisabled(){
+  const pairs = [['room','upRoomBtn'],['quality','upQualityBtn'],['kitchen','upKitchenBtn'],['stable','upStableBtn']];
+  for(const [kind, id] of pairs){
+    const b = document.getElementById(id), c = upgradeCost(kind);
+    if(b && c !== null) b.disabled = S.coins < c;
+  }
+}
+function renderStaff(){
+  const box = document.getElementById('staffBox');
+  if(!box) return;
+  box.innerHTML = CONFIG.staffTypes.map(t => {
+    const cur = S.staff[t.id];
+    const cost = staffCost(t.id);
+    return '<div class="up-row"><div class="info"><div class="t">' + t.label +
+      (cur ? '（' + cur.lv + ' 级）' : '（未雇佣）') + '</div><div class="d">' + t.desc + '</div></div>' +
+      (cost === null ? '<button disabled>已满级</button>'
+        : '<button class="small" id="staffBtn_' + t.id + '" onclick="buyStaff(\'' + t.id + '\')">' +
+          (cur ? '升级' : '雇佣') + ' · ' + cost + ' 文</button>') + '</div>';
+  }).join('');
+  for(const t of CONFIG.staffTypes){
+    const b = document.getElementById('staffBtn_' + t.id), c = staffCost(t.id);
+    if(b && c !== null) b.disabled = S.coins < c;
+  }
+}
+function fmtLeft(ms){
+  if(ms <= 0) return '已归来';
+  const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return (h > 0 ? h + ' 小时 ' : '') + m + ' 分 ' + ss + ' 秒';
+}
+function renderCommissions(){
+  const box = document.getElementById('commissionsBox');
+  if(!box) return;
+  if(!packActive('commission')){
+    box.innerHTML = '<div class="small-note">商队委托将于 2026-11-19（开业第 3 日）开放，敬请期待。</div>';
+    return;
+  }
+  let html = '<div class="btnrow">' + CONFIG.commissionTiers.map(t => {
+    const rw = commissionReward(t);
+    return '<button class="small" onclick="startCommission(\'' + t.id + '\')">' + t.hours + ' 小时 · 报酬 ' + rw.coins + ' 文</button>';
+  }).join('') + '</div>';
+  if(!S.commissions.length) html += '<div class="small-note" style="margin-top:8px;">暂无进行中的委托。</div>';
+  for(const c of S.commissions){
+    const rw = commissionReward(CONFIG.commissionTiers.find(t => t.id === c.tierId));
+    html += '<div class="up-row"><div class="info"><div class="t">商队委托 · ' + c.hours + ' 小时</div>' +
+      '<div class="d">报酬 ' + rw.coins + ' 铜钱 / 声望 ' + rw.fame + ' · <span class="cm-left" data-end="' + c.end + '">' + fmtLeft(c.end - Date.now()) + '</span></div></div>' +
+      '<button class="small" onclick="claimCommission(\'' + c.id + '\')"' + (commissionReady(c) ? '' : ' disabled') + '>领取</button>' +
+      '<button class="small" onclick="instantCommission(\'' + c.id + '\')">广告立即完成</button></div>';
+  }
+  html += '<div class="small-note">立即完成今日已用 ' + adsUsed('instant') + '/3 次。</div>';
+  box.innerHTML = html;
+}
+function updateCommissionTimes(){
+  document.querySelectorAll('.cm-left').forEach(el => {
+    el.textContent = fmtLeft(+el.getAttribute('data-end') - Date.now());
+  });
+}
+function mileRowHtml(m){
+  const val = metricValue(m.metric), claimed = !!S.miles[m.id], done = val >= m.target;
+  return '<div class="up-row"><div class="info"><div class="t">' + esc(m.label) + '</div>' +
+    '<div class="d">进度 ' + Math.min(val, m.target) + '/' + m.target + ' · 奖励 ' + m.coins + ' 铜钱' + (m.fame ? ' / 声望 ' + m.fame : '') + '</div>' +
+    (m.tip ? '<div class="d">贴士：' + esc(m.tip) + '</div>' : '') + '</div>' +
+    (claimed ? '<button class="small" disabled>已领取</button>'
+      : '<button class="small" onclick="claimMilestone(\'' + m.id + '\')"' + (done ? '' : ' disabled') + '>领取</button>') + '</div>';
+}
+function renderMilestones(){
+  const box = document.getElementById('milesBox');
+  if(!box) return;
+  /* 前 4 个置顶为「开张贴士」分组：新手引导走完后的常驻复看贴士（纯展示排序，指标与领取逻辑不变） */
+  const guide = CONFIG.milestones.slice(0, 4), rest = CONFIG.milestones.slice(4);
+  box.innerHTML =
+    '<div class="sect">开 张 贴 士（引 导 复 看）</div>' + guide.map(mileRowHtml).join('') +
+    '<div class="sect">全 部 里 程 碑</div>' + rest.map(mileRowHtml).join('');
+}
+function guestLockReason(t){
+  if(t.gate && !packActive(t.gate)) return '2026-11-26 后迎贵客';
+  if(S.level < t.minLevel) return '驿站 ' + t.minLevel + ' 级';
+  if(S.kitchenLv < (t.minKitchen || 0)) return '厨房 ' + t.minKitchen + ' 级';
+  if(S.stableLv < (t.minStable || 0)) return '马厩 ' + t.minStable + ' 级';
+  return '';
+}
+/* 套装进度明牌（纯展示）：按类别分组统计 guestsSeen 布尔标记，不扩计数、不动存档 */
+function codexGroupProgress(){
+  return CONFIG.guestGroups.map(g => {
+    const types = g.ids.map(id => CONFIG.guestTypes.find(t => t.id === id)).filter(Boolean);
+    return { label: g.label, seen: types.filter(t => S.guestsSeen[t.id]).length, total: types.length };
+  });
+}
+function renderCodex(){
+  const box = document.getElementById('codexBox');
+  if(!box) return;
+  const sc = document.getElementById('seenCount');
+  if(sc) sc.textContent = Object.keys(S.guestsSeen).length;
+  const tagHtml = t => {
+    const seen = !!S.guestsSeen[t.id], reason = guestLockReason(t);
+    return '<span class="tag ' + (seen ? 'seen' : (reason ? 'lock' : '')) + '">' +
+      (seen ? t.label : (reason ? '？？（' + reason + '）' : t.label + '（未接待）')) + '</span>';
+  };
+  box.innerHTML = CONFIG.guestGroups.map(g => {
+    const types = g.ids.map(id => CONFIG.guestTypes.find(t => t.id === id)).filter(Boolean);
+    const seenN = types.filter(t => S.guestsSeen[t.id]).length;
+    return '<div class="group-line">' + esc(g.label) + '（' + seenN + '/' + types.length + '）' +
+      (seenN === types.length ? ' · 已集齐' : '') + '</div>' + types.map(tagHtml).join('');
+  }).join('') +
+  '<div class="small-note" style="margin-top:8px;">集齐一类旅客的奖励筹备中，后续更新送上。</div>';
+}
+function renderAdsBox(){
+  const box = document.getElementById('adsBox');
+  if(!box) return;
+  box.innerHTML = '<div class="small-note">看广告领取铜钱礼包，今日已领 ' + adsUsed('gift') + '/2 次，每次 +' + CONFIG.giftReward + ' 铜钱。</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="claimDailyGift()"' + (adsUsed('gift') >= CONFIG.adsLimit.gift ? ' disabled' : '') + '>领取每日礼包</button></div>';
+}
+function renderSettings(){
+  const box = document.getElementById('settingsBox');
+  if(!box) return;
+  const pool = guestPool();
+  const totalW = pool.reduce((a, t) => a + t.weight, 0) || 1;
+  box.innerHTML =
+    '<div class="btnrow">' +
+      '<button class="small" onclick="toggleSetting(\'bgm\')">背景音乐：' + (S.settings.bgm ? '开' : '关') + '</button>' +
+      '<button class="small" onclick="toggleSetting(\'sfx\')">音效：' + (S.settings.sfx ? '开' : '关') + '</button>' +
+      '<button class="small" onclick="document.getElementById(\'saveBox\').scrollIntoView()">前往存档</button>' +
+      '<button class="small" onclick="tourStart(true)">重看新手引导</button>' +
+    '</div>' +
+    '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
+    '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
+    '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
+      (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
+      '。贵客图鉴段 2026-11-26 开启。重置说明：如需重开驿站，请到下方存档区两步确认删档，删除后不可恢复（导入前备份除外）。</div>';
+}
+function toggleSetting(key){
+  S.settings[key] = !S.settings[key];
+  save();
+  renderSettings();
+}
+function renderSaveBox(){
+  const box = document.getElementById('saveBox');
+  if(!box) return;
+  let html = '<div class="sect">本 地 档 位</div>' +
+    '<div class="small-note">5 个档位槽，存在本机浏览器里。</div>';
+  for(let i = 1; i <= 5; i++){
+    const info = slotInfo(i);
+    html += '<div class="up-row"><div class="info"><div class="t">档位 ' + i + '</div>' +
+      '<div class="d">' + (info ? esc(info.name) + ' · ' + info.level + ' 级 · ' + info.coins + ' 铜钱 · ' + new Date(info.savedAt).toLocaleString() : '空') + '</div></div>' +
+      '<button class="small" onclick="uiSaveSlot(' + i + ')">存入</button>' +
+      '<button class="small" onclick="uiLoadSlot(' + i + ')"' + (info ? '' : ' disabled') + '>读取</button></div>';
+  }
+  html += '<div class="sect">云 端 短 码</div>' +
+    '<div class="small-note">把当前进度传上云端，换得一枚 8 位短码；换设备或清了浏览器后，输码即可取回整档。短码就是凭证，收好别发给别人。发码/取码有频率限制。</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="uiCloudExport(this)">生成云端短码</button></div>' +
+    '<div id="cloudCodeOut" style="margin-top:6px;"></div>' +
+    '<input type="text" class="code-in" id="cloudCodeIn" placeholder="输入短码，如 YZ-AB12CD34" maxlength="12" autocomplete="off">' +
+    '<div class="btnrow"><button class="small" onclick="uiCloudImport(this)">凭短码取回</button></div>' +
+    '<div class="sect">长 码（离 线 兜 底）</div>' +
+    '<div class="small-note">不用云端时走长码：导入前会自动备份当前档，可一键恢复备份。</div>' +
+    '<textarea id="codeArea" placeholder="点「导出长码」生成，或粘贴长码后点「导入长码」"></textarea>' +
+    '<div class="btnrow">' +
+      '<button class="small" onclick="uiExport()">导出长码</button>' +
+      '<button class="small" onclick="uiImport()">导入长码</button>' +
+      '<button class="small ghost" onclick="uiRestoreBackup()"' + (hasBackup() ? '' : ' disabled') + '>恢复导入前备份</button>' +
+    '</div>' +
+    '<div class="sect">删 档</div>' +
+    '<div class="btnrow"><button class="small ghost" id="delBtn" onclick="uiDelete()">删档重开（两步确认）</button></div>';
+  box.innerHTML = html;
+}
+function uiSaveSlot(i){ if(saveSlot(i)){ renderSaveBox(); showToast('已存入档位 ' + i); } }
+function uiLoadSlot(i){
+  if(loadSlot(i)){ if(tickTimer){} startApp(); showToast('已读取档位 ' + i); }
+  else showToast('该档位为空');
+}
+function uiExport(){
+  const ta = document.getElementById('codeArea');
+  ta.value = exportCode();
+  ta.select();
+  showToast('长码已生成，请自行保存');
+}
+function uiImport(){
+  const ta = document.getElementById('codeArea');
+  if(importCode(ta.value)){ startApp(); showToast('导入成功（原档已自动备份）'); }
+  else showToast('长码无效，导入失败');
+}
+async function uiCloudExport(btn){
+  if(btn) btn.disabled = true;
+  const r = await cloudExport();
+  const out = document.getElementById('cloudCodeOut');
+  if(r.ok){
+    if(out) out.innerHTML = '<div class="small-note">你的云端短码（收好别发给别人）：</div><div class="cloud-code">' + esc(r.code) + '</div>';
+    showToast('云端短码已生成');
+  }else{
+    if(out) out.innerHTML = '<div class="small-note">' + esc(r.msg) + '</div>';
+    showToast(r.msg);
+  }
+  if(btn) btn.disabled = false;
+}
+async function uiCloudImport(btn){
+  const inp = document.getElementById('cloudCodeIn');
+  if(btn) btn.disabled = true;
+  const r = await cloudImport(inp ? inp.value : '');
+  if(r.ok){ startApp(); showToast('云端存档已取回（原档已自动备份）'); }
+  else showToast(r.msg);
+  if(btn && document.getElementById('cloudCodeIn')) btn.disabled = false;
+}
+function uiRestoreBackup(){
+  if(restoreBackup()){ startApp(); showToast('已恢复导入前备份'); }
+  else showToast('暂无备份');
+}
+function uiDelete(){
+  const btn = document.getElementById('delBtn');
+  if(!deleteArmedAt){
+    requestDelete();
+    btn.textContent = '确认删除全部进度？再点一次删除';
+    btn.classList.add('accent');
+    return;
+  }
+  if(confirmDelete()){
+    if(tickTimer){ clearInterval(tickTimer); tickTimer = null; }
+    renderNaming();
+    showToast('已删档，重新开张');
+    setTimeout(() => { try{ tourAutoStart(); }catch(e){} }, 400);
+  }
+}
+function renderLog(){
+  const el = document.getElementById('logList');
+  if(!el) return;
+  el.innerHTML = S.log.length
+    ? S.log.map(x => '<li>' + esc(x) + '</li>').join('')
+    : '<li>尚无动态，静候旅客推门。</li>';
+}
+function updateDynamic(){
+  if(!S || !S.name) return;
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set('coinsVal', S.coins);
+  set('fameVal', S.fame);
+  set('occVal', S.guests.length + '/' + S.rooms.count);
+  set('priceVal', roomPrice());
+  set('rateVal', Math.round(incomeRate() * 10) / 10);
+  set('totalGuestsVal', S.totalGuests);
+  set('favorVal', S.favor);
+  set('levelSeal', '驿站 ' + S.level + ' 级');
+  const nf = nextLevelFame();
+  set('levelNext', nf === null ? '已是十里闻名的名驿' : ('声望满 ' + nf + ' 升至 ' + (S.level + 1) + ' 级'));
+  refreshUpgradeDisabled();
+  renderOffline();
+  renderToday();
+}
+
+/* ================= 工具 ================= */
+function clampInt(v, lo, hi, dft){
+  v = Math.floor(+v);
+  if(!isFinite(v)) return dft;
+  return Math.min(hi, Math.max(lo, v));
+}
+function randInt(lo, hi){ return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+function dayStr(d){
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function timeStr(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function pushLog(msg){
+  S.log.unshift(timeStr() + ' · ' + msg);
+  if(S.log.length > 8) S.log.length = 8;
+}
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.classList.remove('pop');
+  void t.offsetWidth;   /* 重启动画，给领取动作一个即时跳字反馈 */
+  t.classList.add('pop');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2200);
+}
+
+
+/* ================= 新手引导（照联赛 v58/v59 讲解台形态移植） =================
+   底部讲解台固定停靠、位置零计算零跳动；高亮圈独立追踪；页面留 330px 底部滚动空间；
+   先讲后用：动作步无「下一步」、只认真实操作（tourHook）推进；
+   目标不在场/弹窗被关/切页时自动回退或跳过对应步，不乱指、不堵屏（气泡 pointer-events:none，仅按钮可点）。
+   状态走存档字段 guideStep/guideDone/guideRewarded（normalize 加法加入）：
+   新档（未开张）从头走；老档默认标完成不补弹；删档后新档重新走。 */
+const TOUR_STEPS = [
+  { id:'open', action:'open', target:() => document.getElementById('openBtn'),
+    title:'先开张：给驿站起个名字',
+    body:'名字随你起，不填就叫「风来驿站」。点高亮的「开张大吉」，今夜就挂牌。' },
+  { id:'guests', target:() => document.getElementById('roomsGrid'),
+    title:'旅客自己会来，房钱自动进账',
+    body:'旅客自动推门入住，住满就不再进客；房钱按分钟慢慢攒，人在不在都算。' },
+  { id:'offline', target:() => document.getElementById('offlineCard'),
+    title:'离线收益，看这张明牌卡',
+    body:'关掉游戏也按 55% 速率攒房钱，封顶 12 小时；回来在这张卡上点「领取」，还能看广告翻倍。' },
+  { id:'upgrade', target:() => document.getElementById('upRoomBtn') || document.getElementById('upgradesCard'),
+    title:'有钱先扩建，再提品质',
+    body:'扩建多接客，品质抬房价；往下还有厨房和马厩，各有加成，按钮上就是价钱。' },
+  { id:'staff', target:() => document.querySelector('#staffBox .up-row') || document.getElementById('staffCard'),
+    title:'伙计：雇来帮你多赚钱',
+    body:'掌柜、小二、厨子、马夫各管一条加成，雇佣和升级都在这一区办。' },
+  { id:'eventIntro', target:() => document.getElementById('eventsBox'),
+    title:'每日抉择：一天三张，先讲规矩',
+    body:'旅客的小麻烦、小机缘，一天三张，任选一个处置——影响铜钱、声望和好感。下一张由你亲手选。' },
+  { id:'eventDo', action:'event', target:() => document.getElementById('eventsBox'),
+    title:'亲手处理一张抉择',
+    body:'点下面任意一个选项，选完自动继续；铜钱不够的选项点不动。' },
+  { id:'miles', target:() => document.querySelector('#milesBox .up-row') || document.getElementById('milesCard'),
+    title:'里程碑：照着目标领赏',
+    body:'接待、扩建、图鉴都有里程碑，达标回来点「领取」；最上面四条开张贴士，走完引导也留着复看。' },
+  { id:'codex', target:() => document.querySelector('#codexCard h3') || document.getElementById('codexCard'),
+    title:'图鉴：认全 32 种旅客',
+    body:'接待过的旅客会点亮图鉴；等级、厨房、马厩越高，来的客越金贵。' },
+  { id:'save', target:() => document.querySelector('#saveCard h3') || document.getElementById('saveCard'),
+    title:'存档在最下面，短码换设备取回',
+    body:'存档区有本地 5 槽、云端短码和长码兜底；换设备前先生成短码，输码就能取回整档。' },
+  { id:'finish', noring:true, target:null,
+    title:'领路到此，去接第一拨客吧',
+    body:'记住三件事：旅客自动来、离线也有钱、有钱先扩建。走完这趟，老掌柜备了 ' + CONFIG.guideReward + ' 铜钱谢礼，点「完成引导」领取。' }
+];
+let tourActive = false;
+let TOUR_TIMER = null;
+function tourIdx(){ return clampInt(S ? S.guideStep : 0, 0, TOUR_STEPS.length, 0); }
+function tourAutoStart(force){
+  if(navigator.webdriver && !force) return;   /* 自动化环境不自动弹，探针手动开 */
+  if(!S || S.guideDone) return;
+  tourShow();
+}
+function tourStart(manual){
+  if(!S) return;
+  S.guideDone = false;
+  S.guideStep = 0;               /* guideRewarded 保留：重看不再发谢礼 */
+  save();
+  tourShow();
+}
+function tourShow(){
+  if(!S || S.guideDone){ tourHide(); return; }
+  /* 上下文校正：目标所依赖的界面不在场时回退/跳过对应步，绝不对着空页面乱指 */
+  let guard = 0;
+  while(guard++ < TOUR_STEPS.length + 2){
+    const st = TOUR_STEPS[tourIdx()];
+    if(!st){ tourFinish(true); return; }
+    if(st.id === 'open' && S.name){ S.guideStep++; continue; }
+    if(st.id !== 'open' && !S.name){ S.guideStep = 0; break; }
+    if(st.action === 'event' && !currentEvent()){ S.guideStep++; continue; }
+    break;
+  }
+  const step = TOUR_STEPS[tourIdx()];
+  if(!step){ tourFinish(true); return; }
+  /* 规则弹窗若还开着，先收起再讲解（等价联赛「弹窗不在场回退」口径，不让气泡指到弹窗背后） */
+  const mask = document.getElementById('rulesMask');
+  if(mask && mask.style.display !== 'none') hideOfflineRules();
+  tourActive = true;
+  let tries = 0;
+  const attempt = () => {
+    const el = step.target ? step.target() : null;
+    if(!el && step.target && tries++ < 10){ setTimeout(attempt, 250); return; }
+    tourRender(step, el);
+  };
+  attempt();
+  if(TOUR_TIMER) clearInterval(TOUR_TIMER);
+  TOUR_TIMER = setInterval(() => {
+    if(!tourActive || !S || S.guideDone){ clearInterval(TOUR_TIMER); TOUR_TIMER = null; return; }
+    const st = TOUR_STEPS[tourIdx()];
+    tourPlace(st && st.target ? st.target() : null);
+  }, 700);
+  save();
+}
+function tourRender(step, el){
+  const bub = document.getElementById('tourBubble');
+  if(!bub) return;
+  document.body.classList.add('touring');
+  const i = tourIdx();
+  const actHint = { open:'👆 点高亮的「开张大吉」，点了自动继续', event:'👆 点高亮区里的任意选项，选了自动继续' }[step.action];
+  const right = actHint
+    ? '<span class="tmeta" style="align-self:center">' + actHint + '</span>'
+    : '<button class="small accent" onclick="tourNext()">' + (i === TOUR_STEPS.length - 1 ? '完成引导' : '下一步') + '</button>';
+  const dots = TOUR_STEPS.map((_, k) => '<span class="' + (k === i ? '' : 'off') + '">●</span>').join('');
+  bub.innerHTML =
+    '<div class="trow"><span class="tmeta">🧭 新手引导 ' + (i + 1) + '/' + TOUR_STEPS.length + ' · 老掌柜领路</span><span class="tourDots">' + dots + '</span></div>' +
+    '<div class="ttitle">' + step.title + '</div>' +
+    '<div class="tbody">' + step.body + '</div>' +
+    '<div class="tbtns"><button class="small ghost" onclick="tourSkip()">跳过引导</button>' + right + '</div>';
+  bub.style.display = '';
+  if(el){
+    try{
+      const r0 = el.getBoundingClientRect(), vh = window.innerHeight, dockTop = vh - (bub.offsetHeight || 170);
+      if(r0.top < 8 || r0.bottom > dockTop - 6){
+        el.scrollIntoView({ block: r0.height > vh * 0.45 ? 'start' : 'center', behavior: 'auto' });
+      }
+    }catch(e){}
+  }
+  setTimeout(() => tourPlace(el), 60);
+  tourPlace(el);
+}
+function tourPlace(el){
+  const ring = document.getElementById('tourRing'), bub = document.getElementById('tourBubble');
+  if(!ring || !bub || bub.style.display === 'none') return;
+  const step = TOUR_STEPS[tourIdx()];
+  if(!el || (step && step.noring)){ ring.style.display = 'none'; return; }
+  const r = el.getBoundingClientRect();
+  if(r.width === 0 || r.height < 6){ ring.style.display = 'none'; return; }
+  ring.style.display = '';
+  ring.style.left = (r.left - 5) + 'px';
+  ring.style.top = (r.top - 5) + 'px';
+  ring.style.width = (r.width + 10) + 'px';
+  ring.style.height = (r.height + 10) + 'px';
+}
+function tourNext(){
+  if(!S || S.guideDone) return;
+  S.guideStep = tourIdx() + 1;
+  save();
+  if(tourIdx() >= TOUR_STEPS.length){ tourFinish(true); return; }
+  tourShow();
+}
+function tourSkip(){ tourFinish(false); }
+function tourFinish(completed){
+  if(!S) return;
+  S.guideDone = true;
+  S.guideStep = TOUR_STEPS.length;
+  let rewarded = false;
+  if(completed && !S.guideRewarded){
+    S.guideRewarded = true;
+    rewarded = !!S.name;
+    if(rewarded) ledger('guide', CONFIG.guideReward, 0, '新手引导走完，老掌柜谢礼 +' + CONFIG.guideReward + ' 铜钱');
+  }
+  save();
+  tourHide();
+  if(S.name){ updateDynamic(); renderLog(); }
+  if(rewarded) showToast('引导完成，谢礼 +' + CONFIG.guideReward + ' 铜钱已到账');
+}
+function tourHide(){
+  const r = document.getElementById('tourRing'), b = document.getElementById('tourBubble');
+  if(r) r.style.display = 'none';
+  if(b) b.style.display = 'none';
+  document.body.classList.remove('touring');
+  if(TOUR_TIMER){ clearInterval(TOUR_TIMER); TOUR_TIMER = null; }
+  tourActive = false;
+}
+function tourHook(ev){
+  if(!tourActive || !S || S.guideDone) return;
+  const step = TOUR_STEPS[tourIdx()];
+  if(!step) return;
+  if(ev === 'open' && step.action === 'open'){ tourNext(); return; }
+  if(ev === 'event' && step.action === 'event'){ tourNext(); return; }
+}
+
+/* ================= 启动 ================= */
+function settleOffline(){
+  const gain = offlineGain();
+  if(gain >= 1){
+    S.offlinePending += gain;
+    S.guests = [];
+    pushLog('离线期间有旅客投宿，房钱待领取');
+  }
+  rollDayIfNeeded();
+  save();
+}
+function startApp(){
+  renderMain();
+  if(tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(tick, CONFIG.tickMs);
+}
+function boot(){
+  const loaded = load();
+  if(loaded && loaded.name){
+    S = loaded;
+    settleOffline();
+    startApp();
+  }else{
+    S = loaded || defaultState();
+    renderNaming();
+  }
+  setTimeout(() => { try{ tourAutoStart(); }catch(e){} }, 600);
+}
+document.addEventListener('visibilitychange', () => { if(document.hidden) save(); });
+window.addEventListener('beforeunload', save);
+boot();
+
+/* 测试探针出口（不参与游戏逻辑） */
+window.YZ = {
+  get state(){ return S; },
+  CONFIG: CONFIG,
+  incomeRate: incomeRate, offlineGain: offlineGain, upgradeCost: upgradeCost, guestPool: guestPool,
+  arrivalChance: arrivalChance, commissionReward: commissionReward, packActive: packActive,
+  staffCost: staffCost, staffLv: staffLv, metricValue: metricValue, eventPool: eventPool,
+  ledger: function(k, c, f){ return ledger(k, c, f, null); },
+  buyUpgrade: buyUpgrade, buyStaff: buyStaff,
+  currentEvent: currentEvent, doEventChoice: doEventChoice,
+  startCommission: startCommission, claimCommission: claimCommission, instantCommission: instantCommission,
+  claimMilestone: claimMilestone, claimDailyGift: claimDailyGift,
+  claimOffline: claimOffline, claimOfflineDouble: claimOfflineDouble,
+  showRewardAd: showRewardAd,
+  saveSlot: saveSlot, loadSlot: loadSlot, slotInfo: slotInfo,
+  exportCode: exportCode, importCode: importCode, restoreBackup: restoreBackup, hasBackup: hasBackup,
+  vaultConfigured: vaultConfigured, cloudExport: cloudExport, cloudImport: cloudImport,
+  vaultPut: vaultPut, vaultGet: vaultGet,
+  hasShellVault: function(){ return !!shellVault(); },
+  offlineInfo: offlineInfo, tomorrowPreview: tomorrowPreview,
+  todaySummary: todaySummary, codexGroupProgress: codexGroupProgress,
+  showOfflineRules: showOfflineRules, hideOfflineRules: hideOfflineRules,
+  renderOffline: renderOffline, renderToday: renderToday, renderMorning: renderMorning,
+  renderCodex: renderCodex, renderMilestones: renderMilestones,
+  setVaultApi: function(u){ CONFIG.vaultApi = u; },
+  requestDelete: requestDelete, confirmDelete: confirmDelete,
+  rollDayIfNeeded: rollDayIfNeeded, pickEventsForDay: pickEventsForDay,
+  dismissMorning: dismissMorning,
+  tourStart: tourStart, tourNext: tourNext, tourSkip: tourSkip, tourShow: tourShow,
+  tourAutoStart: tourAutoStart, tourHook: tourHook, tourSteps: TOUR_STEPS,
+  tourState: function(){ return S ? { i: tourIdx(), done: !!S.guideDone, rewarded: !!S.guideRewarded, active: tourActive } : null; },
+  arriveGuest: arriveGuest, save: save, load: load, normalize: normalize,
+  halt: function(){ if(tickTimer){ clearInterval(tickTimer); tickTimer = null; } }
+};
+</script>
+</body>
+</html>
