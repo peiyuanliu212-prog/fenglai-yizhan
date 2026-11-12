@@ -84,13 +84,6 @@
     color:var(--ink); padding:9px 10px; margin-top:8px; text-transform:uppercase;
   }
   .cloud-code{font-size:20px; font-weight:700; letter-spacing:3px; color:var(--accent-ink); padding:4px 0 2px;}
-  .nav{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
-  .nav a{
-    flex:1 1 auto; text-align:center; text-decoration:none; color:var(--ink);
-    background:var(--card); border:1px solid var(--line); border-radius:8px;
-    padding:7px 4px; font-size:12px; letter-spacing:1px; white-space:nowrap;
-  }
-  .nav a:active{transform:translateY(1px);}
   .bar{height:8px; background:var(--paper); border:1px solid var(--line); border-radius:5px; overflow:hidden; margin:6px 0 4px;}
   .bar i{display:block; height:100%; background:var(--accent); width:0;}
   .group-line{font-size:13px; font-weight:700; letter-spacing:2px; margin:10px 0 4px; border-top:1px dashed var(--line); padding-top:8px;}
@@ -130,6 +123,37 @@
     background:var(--ink); color:var(--paper); padding:9px 18px; border-radius:8px;
     font-size:14px; letter-spacing:1px; display:none; z-index:50; max-width:86vw; text-align:center;
   }
+  /* ---- UI 分栏（v0.9）：底部五栏 + 页内小栏目 + 卡片网格，一屏一个主题，禁一长条 ---- */
+  :root{ --tabbar-h:58px; }
+  body.has-tabbar #app{padding-bottom:calc(var(--tabbar-h) + 30px + env(safe-area-inset-bottom));}
+  body.touring.has-tabbar #app{padding-bottom:calc(330px + var(--tabbar-h) + env(safe-area-inset-bottom));}
+  body.has-tabbar #tourBubble{bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom));}
+  body.has-tabbar #toast{bottom:calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom));}
+  .tabbar{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:480px; z-index:40;
+    display:flex; background:var(--card); border-top:2px solid var(--ink); padding-bottom:env(safe-area-inset-bottom);}
+  .tabbar .tab{flex:1; position:relative; background:transparent; border:none; border-radius:0; color:var(--ink2);
+    font-size:13px; letter-spacing:2px; padding:12px 0 10px; cursor:pointer;}
+  .tabbar .tab.on{color:var(--accent-ink); font-weight:700; box-shadow:inset 0 3px 0 var(--accent);}
+  .tabbar .tab:active{transform:none;}
+  .tabdot{position:absolute; top:7px; right:calc(50% - 17px); width:8px; height:8px; border-radius:50%; background:var(--accent); display:none;}
+  .tabpage{display:none;}
+  .tabpage.on{display:block;}
+  .subtabs{display:flex; gap:8px; margin-bottom:12px;}
+  .subtabs button{flex:1;}
+  .subtabs button.off{background:transparent; color:var(--ink); border-color:var(--line);}
+  .cardgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .up-card{border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--paper); display:flex; flex-direction:column;}
+  .up-card img.up-thumb{width:100%; height:auto; aspect-ratio:16/8; object-fit:cover; border-radius:6px; border:1px solid var(--line); margin-bottom:8px; background:var(--card); flex:none;}
+  .up-card .t{font-weight:700;}
+  .up-card .d{font-size:12px; color:var(--ink2); flex:1;}
+  .up-card button{margin-top:8px; width:100%;}
+  .staff-card{border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--paper); display:flex; flex-direction:column;}
+  .staff-ava{width:44px; height:44px; border:1.5px solid var(--accent); border-radius:50%; color:var(--accent-ink);
+    display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:700; margin-bottom:6px; background:var(--card);}
+  .staff-card .t{font-weight:700;}
+  .staff-card .d{font-size:12px; color:var(--ink2); flex:1;}
+  .staff-card button{margin-top:8px; width:100%;}
+  .banner.small{aspect-ratio:16/5;}
 </style>
 </head>
 <body>
@@ -340,7 +364,7 @@ function codexAvatar(t, seen){
   if(!IMG[key]) return '';
   return '<img class="cxava' + (seen ? '' : ' unseen') + '" src="' + IMG[key] + '" alt="">';
 }
-function bannerImg(){ return IMG.banner ? '<img class="banner" src="' + IMG.banner + '" alt="">' : ''; }
+function bannerImg(cls){ return IMG.banner ? '<img class="banner' + (cls ? ' ' + cls : '') + '" src="' + IMG.banner + '" alt="">' : ''; }
 function evImgHtml(ev){
   return (ev && ev.img && IMG[ev.img]) ? '<img class="ev-img" src="' + IMG[ev.img] + '" alt="">' : '';
 }
@@ -1056,6 +1080,7 @@ function claimOffline(){
 /* ================= 渲染 ================= */
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function renderNaming(){
+  document.body.classList.remove('has-tabbar');
   document.getElementById('app').innerHTML =
     '<div class="open-wrap">' +
       bannerImg() +
@@ -1079,54 +1104,127 @@ function openInn(){
   startApp();
   tourHook('open');
 }
+/* ================= 分栏导航（v0.9 UI 分栏批） =================
+   底部五栏：经营/建设/事务/收集/存档；建设、收集页内再分小栏目，一屏一个主题。
+   当前页签只存内存变量 uiTab/uiSub，不入存档、不动 normalize/存档结构。 */
+let uiTab = 'home';
+let uiSub = { build:'fac', collect:'codex' };
+function switchTab(tab){
+  uiTab = tab;
+  document.querySelectorAll('.tabpage').forEach(p => p.classList.toggle('on', p.id === 'page-' + tab));
+  document.querySelectorAll('#tabbar .tab').forEach(b => b.classList.toggle('on', b.getAttribute('data-tab') === tab));
+  applySubs();
+  updateTabDots();
+  window.scrollTo(0, 0);
+}
+function switchSub(group, sub){
+  if(!(group in uiSub)) return;
+  uiSub[group] = sub;
+  applySubs();
+  window.scrollTo(0, 0);
+}
+function applySubs(){
+  for(const g of Object.keys(uiSub)){
+    for(const s of ['fac', 'staff', 'codex', 'miles']){
+      const c = document.getElementById('sub-' + g + '-' + s);
+      if(c) c.style.display = uiSub[g] === s ? '' : 'none';
+      const b = document.getElementById('subBtn-' + g + '-' + s);
+      if(b) b.classList.toggle('off', uiSub[g] !== s);
+    }
+  }
+}
+function applyTabs(){ switchTab(uiTab); }
+/* 切页后滚到目标卡（今日清单快捷按钮用） */
+function gotoCard(tab, id){
+  switchTab(tab);
+  setTimeout(() => { const el = document.getElementById(id); if(el) el.scrollIntoView(); }, 30);
+}
+/* 栏上待办提醒点：全部由现有状态派生（离线待领/晨间小结未收/抉择未处理/委托可领/里程碑可领），不新建状态字段 */
+function updateTabDots(){
+  if(!S || !S.name) return;
+  const set = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? 'block' : 'none'; };
+  set('dot-home', Math.floor(S.offlinePending) >= 1 || !!S.morning);
+  set('dot-affair', (S.eventsToday.length - S.eventsDone) > 0 || S.commissions.some(c => commissionReady(c)));
+  set('dot-collect', CONFIG.milestones.some(m => !S.miles[m.id] && metricValue(m.metric) >= m.target));
+}
 function renderMain(){
   document.getElementById('app').innerHTML =
-    bannerImg() +
-    '<div class="sign">' +
-      '<div class="inn-name" id="innNameView"></div>' +
-      '<div class="inn-sub">风 来 驿 站</div>' +
-      '<span class="seal" id="levelSeal"></span>' +
-      '<div class="small-note" id="levelNext"></div>' +
+    '<div class="tabpage" id="page-home">' +
+      bannerImg('small') +
+      '<div class="sign">' +
+        '<div class="inn-name" id="innNameView"></div>' +
+        '<div class="inn-sub">风 来 驿 站</div>' +
+        '<span class="seal" id="levelSeal"></span>' +
+        '<div class="small-note" id="levelNext"></div>' +
+      '</div>' +
+      '<div class="wallet">' +
+        '<div class="cell"><div class="k">铜 钱</div><div class="v coin" id="coinsVal">0</div></div>' +
+        '<div class="cell"><div class="k">声 望</div><div class="v" id="fameVal">0</div></div>' +
+        '<div class="cell"><div class="k">入 住</div><div class="v" id="occVal">0/0</div></div>' +
+      '</div>' +
+      '<div class="card" id="morningCard"><h3>晨 间 小 结</h3><div id="morningBody"></div>' +
+        '<div class="btnrow"><button class="small" onclick="dismissMorning()">收好小结</button></div></div>' +
+      '<div class="card" id="offlineCard">' +
+        '<h3>离 线 明 牌</h3>' +
+        '<div id="offlineBody"></div>' +
+      '</div>' +
+      '<div class="card" id="todayCard"><h3>今 日 清 单</h3><div id="todayBody"></div></div>' +
+      '<div class="card"><h3>驿 站 动 态</h3><ul class="log" id="logList"></ul></div>' +
+      '<div class="foot">自动存档中 · 累计接待 <span id="totalGuestsVal">0</span> 位旅客 · 旅客好感 <span id="favorVal">0</span></div>' +
     '</div>' +
-    '<div class="wallet">' +
-      '<div class="cell"><div class="k">铜 钱</div><div class="v coin" id="coinsVal">0</div></div>' +
-      '<div class="cell"><div class="k">声 望</div><div class="v" id="fameVal">0</div></div>' +
-      '<div class="cell"><div class="k">入 住</div><div class="v" id="occVal">0/0</div></div>' +
+    '<div class="tabpage" id="page-build">' +
+      '<div class="subtabs">' +
+        '<button id="subBtn-build-fac" onclick="switchSub(\'build\',\'fac\')">客房与设施</button>' +
+        '<button id="subBtn-build-staff" onclick="switchSub(\'build\',\'staff\')">伙计</button>' +
+      '</div>' +
+      '<div id="sub-build-fac">' +
+        '<div class="card" id="roomsCard"><h3>客 房</h3><div class="rooms" id="roomsGrid"></div>' +
+          '<div class="rate-line">当前房价 <b id="priceVal">0</b> 文/间 · 在住进账约 <b id="rateVal">0</b> 铜钱/分钟（含厨房与伙计加成）</div></div>' +
+        '<div class="card" id="upgradesCard"><h3>修 缮 与 设 施</h3><div id="upgradesBox"></div></div>' +
+      '</div>' +
+      '<div id="sub-build-staff" style="display:none">' +
+        '<div class="card" id="staffCard"><h3>伙 计</h3><div id="staffBox"></div></div>' +
+      '</div>' +
     '</div>' +
-    '<div class="nav">' +
-      '<a href="#offlineCard">离线明牌</a><a href="#todayCard">今日清单</a><a href="#roomsCard">客房</a>' +
-      '<a href="#eventsCard">抉择</a><a href="#commissionsCard">委托</a><a href="#milesCard">里程碑</a>' +
-      '<a href="#codexCard">图鉴</a><a href="#adsCard">礼包</a><a href="#saveCard">存档</a>' +
+    '<div class="tabpage" id="page-affair">' +
+      '<div class="card" id="eventsCard"><h3>今 日 抉 择（<span id="evLeft">0</span>/3）</h3><div id="eventsBox"></div></div>' +
+      '<div class="card" id="commissionsCard"><h3>商 队 委 托</h3><div id="commissionsBox"></div></div>' +
+      '<div class="card" id="adsCard"><h3>每 日 礼 包</h3><div id="adsBox"></div></div>' +
     '</div>' +
-    '<div class="card" id="morningCard"><h3>晨 间 小 结</h3><div id="morningBody"></div>' +
-      '<div class="btnrow"><button class="small" onclick="dismissMorning()">收好小结</button></div></div>' +
-    '<div class="card" id="offlineCard">' +
-      '<h3>离 线 明 牌</h3>' +
-      '<div id="offlineBody"></div>' +
+    '<div class="tabpage" id="page-collect">' +
+      '<div class="subtabs">' +
+        '<button id="subBtn-collect-codex" onclick="switchSub(\'collect\',\'codex\')">旅客图鉴</button>' +
+        '<button id="subBtn-collect-miles" onclick="switchSub(\'collect\',\'miles\')">里程碑</button>' +
+      '</div>' +
+      '<div id="sub-collect-codex">' +
+        '<div class="card" id="codexCard"><h3>旅 客 图 鉴（<span id="seenCount">0</span>/32）</h3><div id="codexBox"></div></div>' +
+      '</div>' +
+      '<div id="sub-collect-miles" style="display:none">' +
+        '<div class="card" id="milesCard"><h3>里 程 碑</h3><div id="milesBox"></div></div>' +
+      '</div>' +
     '</div>' +
-    '<div class="card" id="todayCard"><h3>今 日 清 单</h3><div id="todayBody"></div></div>' +
-    '<div class="card" id="roomsCard"><h3>客 房</h3><div class="rooms" id="roomsGrid"></div>' +
-      '<div class="rate-line">当前房价 <b id="priceVal">0</b> 文/间 · 在住进账约 <b id="rateVal">0</b> 铜钱/分钟（含厨房与伙计加成）</div></div>' +
-    '<div class="card" id="eventsCard"><h3>今 日 抉 择（<span id="evLeft">0</span>/3）</h3><div id="eventsBox"></div></div>' +
-    '<div class="card" id="upgradesCard"><h3>修 缮 与 设 施</h3><div id="upgradesBox"></div></div>' +
-    '<div class="card" id="staffCard"><h3>伙 计</h3><div id="staffBox"></div></div>' +
-    '<div class="card" id="commissionsCard"><h3>商 队 委 托</h3><div id="commissionsBox"></div></div>' +
-    '<div class="card" id="milesCard"><h3>里 程 碑</h3><div id="milesBox"></div></div>' +
-    '<div class="card" id="codexCard"><h3>旅 客 图 鉴（<span id="seenCount">0</span>/32）</h3><div id="codexBox"></div></div>' +
-    '<div class="card" id="adsCard"><h3>每 日 礼 包</h3><div id="adsBox"></div></div>' +
-    '<div class="card" id="settingsCard"><h3>设 置</h3><div id="settingsBox"></div></div>' +
-    '<div class="card" id="saveCard"><h3>存 档</h3><div id="saveBox"></div></div>' +
-    '<div class="card"><h3>驿 站 动 态</h3><ul class="log" id="logList"></ul></div>' +
-    '<div class="foot">自动存档中 · 累计接待 <span id="totalGuestsVal">0</span> 位旅客 · 旅客好感 <span id="favorVal">0</span></div>' +
+    '<div class="tabpage" id="page-save">' +
+      '<div class="card" id="saveCard"><h3>存 档</h3><div id="saveBox"></div></div>' +
+      '<div class="card" id="settingsCard"><h3>设 置</h3><div id="settingsBox"></div></div>' +
+    '</div>' +
+    '<div class="tabbar" id="tabbar">' +
+      '<button class="tab" data-tab="home" onclick="switchTab(\'home\')">经营<span class="tabdot" id="dot-home"></span></button>' +
+      '<button class="tab" data-tab="build" onclick="switchTab(\'build\')">建设</button>' +
+      '<button class="tab" data-tab="affair" onclick="switchTab(\'affair\')">事务<span class="tabdot" id="dot-affair"></span></button>' +
+      '<button class="tab" data-tab="collect" onclick="switchTab(\'collect\')">收集<span class="tabdot" id="dot-collect"></span></button>' +
+      '<button class="tab" data-tab="save" onclick="switchTab(\'save\')">存档</button>' +
+    '</div>' +
     '<div id="rulesMask" class="modal-mask" style="display:none"><div class="modal-box">' +
       '<h3>离 线 收 益 规 则</h3><div id="rulesBody"></div>' +
       '<div class="btnrow"><button class="small accent" onclick="hideOfflineRules()">知道了</button></div>' +
     '</div></div>';
   document.getElementById('innNameView').textContent = S.name;
+  document.body.classList.add('has-tabbar');
   todaySig = ''; offlineSig = '';
   renderMorning(); renderOffline(); renderToday(); renderRooms(); renderEvents(); renderUpgrades();
   renderStaff(); renderCommissions(); renderMilestones(); renderCodex();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
+  applyTabs();
 }
 const GATE_LABELS = { commission:'商队委托', banquet:'宴会厅事件池', noble:'贵客图鉴段' };
 /* 明日预告（纯展示）：由日期门 gates 与下一等级声望差派生，不发奖、不写存档 */
@@ -1239,14 +1337,14 @@ function renderToday(){
   const sig = JSON.stringify(t);
   if(sig === todaySig) return;
   todaySig = sig;
-  const row = (txt, anchor, btn) =>
+  const row = (txt, tab, anchor, btn) =>
     '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' + txt + '</div></div>' +
-    (anchor ? '<button class="small ghost" onclick="document.getElementById(\'' + anchor + '\').scrollIntoView()">' + btn + '</button>' : '') + '</div>';
+    (anchor ? '<button class="small ghost" onclick="gotoCard(\'' + tab + '\',\'' + anchor + '\')">' + btn + '</button>' : '') + '</div>';
   box.innerHTML =
-    row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'offlineCard', '去领取') +
-    row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'eventsCard', '去处理') +
-    row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'commissionsCard', '去查看') +
-    row('每日礼包剩余：<b>' + t.giftLeft + '</b>/' + CONFIG.adsLimit.gift + ' 次', 'adsCard', '去领取');
+    row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'home', 'offlineCard', '去领取') +
+    row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'affair', 'eventsCard', '去处理') +
+    row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'affair', 'commissionsCard', '去查看') +
+    row('每日礼包剩余：<b>' + t.giftLeft + '</b>/' + CONFIG.adsLimit.gift + ' 次', 'affair', 'adsCard', '去领取');
 }
 function renderRooms(){
   const grid = document.getElementById('roomsGrid');
@@ -1282,26 +1380,27 @@ function renderEvents(){
     '<div class="btnrow">' + ev.choices.map((c, i) =>
       '<button class="small" onclick="doEventChoice(' + i + ')">' + esc(c.label) + '</button>').join('') + '</div>';
 }
-function upRowHtml(kind, title, desc, btnId, imgKey){
+function upCardHtml(kind, title, desc, btnId, imgKey){
   const cost = upgradeCost(kind);
-  return '<div class="up-row">' +
+  return '<div class="up-card">' +
     ((imgKey && IMG[imgKey]) ? '<img class="up-thumb" src="' + IMG[imgKey] + '" alt="">' : '') +
-    '<div class="info"><div class="t">' + title + '</div>' +
-    '<div class="d">' + desc + '</div></div>' +
+    '<div class="t">' + title + '</div>' +
+    '<div class="d">' + desc + '</div>' +
     (cost === null ? '<button disabled>已满/未解锁</button>'
       : '<button id="' + btnId + '" onclick="buyUpgrade(\'' + kind + '\')">' + cost + ' 文</button>') + '</div>';
 }
 function renderUpgrades(){
   const box = document.getElementById('upgradesBox');
   if(!box) return;
-  box.innerHTML =
-    upRowHtml('room', '扩建客房（现 ' + S.rooms.count + ' 间）', '多一间房，多一份进账', 'upRoomBtn', 'rooms') +
-    upRowHtml('quality', '提升品质（现「' + CONFIG.qualityNames[S.rooms.quality] + '」）',
+  box.innerHTML = '<div class="cardgrid">' +
+    upCardHtml('room', '扩建客房（现 ' + S.rooms.count + ' 间）', '多一间房，多一份进账', 'upRoomBtn', 'rooms') +
+    upCardHtml('quality', '提升品质（现「' + CONFIG.qualityNames[S.rooms.quality] + '」）',
       '房价倍率 ×' + CONFIG.qualityMult[S.rooms.quality], 'upQualityBtn') +
-    upRowHtml('kitchen', '升级厨房（现 ' + S.kitchenLv + ' 级，上限 ' + kitchenCap() + ' 级）',
+    upCardHtml('kitchen', '升级厨房（现 ' + S.kitchenLv + ' 级，上限 ' + kitchenCap() + ' 级）',
       '总收入 +' + Math.round(S.kitchenLv * CONFIG.kitchenMultPerLv * 100) + '%（每级 +8%）', 'upKitchenBtn', 'kitchen') +
-    upRowHtml('stable', '整修马厩（现 ' + S.stableLv + ' 级，上限 ' + stableCap() + ' 级）',
-      '委托报酬与旅客到访率提升', 'upStableBtn', 'stable');
+    upCardHtml('stable', '整修马厩（现 ' + S.stableLv + ' 级，上限 ' + stableCap() + ' 级）',
+      '委托报酬与旅客到访率提升', 'upStableBtn', 'stable') +
+    '</div>';
   refreshUpgradeDisabled();
 }
 function refreshUpgradeDisabled(){
@@ -1314,15 +1413,16 @@ function refreshUpgradeDisabled(){
 function renderStaff(){
   const box = document.getElementById('staffBox');
   if(!box) return;
-  box.innerHTML = CONFIG.staffTypes.map(t => {
+  box.innerHTML = '<div class="cardgrid">' + CONFIG.staffTypes.map(t => {
     const cur = S.staff[t.id];
     const cost = staffCost(t.id);
-    return '<div class="up-row"><div class="info"><div class="t">' + t.label +
-      (cur ? '（' + cur.lv + ' 级）' : '（未雇佣）') + '</div><div class="d">' + t.desc + '</div></div>' +
+    return '<div class="staff-card"><div class="staff-ava">' + t.label.charAt(0) + '</div>' +
+      '<div class="t">' + t.label +
+      (cur ? '（' + cur.lv + ' 级）' : '（未雇佣）') + '</div><div class="d">' + t.desc + '</div>' +
       (cost === null ? '<button disabled>已满级</button>'
         : '<button class="small" id="staffBtn_' + t.id + '" onclick="buyStaff(\'' + t.id + '\')">' +
           (cur ? '升级' : '雇佣') + ' · ' + cost + ' 文</button>') + '</div>';
-  }).join('');
+  }).join('') + '</div>';
   for(const t of CONFIG.staffTypes){
     const b = document.getElementById('staffBtn_' + t.id), c = staffCost(t.id);
     if(b && c !== null) b.disabled = S.coins < c;
@@ -1432,7 +1532,7 @@ function renderSettings(){
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
-      '。贵客图鉴段 2026-11-26 开启。重置说明：如需重开驿站，请到下方存档区两步确认删档，删除后不可恢复（导入前备份除外）。</div>';
+      '。贵客图鉴段 2026-11-26 开启。重置说明：如需重开驿站，请到本页存档区两步确认删档，删除后不可恢复（导入前备份除外）。</div>';
 }
 function toggleSetting(key){
   S.settings[key] = !S.settings[key];
@@ -1548,6 +1648,7 @@ function updateDynamic(){
   refreshUpgradeDisabled();
   renderOffline();
   renderToday();
+  updateTabDots();
 }
 
 /* ================= 工具 ================= */
@@ -1592,32 +1693,32 @@ const TOUR_STEPS = [
   { id:'open', action:'open', target:() => document.getElementById('openBtn'),
     title:'先开张：给驿站起个名字',
     body:'名字随你起，不填就叫「风来驿站」。点高亮的「开张大吉」，今夜就挂牌。' },
-  { id:'guests', target:() => document.getElementById('roomsGrid'),
+  { id:'guests', page:'build', sub:['build','fac'], target:() => document.getElementById('roomsGrid'),
     title:'旅客自己会来，房钱自动进账',
     body:'旅客自动推门入住，住满就不再进客；房钱按分钟慢慢攒，人在不在都算。' },
-  { id:'offline', action:'offline', target:() => document.getElementById('offlineCard'),
+  { id:'offline', action:'offline', page:'home', target:() => document.getElementById('offlineCard'),
     title:'离线收益，亲手领这一笔',
     body:'老掌柜把刚才这会儿快进成离线十分钟：旅客投宿又离店，账已攒在这张卡上。点卡上的「领取」亲手收下；平时关掉游戏也照 55% 攒，封顶 12 小时。' },
-  { id:'upgrade', target:() => document.getElementById('upRoomBtn') || document.getElementById('upgradesCard'),
+  { id:'upgrade', page:'build', sub:['build','fac'], target:() => document.getElementById('upRoomBtn') || document.getElementById('upgradesCard'),
     title:'有钱先扩建，再提品质',
     body:'扩建多接客，品质抬房价；往下还有厨房和马厩，各有加成，按钮上就是价钱。' },
-  { id:'staff', target:() => document.querySelector('#staffBox .up-row') || document.getElementById('staffCard'),
+  { id:'staff', page:'build', sub:['build','staff'], target:() => document.querySelector('#staffBox .staff-card') || document.getElementById('staffCard'),
     title:'伙计：雇来帮你多赚钱',
     body:'掌柜、小二、厨子、马夫各管一条加成，雇佣和升级都在这一区办。' },
-  { id:'eventIntro', target:() => document.getElementById('eventsBox'),
+  { id:'eventIntro', page:'affair', target:() => document.getElementById('eventsBox'),
     title:'每日抉择：一天三张，先讲规矩',
     body:'旅客的小麻烦、小机缘，一天三张，任选一个处置——影响铜钱、声望和好感。下一张由你亲手选。' },
-  { id:'eventDo', action:'event', target:() => document.getElementById('eventsBox'),
+  { id:'eventDo', action:'event', page:'affair', target:() => document.getElementById('eventsBox'),
     title:'亲手处理一张抉择',
     body:'点下面任意一个选项，选完自动继续；铜钱不够的选项点不动。' },
-  { id:'miles', target:() => document.querySelector('#milesBox .up-row') || document.getElementById('milesCard'),
+  { id:'miles', page:'collect', sub:['collect','miles'], target:() => document.querySelector('#milesBox .up-row') || document.getElementById('milesCard'),
     title:'里程碑：照着目标领赏',
     body:'接待、扩建、图鉴都有里程碑，达标回来点「领取」；最上面四条开张贴士，走完引导也留着复看。' },
-  { id:'codex', target:() => document.querySelector('#codexCard h3') || document.getElementById('codexCard'),
+  { id:'codex', page:'collect', sub:['collect','codex'], target:() => document.querySelector('#codexCard h3') || document.getElementById('codexCard'),
     title:'图鉴：认全 32 种旅客',
     body:'接待过的旅客会点亮图鉴；等级、厨房、马厩越高，来的客越金贵。' },
-  { id:'save', target:() => document.querySelector('#saveCard h3') || document.getElementById('saveCard'),
-    title:'存档在最下面，短码换设备取回',
+  { id:'save', page:'save', target:() => document.querySelector('#saveCard h3') || document.getElementById('saveCard'),
+    title:'存档在「存档」栏，短码换设备取回',
     body:'存档区有本地 5 槽、云端短码和长码兜底；换设备前先生成短码，输码就能取回整档。' },
   { id:'finish', noring:true, target:null,
     title:'领路到此，去接第一拨客吧',
@@ -1717,6 +1818,9 @@ function tourShow(){
   }
   tourYielded = false;
   tourActive = true;
+  /* 跟随切页：展示该步前先切到目标所在页/小栏目再取位高亮；切页不重置引导进度（guideStep 不动） */
+  if(step.page) switchTab(step.page);
+  if(step.sub) switchSub(step.sub[0], step.sub[1]);
   let tries = 0;
   const attempt = () => {
     const el = step.target ? step.target() : null;
@@ -1745,7 +1849,10 @@ function tourRender(step, el){
   bub.style.display = '';
   if(el){
     try{
-      const r0 = el.getBoundingClientRect(), vh = window.innerHeight, dockTop = vh - (bub.offsetHeight || 170);
+      const r0 = el.getBoundingClientRect(), vh = window.innerHeight,
+        tbEl = document.getElementById('tabbar'),
+        tabH = (tbEl && document.body.classList.contains('has-tabbar')) ? tbEl.offsetHeight : 0,
+        dockTop = vh - tabH - (bub.offsetHeight || 170);
       if(r0.top < 8 || r0.bottom > dockTop - 6){
         el.scrollIntoView({ block: r0.height > vh * 0.45 ? 'start' : 'center', behavior: 'auto' });
       }
@@ -1860,6 +1967,8 @@ window.YZ = {
   hasShellVault: function(){ return !!shellVault(); },
   offlineInfo: offlineInfo, tomorrowPreview: tomorrowPreview,
   todaySummary: todaySummary, codexGroupProgress: codexGroupProgress,
+  switchTab: switchTab, switchSub: switchSub, gotoCard: gotoCard, updateTabDots: updateTabDots,
+  uiState: function(){ return { tab: uiTab, sub: Object.assign({}, uiSub) }; },
   showOfflineRules: showOfflineRules, hideOfflineRules: hideOfflineRules,
   renderOffline: renderOffline, renderToday: renderToday, renderMorning: renderMorning,
   renderCodex: renderCodex, renderMilestones: renderMilestones,
