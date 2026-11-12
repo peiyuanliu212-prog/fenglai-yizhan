@@ -473,12 +473,12 @@ async function vaultPut(payload){
   if(cloud){
     const r = await cloud.request({ path:'/api/yzvault/put', method:'POST', data:{ payload } });
     const d = (r && r.data) || null;
-    if(!d || !d.shortCode) throw new Error((d && d.message) || '短码生成失败');
+    if(!d || !d.shortCode) throw new Error('vault_put_fail');   /* 内部码仅供调用方归类，绝不原样弹给玩家 */
     return d.shortCode;
   }
   const res = await fetch(CONFIG.vaultApi + '/yzvault/put', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ payload }) });
   const j = await res.json().catch(() => null);
-  if(!res.ok || !j || j.code !== 0 || !j.data || !j.data.shortCode) throw new Error((j && j.message) || ('HTTP ' + res.status));
+  if(!res.ok || !j || j.code !== 0 || !j.data || !j.data.shortCode) throw new Error('vault_put_fail');
   return j.data.shortCode;
 }
 async function vaultGet(code){
@@ -486,12 +486,12 @@ async function vaultGet(code){
   if(cloud){
     const r = await cloud.request({ path:'/api/yzvault/get', method:'POST', data:{ code } });
     const d = (r && r.data) || null;
-    if(!d || typeof d.payload !== 'string') throw new Error((d && d.message) || '短码取档失败');
+    if(!d || typeof d.payload !== 'string') throw new Error('vault_get_fail');
     return d.payload;
   }
   const res = await fetch(CONFIG.vaultApi + '/yzvault/get', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ code }) });
   const j = await res.json().catch(() => null);
-  if(!res.ok || !j || j.code !== 0 || !j.data || typeof j.data.payload !== 'string') throw new Error((j && j.message) || ('HTTP ' + res.status));
+  if(!res.ok || !j || j.code !== 0 || !j.data || typeof j.data.payload !== 'string') throw new Error('vault_get_fail');
   return j.data.payload;
 }
 function normalizeVaultCode(text){
@@ -505,7 +505,7 @@ async function cloudExport(){
   try{
     const code = await vaultPut(payload);
     return { ok:true, code: CONFIG.vaultPrefix + code };
-  }catch(e){ return { ok:false, msg:'上传失败：' + (e.message || '网络错误') + '，可改用长码导出' }; }
+  }catch(e){ console.warn('cloudExport failed', e); return { ok:false, msg:'上传失败，网络可能不稳，请稍后再试，或改用下方长码导出' }; }
 }
 async function cloudImport(text){
   const code = normalizeVaultCode(text);
@@ -514,7 +514,7 @@ async function cloudImport(text){
   if(!vaultConfigured()) return { ok:false, msg:'云端短码尚未开通（后端部署中），请改用长码导入' };
   let payload = null;
   try{ payload = await vaultGet(code); }
-  catch(e){ return { ok:false, msg:'取档失败：' + (e.message || '网络错误') }; }
+  catch(e){ console.warn('cloudImport failed', e); return { ok:false, msg:'取档失败：短码可能不对，或网络不稳，请核对后重试' }; }
   /* 落地走 importCode 同一通道：JSON/形状校验不过不动现档，通过则先备份当前档再覆盖 */
   return importCode(btoa(unescape(encodeURIComponent(payload))))
     ? { ok:true }
@@ -933,6 +933,7 @@ function claimOfflineDouble(){
     ledger('offline_ad', amt, 0, '离线收益翻倍领取 +' + amt + ' 铜钱');
     save(); renderOffline(); updateDynamic(); renderLog();
     showToast('翻倍领取到账 +' + amt + ' 铜钱');
+    tourHook('offline');
   });
 }
 function claimDailyGift(){
@@ -971,6 +972,7 @@ function claimOffline(){
   updateDynamic();
   renderLog();
   showToast('离线收益到账 +' + amt + ' 铜钱');
+  tourHook('offline');
 }
 
 /* ================= 渲染 ================= */
@@ -1102,7 +1104,9 @@ function renderOffline(){
   if(info.pending >= 1){
     html += '<div style="margin-top:6px;">已累计待领</div>' +
       '<div class="amt" id="offlineAmt">' + info.pending + ' 铜钱</div>' +
-      '<div class="small-note">按当前速率折算约已累计 ' + fmtDurMin(info.accruedMin) + '（封顶 ' + CONFIG.offlineCapHours + ' 小时）</div>';
+      (info.offRate > 0
+        ? '<div class="small-note">按当前速率折算约已累计 ' + fmtDurMin(info.accruedMin) + '（封顶 ' + CONFIG.offlineCapHours + ' 小时）</div>'
+        : '<div class="small-note">这是旅客已离店结下的账，点下方「领取」即可入账（封顶 ' + CONFIG.offlineCapHours + ' 小时）</div>');
   }else{
     html += '<div class="small-note" style="margin-top:6px;">暂无待领离线收益——离开游戏后，在住旅客的房钱会按离线速率自动累计。</div>';
   }
@@ -1507,9 +1511,9 @@ const TOUR_STEPS = [
   { id:'guests', target:() => document.getElementById('roomsGrid'),
     title:'旅客自己会来，房钱自动进账',
     body:'旅客自动推门入住，住满就不再进客；房钱按分钟慢慢攒，人在不在都算。' },
-  { id:'offline', target:() => document.getElementById('offlineCard'),
-    title:'离线收益，看这张明牌卡',
-    body:'关掉游戏也按 55% 速率攒房钱，封顶 12 小时；回来在这张卡上点「领取」，还能看广告翻倍。' },
+  { id:'offline', action:'offline', target:() => document.getElementById('offlineCard'),
+    title:'离线收益，亲手领这一笔',
+    body:'老掌柜把刚才这会儿快进成离线十分钟：旅客投宿又离店，账已攒在这张卡上。点卡上的「领取」亲手收下；平时关掉游戏也照 55% 攒，封顶 12 小时。' },
   { id:'upgrade', target:() => document.getElementById('upRoomBtn') || document.getElementById('upgradesCard'),
     title:'有钱先扩建，再提品质',
     body:'扩建多接客，品质抬房价；往下还有厨房和马厩，各有加成，按钮上就是价钱。' },
@@ -1537,6 +1541,54 @@ const TOUR_STEPS = [
 ];
 let tourActive = false;
 let TOUR_TIMER = null;
+let tourSeededGuest = false;   /* 旅客步造真客只做一次（运行时标记，不入存档） */
+let tourSeededOffline = false; /* 离线步造真待领只做一次（运行时标记，不入存档） */
+let tourYielded = false;       /* 真实弹窗（离线规则）在场时引导让行，关后接回 */
+/* 旅客步：房里还没客时用真实入住流程迎一拨客再讲，不对着空房讲 */
+function tourSeedGuest(){
+  if(tourSeededGuest || !S || !S.name) return;
+  tourSeededGuest = true;
+  if(S.guests.length === 0) arriveGuest();
+}
+/* 离线步：新档刚开张 offlinePending 必为 0，空讲违规——按清单造真实对象：
+   先保证有客（真实入住），再把 lastSeen 回拨 10 分钟走真实 settleOffline 结算，
+   待领金额由 offlineGain() 公式算出，不写死、不绕公式；玩家在本步亲手领取入账。 */
+function tourSeedOffline(){
+  if(tourSeededOffline || !S || !S.name) return;
+  if(S.offlinePending >= 1){ tourSeededOffline = true; return; }
+  if(S.guests.length === 0) arriveGuest();
+  if(incomeRate() <= 0) return;
+  S.lastSeen = Date.now() - 10 * 60000;
+  settleOffline();
+  if(S.offlinePending >= 1){
+    tourSeededOffline = true;
+    /* 结算完立刻重绘相关卡：不许讲解说「账已攒好」而卡面还停在「暂无待领」 */
+    renderOffline(); renderRooms(); renderToday(); updateDynamic(); renderLog();
+  }
+}
+function tourModalOpen(){
+  const m = document.getElementById('rulesMask');
+  return !!(m && m.style.display !== 'none');
+}
+function tourHideEls(){
+  const r = document.getElementById('tourRing'), b = document.getElementById('tourBubble');
+  if(r) r.style.display = 'none';
+  if(b) b.style.display = 'none';
+}
+/* 引导计时器：高亮圈追踪 + 弹窗让行监测（弹窗在场收起讲解台，关后接回当前步） */
+function tourStartTimer(){
+  if(TOUR_TIMER) clearInterval(TOUR_TIMER);
+  TOUR_TIMER = setInterval(() => {
+    if(!tourActive || !S || S.guideDone){ clearInterval(TOUR_TIMER); TOUR_TIMER = null; return; }
+    if(tourModalOpen()){
+      if(!tourYielded){ tourYielded = true; tourHideEls(); }
+      return;
+    }
+    if(tourYielded){ tourYielded = false; tourShow(); return; }
+    const st = TOUR_STEPS[tourIdx()];
+    tourPlace(st && st.target ? st.target() : null);
+  }, 700);
+}
 function tourIdx(){ return clampInt(S ? S.guideStep : 0, 0, TOUR_STEPS.length, 0); }
 function tourAutoStart(force){
   if(navigator.webdriver && !force) return;   /* 自动化环境不自动弹，探针手动开 */
@@ -1552,6 +1604,10 @@ function tourStart(manual){
 }
 function tourShow(){
   if(!S || S.guideDone){ tourHide(); return; }
+  /* 空状态先行造真：旅客步保证有客、离线步保证有真实待领（公式结算），不空讲 */
+  const cur0 = TOUR_STEPS[tourIdx()];
+  if(cur0 && cur0.id === 'guests') tourSeedGuest();
+  if(cur0 && cur0.id === 'offline') tourSeedOffline();
   /* 上下文校正：目标所依赖的界面不在场时回退/跳过对应步，绝不对着空页面乱指 */
   let guard = 0;
   while(guard++ < TOUR_STEPS.length + 2){
@@ -1560,13 +1616,22 @@ function tourShow(){
     if(st.id === 'open' && S.name){ S.guideStep++; continue; }
     if(st.id !== 'open' && !S.name){ S.guideStep = 0; break; }
     if(st.action === 'event' && !currentEvent()){ S.guideStep++; continue; }
+    if(st.action === 'offline' && tourSeededOffline && S.offlinePending < 1){ S.guideStep++; continue; }
     break;
   }
   const step = TOUR_STEPS[tourIdx()];
   if(!step){ tourFinish(true); return; }
-  /* 规则弹窗若还开着，先收起再讲解（等价联赛「弹窗不在场回退」口径，不让气泡指到弹窗背后） */
-  const mask = document.getElementById('rulesMask');
-  if(mask && mask.style.display !== 'none') hideOfflineRules();
+  /* 真实弹窗（离线规则）在场：引导让行——收起讲解台与高亮圈、暂停讲解，
+     不抢屏、不自动收掉玩家的弹窗；弹窗关闭后由计时器接回当前步 */
+  if(tourModalOpen()){
+    tourYielded = true;
+    tourActive = true;
+    tourHideEls();
+    tourStartTimer();
+    save();
+    return;
+  }
+  tourYielded = false;
   tourActive = true;
   let tries = 0;
   const attempt = () => {
@@ -1575,12 +1640,7 @@ function tourShow(){
     tourRender(step, el);
   };
   attempt();
-  if(TOUR_TIMER) clearInterval(TOUR_TIMER);
-  TOUR_TIMER = setInterval(() => {
-    if(!tourActive || !S || S.guideDone){ clearInterval(TOUR_TIMER); TOUR_TIMER = null; return; }
-    const st = TOUR_STEPS[tourIdx()];
-    tourPlace(st && st.target ? st.target() : null);
-  }, 700);
+  tourStartTimer();
   save();
 }
 function tourRender(step, el){
@@ -1588,7 +1648,7 @@ function tourRender(step, el){
   if(!bub) return;
   document.body.classList.add('touring');
   const i = tourIdx();
-  const actHint = { open:'👆 点高亮的「开张大吉」，点了自动继续', event:'👆 点高亮区里的任意选项，选了自动继续' }[step.action];
+  const actHint = { open:'👆 点高亮的「开张大吉」，点了自动继续', event:'👆 点高亮区里的任意选项，选了自动继续', offline:'👆 点明牌卡上的「领取」，领了自动继续' }[step.action];
   const right = actHint
     ? '<span class="tmeta" style="align-self:center">' + actHint + '</span>'
     : '<button class="small accent" onclick="tourNext()">' + (i === TOUR_STEPS.length - 1 ? '完成引导' : '下一步') + '</button>';
@@ -1660,6 +1720,7 @@ function tourHook(ev){
   if(!step) return;
   if(ev === 'open' && step.action === 'open'){ tourNext(); return; }
   if(ev === 'event' && step.action === 'event'){ tourNext(); return; }
+  if(ev === 'offline' && step.action === 'offline'){ tourNext(); return; }
 }
 
 /* ================= 启动 ================= */
