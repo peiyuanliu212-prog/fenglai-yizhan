@@ -139,7 +139,7 @@ const CONFIG = {
      请求层双路：壳内优先 window.ColorboxAI.cloud.request（/api/yzvault/*），非壳回退 fetch(vaultApi)。
      部署完成后由总台把网关地址填入 vaultApi（与三国客户端同一个网关）；无壳且留空 = 未配置，
      客户端会明确提示「尚未开通」且长码通道照常可用，绝不假装成功。部署清单见工程根目录《云端短码部署说明》。 */
-  vaultApi: '',
+  vaultApi: 'https://app-6577eaef3c-d1gmtlqu9702c7de1-1252166086.ap-shanghai.app.tcloudbase.com/api',
   vaultPrefix: 'YZ-',
   vaultPayloadMax: 262144,
   startCoins: 100,
