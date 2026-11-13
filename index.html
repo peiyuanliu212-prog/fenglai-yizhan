@@ -552,6 +552,7 @@ function defaultState(){
     lastSeen: Date.now(),
     day: dayStr(),
     ads: {},
+    adPending: null,
     acc: 0,
     offlinePending: 0,
     log: [],
@@ -574,6 +575,30 @@ function defaultState(){
     settings: { bgm: true, sfx: true }
   };
 }
+/* 广告 PENDING 欠账标记清洗（v1.3.1 加法字段）：形状非法一律丢弃；老档无此字段默认 null、安全 */
+function sanitizeAdPending(raw){
+  if(!raw || typeof raw !== 'object') return null;
+  const p = raw.placement;
+  if(p !== 'offline_double' && p !== 'daily_gift' && p !== 'commission_instant') return null;
+  const out = { placement: p,
+    token: (typeof raw.token === 'string' && raw.token) ? raw.token : 'legacy',
+    at: Math.max(0, Math.floor(+raw.at || 0)),
+    day: (typeof raw.day === 'string') ? raw.day : '' };
+  if(p === 'offline_double'){
+    out.amt = Math.floor(+raw.amt || 0);
+    if(out.amt < 1) return null;
+  }
+  if(p === 'daily_gift'){
+    out.n = Math.max(1, Math.floor(+raw.n || 1));
+    out.amt = Math.floor(+raw.amt || 0);
+    if(out.amt < 1) out.amt = CONFIG.giftReward;
+  }
+  if(p === 'commission_instant'){
+    out.cid = (typeof raw.cid === 'string') ? raw.cid : '';
+    if(!out.cid) return null;
+  }
+  return out;
+}
 function normalize(raw){
   const d = defaultState();
   if(!raw || typeof raw !== 'object') return d;
@@ -594,6 +619,7 @@ function normalize(raw){
   s.miles = (raw.miles && typeof raw.miles === 'object') ? raw.miles : {};
   s.commissions = Array.isArray(raw.commissions) ? raw.commissions.filter(c => c && c.tierId && !c.claimed) : [];
   s.ads = (raw.ads && typeof raw.ads === 'object') ? raw.ads : {};
+  s.adPending = sanitizeAdPending(raw.adPending);
   s.log = Array.isArray(raw.log) ? raw.log.slice(0, 8) : [];
   s.coins = Math.max(0, Math.floor(+s.coins || 0));
   s.fame = Math.max(0, Math.floor(+s.fame || 0));
@@ -1427,42 +1453,94 @@ function showRewardAd(placement, onReward){
   }
 }
 function adsUsed(kind){ return Math.floor(+S.ads[kind] || 0); }
+/* ---- PENDING 防丢（v1.3.1，P0 口径）----
+   点广告那一刻先把欠账标记（点位＋快照＋全局唯一 token）落盘 save()，之后才调广告；
+   正常回调与「回调丢失后重开补发」共用 adApply 落账出口：先清标记再落账，
+   标记与 done 守卫互斥，重复回调/重复 load 都不双发；同一时刻只允许一个 pending，
+   新广告入口先 recoverAdPending() 补清旧欠账再放行。 */
+let adSeq = 0;
+function adBegin(placement, snap){
+  const p = Object.assign({
+    placement: placement,
+    token: Date.now() + '_' + placement + '_' + (++adSeq) + '_' + Math.floor(Math.random() * 1000000),
+    at: Date.now(), day: dayStr()
+  }, snap || {});
+  S.adPending = p;
+  save();   /* 标记先落盘，回调丢失（杀进程/壳崩溃）也丢不了这笔账 */
+  return p;
+}
+function adApply(p, recovered){
+  if(!S || !p || !S.adPending || S.adPending.token !== p.token) return false;   /* 标记互斥：已清/已换一律不发 */
+  S.adPending = null;
+  if(p.placement === 'offline_double'){
+    const amt = Math.floor(p.amt || 0);
+    if(amt >= 1){
+      S.offlinePending = Math.max(0, Math.floor(S.offlinePending) - amt);   /* 只扣快照那份，期间新攒的待领保留 */
+      S.ads.offlineDouble = 1;
+      ledger('offline_ad', amt * 2, 0, (recovered ? '上次广告奖励已补发：' : '') + '离线收益翻倍领取 +' + (amt * 2) + ' 铜钱');
+      questBump('offline', 1);
+    }
+  }else if(p.placement === 'daily_gift'){
+    const amt = Math.floor(p.amt || CONFIG.giftReward);
+    S.ads.gift = adsUsed('gift') + 1;   /* 补发也计入当日次数，就是那一份、不额外多给 */
+    ledger('gift_ad', amt, 0, (recovered ? '上次广告奖励已补发：' : '') + '每日礼包 +' + amt + ' 铜钱');
+  }else if(p.placement === 'commission_instant'){
+    const cc = S.commissions.find(x => x.id === p.cid);
+    if(cc && !cc.claimed){
+      S.ads.instant = adsUsed('instant') + 1;
+      cc.end = Date.now();
+      pushLog((recovered ? '上次广告奖励已补发：' : '') + '商队已提前归来，可领取报酬');
+    }
+  }
+  save();
+  return true;
+}
+function recoverAdPending(){
+  if(!S || !S.adPending) return false;
+  if(!adApply(S.adPending, true)) return false;
+  renderOffline(); renderAdsBox(); renderCommissions(); renderToday(); updateDynamic(); renderLog();
+  showToast('上次广告奖励已补发');
+  return true;
+}
 function claimOfflineDouble(){
   if(!S || S.offlinePending < 1) return;
+  if(S.adPending) recoverAdPending();
   if(S.ads.offlineDouble) { showToast('本次离线收益已翻倍过'); return; }
+  if(S.offlinePending < 1) return;
+  const p = adBegin('offline_double', { amt: Math.floor(S.offlinePending) });
   showRewardAd('offline_double', function(){
-    const amt = Math.floor(S.offlinePending) * 2;
-    S.offlinePending = 0;
-    S.ads.offlineDouble = 1;
-    ledger('offline_ad', amt, 0, '离线收益翻倍领取 +' + amt + ' 铜钱');
-    questBump('offline', 1);
-    save(); renderOffline(); updateDynamic(); renderLog();
-    showToast('翻倍领取到账 +' + amt + ' 铜钱');
-    tourHook('offline');
+    if(adApply(p, false)){
+      renderOffline(); updateDynamic(); renderLog();
+      showToast('翻倍领取到账 +' + (p.amt * 2) + ' 铜钱');
+      tourHook('offline');
+    }
   });
 }
 function claimDailyGift(){
+  if(S.adPending) recoverAdPending();
   const lim = giftLimitToday(), amt = giftRewardToday();
   if(adsUsed('gift') >= lim){ showToast('今日礼包已领满（' + lim + ' 次）'); return false; }
+  const p = adBegin('daily_gift', { n: adsUsed('gift') + 1, amt: amt });
   showRewardAd('daily_gift', function(){
-    S.ads.gift = adsUsed('gift') + 1;
-    ledger('gift_ad', amt, 0, '每日礼包 +' + amt + ' 铜钱');
-    save(); renderAdsBox(); renderToday(); updateDynamic(); renderLog();
-    showToast('礼包到账 +' + amt + ' 铜钱');
+    if(adApply(p, false)){
+      renderAdsBox(); renderToday(); updateDynamic(); renderLog();
+      showToast('礼包到账 +' + amt + ' 铜钱');
+    }
   });
   return true;
 }
 function instantCommission(id){
+  if(S.adPending) recoverAdPending();
   const c = S.commissions.find(x => x.id === id);
   if(!c || c.claimed) return false;
+  if(commissionReady(c)){ showToast('商队已归来，可直接领取报酬'); return false; }
   if(adsUsed('instant') >= CONFIG.adsLimit.instant){ showToast('今日立即完成次数已用完（3 次）'); return false; }
+  const p = adBegin('commission_instant', { cid: id });
   showRewardAd('commission_instant', function(){
-    const cc = S.commissions.find(x => x.id === id);
-    if(!cc || cc.claimed) return;
-    S.ads.instant = adsUsed('instant') + 1;
-    cc.end = Date.now();
-    save(); renderCommissions(); renderAdsBox();
-    showToast('商队已提前归来，可领取报酬');
+    if(adApply(p, false)){
+      renderCommissions(); renderAdsBox();
+      showToast('商队已提前归来，可领取报酬');
+    }
   });
   return true;
 }
@@ -2617,6 +2695,7 @@ function startApp(){
   audioApplyPrefs();
   ensureQuests();   /* 当日日课补生成（新档/老档/换槽共用同一入口） */
   renderMain();
+  recoverAdPending();   /* 广告欠账补发：重开/换槽/导入后先清 PENDING 欠账（幂等，重复进入不重发） */
   if(tickTimer) clearInterval(tickTimer);
   tickTimer = setInterval(tick, CONFIG.tickMs);
 }
@@ -2649,7 +2728,8 @@ window.YZ = {
   startCommission: startCommission, claimCommission: claimCommission, instantCommission: instantCommission,
   claimMilestone: claimMilestone, claimDailyGift: claimDailyGift,
   claimOffline: claimOffline, claimOfflineDouble: claimOfflineDouble,
-  showRewardAd: showRewardAd,
+  showRewardAd: showRewardAd, recoverAdPending: recoverAdPending,
+  adPending: function(){ return S ? S.adPending : null; },
   saveSlot: saveSlot, loadSlot: loadSlot, slotInfo: slotInfo,
   exportCode: exportCode, importCode: importCode, restoreBackup: restoreBackup, hasBackup: hasBackup,
   vaultConfigured: vaultConfigured, cloudExport: cloudExport, cloudImport: cloudImport,
