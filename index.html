@@ -89,6 +89,7 @@
   .cloud-code{font-size:20px; font-weight:700; letter-spacing:3px; color:var(--accent-ink); padding:4px 0 2px;}
   .bar{height:8px; background:var(--paper); border:1px solid var(--line); border-radius:5px; overflow:hidden; margin:6px 0 4px;}
   .bar i{display:block; height:100%; background:var(--accent); width:0;}
+  .cal-strip{margin:2px 0 8px; padding:7px 10px; border:1px solid var(--accent); border-radius:6px; color:var(--accent); font-size:13px; font-weight:700; letter-spacing:1px; background:rgba(169,50,38,.06);}
   .quest-head{font-weight:700; letter-spacing:2px; margin:12px 0 4px; padding-top:10px; border-top:1px dashed var(--line);}
   .quest-head .quest-sub{font-weight:400; letter-spacing:0; font-size:12px; color:var(--ink2, #8a7a63); margin-left:8px;}
   .quest-row .quest-rw{color:var(--accent); font-size:12px; margin-left:6px;}
@@ -244,7 +245,28 @@ const CONFIG = {
     { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
-  gates: { commission:'2026-11-19', banquet:'2026-11-22', noble:'2026-11-26' },
+  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', noble:'2026-11-26' },
+  /* 每日上新日历（v1.3）：运营期 2026-11-17～11-30 逐日一条，{date,title,kind,mod?} 为唯一事实源。
+     晨间小结「明日上新」与今日清单「今日上新」小条都读此表；单日修正 mod 只在既有公式/结算出口
+     被 calMod() 读取（eventMult 抉择正奖励倍率 / commissionMult 委托报酬倍率 / kitchenDouble 厨房
+     加成翻倍 / giftTimes 礼包次数 / giftMult 礼包金额倍率），不改公式结构。已有日期门（委托/宴会/
+     贵客）在此登记呈现，门的逻辑仍走 gates/packActive，不经日历。 */
+  calendar: [
+    { date:'2026-11-17', title:'风来驿站开业', kind:'open' },
+    { date:'2026-11-18', title:'每日签到开启', kind:'system' },
+    { date:'2026-11-19', title:'商队委托开门', kind:'gate' },
+    { date:'2026-11-20', title:'远行季限定委托', kind:'data' },
+    { date:'2026-11-21', title:'新面孔到访', kind:'data' },
+    { date:'2026-11-22', title:'宴会厅开门', kind:'gate' },
+    { date:'2026-11-23', title:'丰收日 · 抉择与委托奖励 ×1.5', kind:'boost', mod:{ eventMult:1.5, commissionMult:1.5 } },
+    { date:'2026-11-24', title:'伙计专精 · 即将开启', kind:'preview' },
+    { date:'2026-11-25', title:'新事件上新', kind:'data' },
+    { date:'2026-11-26', title:'贵客临门', kind:'gate' },
+    { date:'2026-11-27', title:'名厨日 · 厨房加成翻倍', kind:'boost', mod:{ kitchenDouble:true } },
+    { date:'2026-11-28', title:'周末市集 · 礼包 4 次、金额 +50%', kind:'boost', mod:{ giftTimes:4, giftMult:1.5 } },
+    { date:'2026-11-29', title:'故事日 · 老客长谈', kind:'data' },
+    { date:'2026-11-30', title:'运营庆典 · 结算答谢', kind:'finale' }
+  ],
   /* 商队委托三档 */
   commissionTiers: [
     { id:'c2',  hours:2,  coins:120, fame:2 },
@@ -252,6 +274,13 @@ const CONFIG = {
     { id:'c12', hours:12, coins:900, fame:14 }
   ],
   commissionMaxActive: 3,
+  /* 远行季限定委托（v1.3，2026-11-20 起常驻可见，需委托门＋journey 门双开）：三档主题委托，
+     单位时间报酬高于常驻档；line 为专属完成台词（领取时入动态）；与常驻档共用在途上限与结算路径 */
+  journeyTiers: [
+    { id:'j_guard',  name:'护送镖银', hours:6,  coins:700,  fame:8,  line:'镖银一箱不少，护送的兄弟说，掌柜的茶好。' },
+    { id:'j_letter', name:'送信边关', hours:4,  coins:480,  fame:6,  line:'边关的信送到了，回信只有四个字：平安，勿念。' },
+    { id:'j_tea',    name:'运茶马道', hours:10, coins:1100, fame:12, line:'茶马道走通了，满载的茶香一路飘回了驿站。' }
+  ],
   /* 广告点位与日限 */
   adsLimit: { gift:2, instant:3 },
   giftReward: 150,
@@ -272,6 +301,17 @@ const CONFIG = {
     { id:'q_fame',        metric:'fame',        label:'今日积攒声望', unit:'点', target:20, coins:60,  fame:0 }
   ],
   dayQuestChest: { coins:250, fame:6 },
+  /* 每日签到（v1.3，2026-11-18 起）：7 日循环，奖励按「累计签到天数」推进（断签不惩罚、不清零，
+     与每日礼包的广告领取完全分开，点领即得免广告）；第 3/7 日带声望大奖 */
+  signin: { open:'2026-11-18', rewards: [
+    { coins:60,  fame:0 }, { coins:100, fame:0 }, { coins:150, fame:5 }, { coins:200, fame:0 },
+    { coins:280, fame:0 }, { coins:360, fame:0 }, { coins:500, fame:12 } ] },
+  /* 日课连清宝箱（v1.3）：全清（开宝箱）计连清天数，连清满 3 天 / 7 天各一份额外宝箱，走 ledger 各发一次 */
+  questStreakBonus: { d3:{ coins:200, fame:4 }, d7:{ coins:600, fame:12 } },
+  /* 运营庆典（v1.3，2026-11-30 起）：按累计接待 / 图鉴种数 / 驿站等级三项实绩达标项数（0–3）
+     索引 rewards 发一份庆典奖，一次为限；感谢信文案在庆典弹窗内呈现 */
+  celebration: { date:'2026-11-30', guestTarget:300, seenTarget:24, levelTarget:6,
+    rewards: [ { coins:100, fame:0 }, { coins:300, fame:4 }, { coins:700, fame:10 }, { coins:1500, fame:25 } ] },
   /* 旅客池 32 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
   guestTypes: [
     { id:'scholar', face:'scholar',   label:'书生',     weight:30, priceMult:0.9, minLevel:1, lines: ['店家，可有安静的房间温书？', '此去京城，但愿金榜题名。'] },
@@ -305,7 +345,12 @@ const CONFIG = {
     { id:'inspector', face:'official', label:'钦差大臣', weight:4,  priceMult:2.4, minLevel:8, gate:'noble', lines: ['奉旨巡查，一切从简。', '这驿站的气象，不错。'] },
     { id:'junzhu', face:'official',    label:'郡主',     weight:4,  priceMult:2.6, minLevel:9, gate:'noble', lines: ['本郡主乏了，备热水来。', '这地方，倒比宫里自在。'] },
     { id:'wangye', face:'official',    label:'王爷',     weight:3,  priceMult:3.0, minLevel:9, gate:'noble', lines: ['把最好的院子腾出来。', '低调些，莫惊动了地方。'] },
-    { id:'richest', face:'merchant',   label:'江南首富', weight:4,  priceMult:2.8, minLevel:10, gate:'noble', lines: ['这驿站，我出钱翻修如何？', '银子带多了，压得马都喘。'] }
+    { id:'richest', face:'merchant',   label:'江南首富', weight:4,  priceMult:2.8, minLevel:10, gate:'noble', lines: ['这驿站，我出钱翻修如何？', '银子带多了，压得马都喘。'] },
+    /* 新面孔（v1.3，2026-11-21 上新，gate:'faces'）：中段等级解锁，face 复用既有头像 */
+    { id:'weaver', face:'artisan', label:'织娘',     weight:10, priceMult:1.2, minLevel:4, gate:'faces', lines: ['梭子声里过日子，今晚得睡个整觉。', '这匹布的纹样，掌柜可认得？'] },
+    { id:'beekeeper', face:'farmer', label:'养蜂人', weight:10, priceMult:1.1, minLevel:4, gate:'faces', lines: ['蜂箱怕惊着，劳烦安排个僻静处。', '尝尝这蜜，甜着呢。'] },
+    { id:'falconer', face:'hero',   label:'驯鹰人',   weight:9,  priceMult:1.5, minLevel:5, gate:'faces', lines: ['鹰在腕上，猎物在天上。', '给我的鹰备些鲜肉，钱照付。'] },
+    { id:'chess', face:'scholar',   label:'棋手',     weight:8,  priceMult:1.3, minLevel:6, gate:'faces', lines: ['掌柜可敢手谈一局？输了免房钱。', '棋逢对手难，今夜且住下寻一个。'] }
   ],
   /* 旅客事件抉择池：choices 各含 coins/fame/favor 增减（走 ledger） */
   events: [
@@ -325,6 +370,25 @@ const CONFIG = {
       { label:'赔钱安抚马主', coins:-20, fame:1, favor:2 }, { label:'据理不赔', coins:0, fame:-2, favor:-1 } ] },
     { id:'e_tip', pool:'daily', img:'ev_lost', title:'丰厚的赏钱', text:'富商对饭菜满意，留下赏钱，指名赏给厨子。', choices:[
       { label:'全数转交厨子', coins:10, fame:1, favor:3 }, { label:'驿站留一半', coins:25, fame:0, favor:-1 } ] },
+    /* 新事件批（v1.3，2026-11-25 上新，from 日期门控）：其中 e_umbrella / e_song 带 chainSeed 标记，
+       为后续事件链 B 埋线——本批只作普通卡结算，标记仅为数据字段、无引擎行为 */
+    { id:'e_umbrella', pool:'daily', img:'ev_night', from:'2026-11-25', chainSeed:true, title:'借伞的姑娘', text:'雨夜里，一位姑娘借走驿站的油纸伞，说明日一准送回。', choices:[
+      { label:'借她，伞不值钱人心贵', coins:0, fame:2, favor:3 }, { label:'收三文押金再借', coins:15, fame:0, favor:0 } ] },
+    { id:'e_song', pool:'daily', img:'ev_night', from:'2026-11-25', chainSeed:true, title:'夜半歌声', text:'后院有人轻声哼着一支旧曲，住客们都支起耳朵。原来是路过的歌者借宿，想唱一曲抵房钱。', choices:[
+      { label:'请她堂前唱一曲', coins:10, fame:3, favor:3 }, { label:'夜深了，劝她早歇', coins:0, fame:0, favor:-1 } ] },
+    { id:'e_well', pool:'daily', img:'ev_night', from:'2026-11-25', title:'井边的铜铃', text:'小二打水时在井边拾到一枚刻着字的铜铃，像是哪个旅客落下的。', choices:[
+      { label:'挂在柜台等失主', coins:0, fame:3, favor:2 }, { label:'熔了换钱', coins:30, fame:-2, favor:-2 } ] },
+    { id:'e_dog', pool:'daily', img:'ev_caravan', from:'2026-11-25', title:'黏人的黄狗', text:'一只黄狗蹲在驿站门口三天了，谁赶都不走，只望着马厩的方向。', choices:[
+      { label:'收下它看门护院', coins:-10, fame:2, favor:3 }, { label:'给顿饱饭打发走', coins:-5, fame:1, favor:1 } ] },
+    { id:'e_map', pool:'daily', img:'ev_lost', from:'2026-11-25', title:'半张旧地图', text:'整理旧房时，床板下压着半张画满山路的旧地图，角上写着一个「宝」字。', choices:[
+      { label:'贴在堂前供人辨认', coins:0, fame:2, favor:2 }, { label:'收进柜里慢慢研究', coins:5, fame:0, favor:0 } ] },
+    { id:'e_snowmsg', pool:'daily', img:'ev_caravan', from:'2026-11-25', title:'雪夜急信', text:'风雪里驰来一骑，信使冻得说不出话，只把一封急信塞进掌柜手里。', choices:[
+      { label:'热汤暖屋，免了房钱', coins:-10, fame:4, favor:3 }, { label:'按急件加价接待', coins:35, fame:-1, favor:-1 } ] },
+    /* 故事日长文案卡（v1.3，2026-11-29 上新，慢玩向） */
+    { id:'e_oldfriend', pool:'daily', img:'ev_night', from:'2026-11-29', title:'驿站老客 · 沈账房', text:'沈账房又来了。二十年前他头一回路过，那时驿站还只有两间漏雨的房，他把一枚铜钱压在柜台底下，说等发达了回来赎。这些年他每回都住同一间房、点同一碗阳春面。今天他进门先笑：「掌柜，我发达啦。」说着把当年的铜钱推了过来，旁边添了一锭银子——「这间房，往后替我留着。有人赶路没钱，就让他住，账记我名下。」', choices:[
+      { label:'收下银子，立个善缘账', coins:120, fame:6, favor:5 }, { label:'只收当年的铜钱，银子退回', coins:10, fame:8, favor:5 } ] },
+    { id:'e_oldcook', pool:'daily', img:'ev_night', from:'2026-11-29', title:'驿站老客 · 哑巴厨子', text:'隔壁镇的哑巴厨子在驿站帮过三年厨，从不开口，只会指着灶台比划。今晚他拎着一坛自家酿的酒坐在灶边，忽然把酒坛推到掌柜面前，又指了指酒坛底——坛底压着一张字条，是他一笔一划写了三天的：「酒，送你。我，回乡，抱孙子了。灶上的火，你替我看着，别让它凉了。」字歪歪扭扭，却看得人心里发烫。', choices:[
+      { label:'收下酒，替他看好灶火', coins:30, fame:5, favor:5 }, { label:'回赠路费，送他到镇口', coins:-20, fame:7, favor:5 } ] },
     { id:'b_feast', pool:'banquet', img:'ev_banquet', title:'宴会厅·乡绅寿宴', text:'本地乡绅要借宴会厅办六十寿宴。', choices:[
       { label:'精心筹备', coins:60, fame:5, favor:2 }, { label:'简单操办', coins:90, fame:1, favor:0 } ] },
     { id:'b_wedding', pool:'banquet', img:'ev_banquet', title:'宴会厅·喜宴', text:'一对新人想在驿站办喜宴，图个热闹。', choices:[
@@ -336,14 +400,14 @@ const CONFIG = {
   ],
   /* 旅客类别分组（图鉴套装进度明牌用，纯展示配置：32 种全覆盖，只读 guestsSeen 布尔） */
   guestGroups: [
-    { label:'文士类', ids:['scholar','examiner','storyteller','painter','zhuangyuan'] },
+    { label:'文士类', ids:['scholar','examiner','storyteller','painter','zhuangyuan','chess'] },
     { label:'商贾类', ids:['peddler','merchant','teamerchant','saltmerchant','herbmerchant','foreign','richman','richest'] },
-    { label:'江湖类', ids:['escort','escortboss','hero','hunter','blacksmith'] },
-    { label:'行旅类', ids:['porter','farmer','doctor','tailor','fortune'] },
+    { label:'江湖类', ids:['escort','escortboss','hero','hunter','blacksmith','falconer'] },
+    { label:'行旅类', ids:['porter','farmer','doctor','tailor','fortune','weaver','beekeeper'] },
     { label:'方外艺人类', ids:['monk','hermit','musician','singer'] },
     { label:'官贵类', ids:['constable','magistrate','inspector','junzhu','wangye'] }
   ],
-  /* 里程碑 24 个：metric 指标 / target 目标 / 奖励走 ledger；metricValue() 为指标单一出处；
+  /* 里程碑 25 个：metric 指标 / target 目标 / 奖励走 ledger；metricValue() 为指标单一出处；
      前 4 个为「开张贴士」梯队（引导走完后的常驻复看贴士），tip 为纯展示贴士文案，不影响指标与领取 */
   milestones: [
     { id:'m_g10',  label:'累计接待 10 位旅客',   metric:'totalGuests', target:10,   coins:50,  fame:2, tip:'旅客自动推门入住，人在不在都有进账——先稳稳接满头十位客。' },
@@ -365,7 +429,8 @@ const CONFIG = {
     { id:'m_stafflv', label:'伙计总等级达 10',   metric:'staffLevels', target:10,   coins:300, fame:8 },
     { id:'m_seen8',  label:'图鉴收集 8 种旅客',  metric:'seen',        target:8,    coins:80,  fame:3 },
     { id:'m_seen16', label:'图鉴收集 16 种旅客', metric:'seen',        target:16,   coins:220, fame:8 },
-    { id:'m_seen32', label:'图鉴收集全部 32 种', metric:'seen',        target:32,   coins:800, fame:25 },
+    { id:'m_seen32', label:'图鉴收集 32 种旅客', metric:'seen',        target:32,   coins:800, fame:25 },
+    { id:'m_seen36', label:'图鉴收集全部 36 种', metric:'seen',        target:36,   coins:1000, fame:30 },
     { id:'m_e1000',  label:'累计收入 1000 铜钱', metric:'totalEarned', target:1000, coins:100, fame:3 },
     { id:'m_e5000',  label:'累计收入 5000 铜钱', metric:'totalEarned', target:5000, coins:300, fame:10 },
     { id:'m_c5',     label:'完成商队委托 5 次',  metric:'commissions', target:5,    coins:200, fame:6 },
@@ -500,6 +565,9 @@ function defaultState(){
     morning: null,
     quests: null,
     questsNext: null,
+    signin: { count: 0, day: '' },
+    streak: { count: 0, last: '', b3: false, b7: false },
+    celebClaimed: false,
     guideStep: 0,
     guideDone: false,
     guideRewarded: false,
@@ -545,6 +613,16 @@ function normalize(raw){
   /* 日课字段（v1.2 加法加入）：形状合法照原值清洗；缺失/非法置 null，由 ensureQuests 按当日补生成，老档安全 */
   s.quests = sanitizeQuests(raw.quests);
   s.questsNext = sanitizeQuestsNext(raw.questsNext);
+  /* v1.3 加法字段：签到累计 / 日课连清 / 庆典领取态，缺失或非法一律回默认，老档安全 */
+  s.signin = (raw.signin && typeof raw.signin === 'object')
+    ? { count: Math.max(0, Math.floor(+raw.signin.count || 0)), day: (typeof raw.signin.day === 'string') ? raw.signin.day : '' }
+    : { count: 0, day: '' };
+  s.streak = (raw.streak && typeof raw.streak === 'object')
+    ? { count: Math.max(0, Math.floor(+raw.streak.count || 0)),
+        last: (typeof raw.streak.last === 'string') ? raw.streak.last : '',
+        b3: raw.streak.b3 === true, b7: raw.streak.b7 === true }
+    : { count: 0, last: '', b3: false, b7: false };
+  s.celebClaimed = raw.celebClaimed === true;
   s.settings = Object.assign({}, d.settings, (raw.settings && typeof raw.settings === 'object') ? raw.settings : {});
   /* 引导字段（v4 加法加入，不动既有字段语义）：带字段的档照原值；
      无字段的老档——已开张（有 name）默认标完成不补弹，未开张从头走 */
@@ -766,6 +844,20 @@ function packActive(gateKey, now){
   if(!gate) return false;
   return dayStr(now || new Date()) >= gate;   /* 本地日期字符串比较，同主作口径 */
 }
+/* ================= 每日上新日历（v1.3） =================
+   CONFIG.calendar 为唯一事实源；calMod 是单日修正的唯一出口，只被既有公式/结算处读取。 */
+function calEntry(ds){ return CONFIG.calendar.find(c => c.date === ds) || null; }
+function calMod(ds){
+  const e = calEntry(ds || dayStr());
+  return (e && e.mod) ? e.mod : {};
+}
+function giftLimitToday(){ return Math.floor(calMod().giftTimes || CONFIG.adsLimit.gift); }
+function giftRewardToday(){ return Math.round(CONFIG.giftReward * (calMod().giftMult || 1)); }
+/* 委托档位统一出处：常驻档＋远行季限定档共用结算/渲染，禁止各处只查一张表 */
+function tierDef(id){
+  return CONFIG.commissionTiers.find(t => t.id === id) || CONFIG.journeyTiers.find(t => t.id === id) || null;
+}
+function yesterdayStr(){ const t = new Date(); t.setDate(t.getDate() - 1); return dayStr(t); }
 function staffLv(id){
   return (S.staff[id] && S.staff[id].lv) || 0;
 }
@@ -775,10 +867,11 @@ function staffIncomeMult(){
   return m;
 }
 function roomPrice(){ return CONFIG.roomPriceBase * CONFIG.qualityMult[S.rooms.quality]; }
-function incomeRate(){  /* 每分钟铜钱：在住旅客逐间计价 ×(1+厨房加成+伙计收入加成) */
+function incomeRate(){  /* 每分钟铜钱：在住旅客逐间计价 ×(1+厨房加成+伙计收入加成)；名厨日（日历修正）厨房加成翻倍 */
   let r = 0;
   for(const g of S.guests) r += roomPrice() * (g.priceMult || 1);
-  return r * (1 + S.kitchenLv * CONFIG.kitchenMultPerLv + staffIncomeMult());
+  const kitchenMult = S.kitchenLv * CONFIG.kitchenMultPerLv * (calMod().kitchenDouble ? 2 : 1);
+  return r * (1 + kitchenMult + staffIncomeMult());
 }
 function arrivalChance(){
   return Math.min(0.9, CONFIG.arrivalChancePerTick + S.stableLv * CONFIG.stableArrivalPerLv);
@@ -786,7 +879,8 @@ function arrivalChance(){
 function commissionReward(tier){
   const groom = CONFIG.staffTypes.find(t => t.id === 'groom');
   const mult = 1 + S.stableLv * CONFIG.stableRewardPerLv + staffLv('groom') * (groom ? groom.commissionPerLv : 0);
-  return { coins: Math.round(tier.coins * mult), fame: tier.fame };
+  const dayMult = calMod().commissionMult || 1;   /* 丰收日：委托报酬 ×1.5（日历修正，展示与结算同源） */
+  return { coins: Math.round(tier.coins * mult * dayMult), fame: tier.fame };
 }
 function offlineGain(){
   const elapsedMin = (Date.now() - S.lastSeen) / 60000;
@@ -865,7 +959,8 @@ function metricValue(metric){
   }
 }
 function eventPool(){
-  const daily = CONFIG.events.filter(e => e.pool === 'daily');
+  /* 日常池按 from 上新日过滤（v1.3 数据上新：未到上新日的卡不入池） */
+  const daily = CONFIG.events.filter(e => e.pool === 'daily' && (!e.from || dayStr() >= e.from));
   if(packActive('banquet')) return daily.concat(CONFIG.events.filter(e => e.pool === 'banquet'));
   return daily;
 }
@@ -1004,9 +1099,105 @@ function claimQuestChest(){
   if(S.quests.chest || S.quests.claimed.length < S.quests.ids.length) return false;
   S.quests.chest = true;
   ledger('questChest', CONFIG.dayQuestChest.coins, CONFIG.dayQuestChest.fame, '掌柜日课全清，宝箱开启');
+  /* 日课连清（v1.3）：全清日记连清天数——昨日全清则续连、今日已记不变、断档重置为 1；
+     连清满 3 天 / 7 天各发一份额外宝箱（各一次），随全清当场到账 */
+  const today = dayStr();
+  if(S.streak.last !== today){
+    S.streak.count = (S.streak.last === yesterdayStr()) ? S.streak.count + 1 : 1;
+    S.streak.last = today;
+  }
+  const bonusNotes = [];
+  if(S.streak.count >= 3 && !S.streak.b3){
+    S.streak.b3 = true;
+    const b = CONFIG.questStreakBonus.d3;
+    ledger('questStreak', b.coins, b.fame, '日课连清 3 天，额外宝箱开启');
+    bonusNotes.push('连清 3 天宝箱 +' + b.coins + ' 铜钱');
+  }
+  if(S.streak.count >= 7 && !S.streak.b7){
+    S.streak.b7 = true;
+    const b = CONFIG.questStreakBonus.d7;
+    ledger('questStreak', b.coins, b.fame, '日课连清 7 天，额外宝箱开启');
+    bonusNotes.push('连清 7 天宝箱 +' + b.coins + ' 铜钱');
+  }
   save(); renderQuests(); updateDynamic(); renderLog();
-  showToast('日课全清宝箱 +' + CONFIG.dayQuestChest.coins + ' 铜钱 / 声望 +' + CONFIG.dayQuestChest.fame);
+  showToast('日课全清宝箱 +' + CONFIG.dayQuestChest.coins + ' 铜钱 / 声望 +' + CONFIG.dayQuestChest.fame +
+    '（连清 ' + S.streak.count + ' 天）' + (bonusNotes.length ? '；' + bonusNotes.join('；') : ''));
   sfxPlay('reward');
+  return true;
+}
+
+/* ================= 每日签到（v1.3） =================
+   7 日循环、按累计签到天数推进（断签不清零），免广告点领即得；状态 S.signin{count,day}。 */
+function signinOpen(){ return dayStr() >= CONFIG.signin.open; }
+function signinRewardAt(count){ return CONFIG.signin.rewards[count % CONFIG.signin.rewards.length]; }
+function signinSummary(){
+  if(!S) return { open: false };
+  const claimedToday = S.signin.day === dayStr();
+  const next = signinRewardAt(S.signin.count + (claimedToday ? 1 : 0));
+  return { open: signinOpen(), count: S.signin.count, claimedToday: claimedToday,
+           nextText: next.coins + ' 铜钱' + (next.fame ? '＋' + next.fame + ' 声望' : '') };
+}
+function claimSignin(){
+  if(!signinOpen()){ showToast('每日签到将于 2026-11-18 开启'); return false; }
+  if(S.signin.day === dayStr()){ showToast('今日已签到，明日再来'); return false; }
+  const r = signinRewardAt(S.signin.count);
+  S.signin.count++;
+  S.signin.day = dayStr();
+  ledger('signin', r.coins, r.fame, '每日签到第 ' + S.signin.count + ' 天');
+  save(); todaySig = ''; renderToday(); updateDynamic(); renderLog();
+  showToast('签到成功 +' + r.coins + ' 铜钱' + (r.fame ? ' / 声望 +' + r.fame : '') + '（累计签到 ' + S.signin.count + ' 天）');
+  sfxPlay('reward');
+  return true;
+}
+
+/* ================= 运营庆典（v1.3） =================
+   三项实绩（累计接待/图鉴种数/驿站等级）各设达标线，达标项数索引 CONFIG.celebration.rewards；
+   庆典卡在今日清单呈现（11-30 起未领常驻），感谢信弹窗只许点击打开，领奖一次为限。 */
+function celebrationInfo(){
+  if(!S) return { visible: false };
+  const cfg = CONFIG.celebration;
+  const seen = Object.keys(S.guestsSeen).length;
+  const met = (S.totalGuests >= cfg.guestTarget ? 1 : 0) + (seen >= cfg.seenTarget ? 1 : 0) + (S.level >= cfg.levelTarget ? 1 : 0);
+  return { visible: dayStr() >= cfg.date && !S.celebClaimed, claimed: S.celebClaimed,
+           guests: S.totalGuests, seen: seen, level: S.level, met: met, reward: cfg.rewards[met] };
+}
+function showCelebration(){
+  const mask = document.getElementById('celebMask');
+  if(!mask) return;
+  const info = celebrationInfo(), cfg = CONFIG.celebration;
+  const line = (label, val, tgt) => '<div>' + label + ' <b>' + val + '</b> / ' + tgt + (val >= tgt ? ' · 达成' : '') + '</div>';
+  document.getElementById('celebBody').innerHTML =
+    '<div>掌柜的感谢信</div>' +
+    '<div style="margin-top:8px;">十四天前，这间驿站推开门，挂上灯笼，等第一位客人。从空房两间到宾客盈门，' +
+    '从第一位书生到远道而来的贵客，每一块铜板、每一声吆喝，都是列位捧场捧出来的。</div>' +
+    '<div style="margin-top:8px;">这封信不长，情分却长久：驿站在，灯笼就亮着，老朋友新朋友，随时推门进来喝碗热茶。</div>' +
+    '<div style="margin-top:10px;">' +
+      line('累计接待旅客', info.guests, cfg.guestTarget) +
+      line('图鉴收集旅客', info.seen, cfg.seenTarget) +
+      line('驿站等级', info.level, cfg.levelTarget) +
+    '</div>' +
+    '<div style="margin-top:8px;">达标 <b>' + info.met + '</b> 项，庆典奖：<b>' + info.reward.coins + ' 铜钱' +
+    (info.reward.fame ? '＋' + info.reward.fame + ' 声望' : '') + '</b></div>' +
+    '<div class="btnrow" style="margin-top:10px;">' +
+      (info.claimed ? '<button class="small ghost" disabled>庆典奖已领</button>'
+        : '<button class="small accent" onclick="claimCelebration()">领取庆典奖</button>') +
+      '<button class="small" onclick="hideCelebration()">收好信</button></div>';
+  sfxPlay('page');
+  mask.style.display = 'flex';
+}
+function hideCelebration(){
+  const mask = document.getElementById('celebMask');
+  if(mask) mask.style.display = 'none';
+}
+function claimCelebration(){
+  const info = celebrationInfo();
+  if(S.celebClaimed || dayStr() < CONFIG.celebration.date) return false;
+  S.celebClaimed = true;
+  ledger('celebration', info.reward.coins, info.reward.fame, '运营庆典结算答谢，达标 ' + info.met + ' 项');
+  save(); todaySig = ''; renderToday(); updateDynamic(); renderLog();
+  showToast('庆典奖到账 +' + info.reward.coins + ' 铜钱' + (info.reward.fame ? ' / 声望 +' + info.reward.fame : ''));
+  sfxPlay('reward');
+  showCelebration();
   return true;
 }
 
@@ -1132,7 +1323,11 @@ function doEventChoice(idx){
   const ch = ev.choices[idx];
   if(!ch) return false;
   if(ch.coins < 0 && S.coins + ch.coins < 0){ showToast('铜钱不足，选不了这一项'); return false; }
-  ledger('event', ch.coins, ch.fame, '事件「' + ev.title + '」已抉择', ch.favor);
+  /* 丰收日（日历修正）：抉择的正向奖励 ×1.5，支出与负向项不放大 */
+  const evMult = calMod().eventMult || 1;
+  const effCoins = ch.coins > 0 ? Math.round(ch.coins * evMult) : ch.coins;
+  const effFame = ch.fame > 0 ? Math.round(ch.fame * evMult) : ch.fame;
+  ledger('event', effCoins, effFame, '事件「' + ev.title + '」已抉择', ch.favor);
   S.eventsDone++;
   S.totalEvents++;
   questBump('events', 1);
@@ -1142,9 +1337,10 @@ function doEventChoice(idx){
   updateDynamic();
   renderLog();
   const fb = [];
-  if(ch.coins) fb.push((ch.coins > 0 ? '+' : '') + ch.coins + ' 铜钱');
-  if(ch.fame) fb.push((ch.fame > 0 ? '+' : '') + ch.fame + ' 声望');
+  if(effCoins) fb.push((effCoins > 0 ? '+' : '') + effCoins + ' 铜钱');
+  if(effFame) fb.push((effFame > 0 ? '+' : '') + effFame + ' 声望');
   if(ch.favor) fb.push((ch.favor > 0 ? '+' : '') + ch.favor + ' 好感');
+  if(evMult > 1) fb.push('丰收日加码');
   showToast('「' + ev.title + '」已抉择' + (fb.length ? '：' + fb.join(' / ') : ''));
   tourHook('event');
   return true;
@@ -1153,8 +1349,9 @@ function doEventChoice(idx){
 /* ================= 商队委托 ================= */
 function startCommission(tierId){
   if(!packActive('commission')){ showToast('商队委托将于 2026-11-19 开放'); return false; }
-  const tier = CONFIG.commissionTiers.find(t => t.id === tierId);
+  const tier = tierDef(tierId);
   if(!tier) return false;
+  if(tier.name && !packActive('journey')){ showToast('远行季限定委托将于 2026-11-20 开放'); return false; }
   if(S.commissions.length >= CONFIG.commissionMaxActive){ showToast('同时进行的委托已满'); return false; }
   const now = Date.now();
   S.commissions.push({
@@ -1163,7 +1360,7 @@ function startCommission(tierId){
     start: now, end: now + tier.hours * 3600 * 1000,
     claimed: false
   });
-  pushLog('接下商队委托（' + tier.hours + ' 小时）');
+  pushLog(tier.name ? '接下远行委托「' + tier.name + '」（' + tier.hours + ' 小时）' : '接下商队委托（' + tier.hours + ' 小时）');
   save();
   renderCommissions();
   renderLog();
@@ -1174,14 +1371,15 @@ function claimCommission(id){
   const c = S.commissions.find(x => x.id === id);
   if(!c || c.claimed) return false;            /* 防重复领取 */
   if(!commissionReady(c)){ showToast('商队尚未归来'); return false; }
-  const tier = CONFIG.commissionTiers.find(t => t.id === c.tierId);
+  const tier = tierDef(c.tierId);
   if(!tier) return false;
   const rw = commissionReward(tier);
   c.claimed = true;
   S.commissions = S.commissions.filter(x => x.id !== id);
   S.totalCommissions++;
   questBump('commissions', 1);
-  ledger('commission', rw.coins, rw.fame, '商队委托完成，报酬 +' + rw.coins + ' 铜钱');
+  ledger('commission', rw.coins, rw.fame, tier.name ? '远行委托「' + tier.name + '」完成，报酬 +' + rw.coins + ' 铜钱' : '商队委托完成，报酬 +' + rw.coins + ' 铜钱');
+  if(tier.line) pushLog(tier.line);   /* 远行季专属完成台词 */
   save();
   renderCommissions();
   renderMilestones();
@@ -1244,12 +1442,13 @@ function claimOfflineDouble(){
   });
 }
 function claimDailyGift(){
-  if(adsUsed('gift') >= CONFIG.adsLimit.gift){ showToast('今日礼包已领满（2 次）'); return false; }
+  const lim = giftLimitToday(), amt = giftRewardToday();
+  if(adsUsed('gift') >= lim){ showToast('今日礼包已领满（' + lim + ' 次）'); return false; }
   showRewardAd('daily_gift', function(){
     S.ads.gift = adsUsed('gift') + 1;
-    ledger('gift_ad', CONFIG.giftReward, 0, '每日礼包 +' + CONFIG.giftReward + ' 铜钱');
-    save(); renderAdsBox(); updateDynamic(); renderLog();
-    showToast('礼包到账 +' + CONFIG.giftReward + ' 铜钱');
+    ledger('gift_ad', amt, 0, '每日礼包 +' + amt + ' 铜钱');
+    save(); renderAdsBox(); renderToday(); updateDynamic(); renderLog();
+    showToast('礼包到账 +' + amt + ' 铜钱');
   });
   return true;
 }
@@ -1549,7 +1748,7 @@ function renderMain(){
         '<button id="subBtn-collect-miles" onclick="switchSub(\'collect\',\'miles\')">里程碑</button>' +
       '</div>' +
       '<div id="sub-collect-codex">' +
-        '<div class="card" id="codexCard"><h3>旅 客 图 鉴（<span id="seenCount">0</span>/32）</h3><div id="codexBox"></div></div>' +
+        '<div class="card" id="codexCard"><h3>旅 客 图 鉴（<span id="seenCount">0</span>/' + CONFIG.guestTypes.length + '）</h3><div id="codexBox"></div></div>' +
       '</div>' +
       '<div id="sub-collect-miles" style="display:none">' +
         '<div class="card" id="milesCard"><h3>里 程 碑</h3><div id="milesBox"></div></div>' +
@@ -1570,6 +1769,9 @@ function renderMain(){
     '<div id="rulesMask" class="modal-mask" style="display:none"><div class="modal-box">' +
       '<h3>离 线 收 益 规 则</h3><div id="rulesBody"></div>' +
       '<div class="btnrow"><button class="small accent" onclick="hideOfflineRules()">知道了</button></div>' +
+    '</div></div>' +
+    '<div id="celebMask" class="modal-mask" style="display:none"><div class="modal-box">' +
+      '<h3>运 营 庆 典</h3><div id="celebBody"></div>' +
     '</div></div>';
   document.getElementById('innNameView').textContent = S.name;
   document.body.classList.add('has-tabbar');
@@ -1579,22 +1781,28 @@ function renderMain(){
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
 }
-const GATE_LABELS = { commission:'商队委托', banquet:'宴会厅事件池', noble:'贵客图鉴段' };
-/* 明日预告（纯展示）：由日期门 gates 与下一等级声望差派生，不发奖、不写存档 */
+const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', noble:'贵客图鉴段' };
+/* 明日预告（纯展示）：首段为「明日上新」——读 CONFIG.calendar 明日条目（预告本身即留存钩子）；
+   日历无明日条目时回退到日期门派生；不发奖、不写存档 */
 function tomorrowPreview(){
   const parts = [];
   const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
   const tmrStr = dayStr(tmr);
-  const upcoming = Object.keys(CONFIG.gates)
-    .filter(k => !packActive(k))
-    .sort((a, b) => CONFIG.gates[a] < CONFIG.gates[b] ? -1 : 1);
-  if(upcoming.length){
-    const k = upcoming[0], g = CONFIG.gates[k], label = GATE_LABELS[k] || k;
-    parts.push(tmrStr >= g
-      ? '明日（' + g + '）开启：' + label
-      : '下一站：' + label + ' 将于 ' + g + ' 开启');
+  const calTmr = calEntry(tmrStr);
+  if(calTmr){
+    parts.push('明日上新（' + tmrStr.slice(5) + '）：' + calTmr.title);
   }else{
-    parts.push('限时内容已全部开启');
+    const upcoming = Object.keys(CONFIG.gates)
+      .filter(k => !packActive(k))
+      .sort((a, b) => CONFIG.gates[a] < CONFIG.gates[b] ? -1 : 1);
+    if(upcoming.length){
+      const k = upcoming[0], g = CONFIG.gates[k], label = GATE_LABELS[k] || k;
+      parts.push(tmrStr >= g
+        ? '明日（' + g + '）开启：' + label
+        : '下一站：' + label + ' 将于 ' + g + ' 开启');
+    }else{
+      parts.push('限时内容已全部开启');
+    }
   }
   const nf = nextLevelFame();
   if(nf === null) parts.push('驿站已是最高等级');
@@ -1614,7 +1822,7 @@ function renderMorning(){
       headImgHtml('morning') +
       '昨夜（' + esc(S.morning.date) + '）共接待 <b>' + S.morning.guests + '</b> 位旅客，进账 <b>' +
       S.morning.earned + '</b> 铜钱' + (S.morning.offline > 0 ? '；离线房钱 <b>' + S.morning.offline + '</b> 铜钱待领取（见离线明牌）' : '') + '。' +
-      '<div class="small-note" style="margin-top:6px;">明日预告：' + esc(tomorrowPreview()) + '</div>';
+      '<div class="small-note" style="margin-top:6px;">' + esc(tomorrowPreview()) + '</div>';
   }else{
     card.style.display = 'none';
   }
@@ -1658,8 +1866,34 @@ function renderOffline(){
     html += '<div class="btnrow"><button class="accent" id="claimBtn" onclick="claimOffline()">领取</button>' +
       '<button id="claimDoubleBtn" onclick="claimOfflineDouble()"' + (S.ads.offlineDouble ? ' disabled' : '') + '>看广告翻倍领取</button></div>';
   }
-  html += '<div class="btnrow"><button class="small ghost" onclick="showOfflineRules()">离线规则说明</button></div>';
+  html += '<div class="btnrow"><button class="small ghost" onclick="showOfflineRules()">离线规则说明</button>' +
+    '<button class="small ghost" onclick="uiAddToDesktop()">添加到桌面，下次一键回来领钱</button></div>';
   body.innerHTML = html;
+}
+/* 添加到桌面（平台无推送，桌面快捷方式是唯一召回口子）：只许玩家点击按钮本体调用，
+   禁页面加载自动触发、禁代点；名称/链接/图标由 Shell 自动注入，无参调用。
+   结果判定照官方口径：code 200 不等于已创建；安卓 alreadyAdded 提示已添加过；
+   bridgeResult.result===false 展示 errorMsg（空则默认失败文案）；安卓 result===true 提示已添加，
+   其他平台成功静默；回调为空静默。SDK 自动上报点击埋点，页面不重复打。
+   非 App/无 Bridge 环境降级为一句提示，不报错。 */
+function desktopSupported(){
+  return typeof window !== 'undefined' && !!window.ColorboxAI && typeof window.ColorboxAI.addToDesktop === 'function';
+}
+function uiAddToDesktop(){
+  if(!desktopSupported()){ showToast('请在虎扑 App 内使用「添加到桌面」'); return; }
+  let p;
+  try{ p = window.ColorboxAI.addToDesktop(); }
+  catch(e){ showToast('添加到桌面失败，请稍后重试'); return; }
+  if(!p || typeof p.then !== 'function'){ return; }   /* 无 Promise 返回：保持静默 */
+  p.then(function(res){
+    if(!res || res.code !== 200){ showToast((res && res.message) || '添加到桌面失败，请稍后重试'); return; }
+    const data = res.data || {};
+    if(data.platform === 'android' && data.alreadyAdded === true){ showToast('已添加过，请勿重复添加'); return; }
+    const cb = data.bridgeResult;
+    if(cb && cb.result === false){ showToast(cb.errorMsg || '添加到桌面失败，请稍后重试'); return; }
+    if(data.platform === 'android' && cb && cb.result === true){ showToast('已添加到桌面'); }
+    /* 其他平台成功 / 回调为空：静默 */
+  }).catch(function(){ showToast('添加到桌面失败，请稍后重试'); });
 }
 /* 规则说明弹窗：只许点击触发（showOfflineRules 由按钮调用），禁自动弹出 */
 function showOfflineRules(){
@@ -1685,7 +1919,11 @@ function todaySummary(){
     eventsTotal: S.eventsToday.length,
     commissionsActive: S.commissions.length,
     commissionsReady: S.commissions.filter(c => commissionReady(c)).length,
-    giftLeft: Math.max(0, CONFIG.adsLimit.gift - adsUsed('gift'))
+    giftLeft: Math.max(0, giftLimitToday() - adsUsed('gift')),
+    giftLimit: giftLimitToday(),
+    calTitle: (calEntry(dayStr()) || {}).title || '',
+    signin: signinSummary(),
+    celeb: celebrationInfo()
   };
 }
 let todaySig = '';
@@ -1699,11 +1937,28 @@ function renderToday(){
   const row = (txt, tab, anchor, btn) =>
     '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' + txt + '</div></div>' +
     (anchor ? '<button class="small ghost" onclick="gotoCard(\'' + tab + '\',\'' + anchor + '\')">' + btn + '</button>' : '') + '</div>';
-  box.innerHTML =
+  let html = '';
+  if(t.calTitle) html += '<div class="cal-strip">今 日 上 新 · ' + esc(t.calTitle) + '</div>';
+  html +=
     row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'home', 'offlineCard', '去领取') +
     row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'affair', 'eventsCard', '去处理') +
     row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'affair', 'commissionsCard', '去查看') +
-    row('每日礼包剩余：<b>' + t.giftLeft + '</b>/' + CONFIG.adsLimit.gift + ' 次', 'affair', 'adsCard', '去领取');
+    row('每日礼包剩余：<b>' + t.giftLeft + '</b>/' + t.giftLimit + ' 次', 'affair', 'adsCard', '去领取');
+  if(t.signin.open){
+    html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+      (t.signin.claimedToday
+        ? '每日签到：今日已签到（累计 <b>' + t.signin.count + '</b> 天），明日奖励 ' + t.signin.nextText
+        : '每日签到：第 <b>' + (t.signin.count + 1) + '</b> 天奖励 ' + t.signin.nextText + '，点领即得、不用看广告') +
+      '</div></div>' +
+      (t.signin.claimedToday ? '<span class="quest-todo">已签</span>'
+        : '<button class="small accent" onclick="claimSignin()">签到</button>') + '</div>';
+  }
+  if(t.celeb.visible){
+    html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+      '运营庆典：十四天的驿站，到了结算答谢的日子——掌柜备了一封感谢信和庆典奖。</div></div>' +
+      '<button class="small accent" onclick="showCelebration()">去看看</button></div>';
+  }
+  box.innerHTML = html;
 }
 /* 掌柜日课分组（今日清单卡内）：进度条＋逐项领取＋全清宝箱；数据全走 quests 状态与 CONFIG，不另造口径 */
 let questSig = '';
@@ -1720,10 +1975,12 @@ function renderQuests(){
              coins: d.coins, fame: d.fame };
   }).filter(Boolean);
   const chestReady = S.quests.claimed.length >= S.quests.ids.length && !S.quests.chest;
-  const sig = JSON.stringify([rows, S.quests.chest, S.quests.claimed.length]);
+  const sig = JSON.stringify([rows, S.quests.chest, S.quests.claimed.length, S.streak.count, S.streak.b3, S.streak.b7]);
   if(sig === questSig) return;
   questSig = sig;
-  let html = '<div class="quest-head">掌 柜 日 课<span class="quest-sub">每日 5 项 · 全清开宝箱</span></div>';
+  const streakNext = !S.streak.b3 ? '满 3 天再开额外宝箱' : (!S.streak.b7 ? '满 7 天再开大宝箱' : '连清宝箱已全领');
+  let html = '<div class="quest-head">掌 柜 日 课<span class="quest-sub">每日 5 项 · 全清开宝箱' +
+    (S.streak.count > 0 ? ' · 已连清 ' + S.streak.count + ' 天（' + streakNext + '）' : ' · 全清计连清，' + streakNext) + '</span></div>';
   for(const r of rows){
     const pct = r.t > 0 ? Math.floor(r.p / r.t * 100) : 100;
     html += '<div class="up-row quest-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
@@ -1793,7 +2050,7 @@ function renderUpgrades(){
     upCardHtml('quality', '提升品质（现「' + CONFIG.qualityNames[S.rooms.quality] + '」）',
       '房价倍率 ×' + CONFIG.qualityMult[S.rooms.quality], 'upQualityBtn', 'roomq') +
     upCardHtml('kitchen', '升级厨房（现 ' + S.kitchenLv + ' 级，上限 ' + kitchenCap() + ' 级）',
-      '总收入 +' + Math.round(S.kitchenLv * CONFIG.kitchenMultPerLv * 100) + '%（每级 +8%）', 'upKitchenBtn', 'kitchen') +
+      '总收入 +' + Math.round(S.kitchenLv * CONFIG.kitchenMultPerLv * (calMod().kitchenDouble ? 2 : 1) * 100) + '%（每级 +8%' + (calMod().kitchenDouble ? '，名厨日翻倍中' : '') + '）', 'upKitchenBtn', 'kitchen') +
     upCardHtml('stable', '整修马厩（现 ' + S.stableLv + ' 级，上限 ' + stableCap() + ' 级）',
       '委托报酬与旅客到访率提升', 'upStableBtn', 'stable') +
     '</div>';
@@ -1844,10 +2101,18 @@ function renderCommissions(){
     const rw = commissionReward(t);
     return '<button class="small" onclick="startCommission(\'' + t.id + '\')">' + t.hours + ' 小时 · 报酬 ' + rw.coins + ' 文</button>';
   }).join('') + '</div>';
+  if(packActive('journey')){
+    html += '<div class="sect">远 行 季 限 定</div>' +
+      '<div class="btnrow">' + CONFIG.journeyTiers.map(t => {
+        const rw = commissionReward(t);
+        return '<button class="small" onclick="startCommission(\'' + t.id + '\')">' + t.name + ' · ' + t.hours + ' 小时 · 报酬 ' + rw.coins + ' 文</button>';
+      }).join('') + '</div>';
+  }
   if(!S.commissions.length) html += '<div class="empty-note" style="margin-top:8px;">' + emptyImgHtml('caravan') + '<span>暂无进行中的委托，挑一支商队派出去走一趟。</span></div>';
   for(const c of S.commissions){
-    const rw = commissionReward(CONFIG.commissionTiers.find(t => t.id === c.tierId));
-    html += '<div class="up-row"><div class="info"><div class="t">商队委托 · ' + c.hours + ' 小时</div>' +
+    const ct = tierDef(c.tierId);
+    const rw = commissionReward(ct);
+    html += '<div class="up-row"><div class="info"><div class="t">' + (ct && ct.name ? '远行委托 · ' + esc(ct.name) : '商队委托') + ' · ' + c.hours + ' 小时</div>' +
       '<div class="d">报酬 ' + rw.coins + ' 铜钱 / 声望 ' + rw.fame + ' · <span class="cm-left" data-end="' + c.end + '">' + fmtLeft(c.end - Date.now()) + '</span></div></div>' +
       '<button class="small" onclick="claimCommission(\'' + c.id + '\')"' + (commissionReady(c) ? '' : ' disabled') + '>领取</button>' +
       '<button class="small" onclick="instantCommission(\'' + c.id + '\')">广告立即完成</button></div>';
@@ -1880,7 +2145,7 @@ function renderMilestones(){
     '<div class="sect">全 部 里 程 碑</div>' + rest.map(mileRowHtml).join('');
 }
 function guestLockReason(t){
-  if(t.gate && !packActive(t.gate)) return '2026-11-26 后迎贵客';
+  if(t.gate && !packActive(t.gate)) return t.gate === 'noble' ? '2026-11-26 后迎贵客' : (CONFIG.gates[t.gate] + ' 起到访');
   if(S.level < t.minLevel) return '驿站 ' + t.minLevel + ' 级';
   if(S.kitchenLv < (t.minKitchen || 0)) return '厨房 ' + t.minKitchen + ' 级';
   if(S.stableLv < (t.minStable || 0)) return '马厩 ' + t.minStable + ' 级';
@@ -1919,8 +2184,9 @@ function renderCodex(){
 function renderAdsBox(){
   const box = document.getElementById('adsBox');
   if(!box) return;
-  box.innerHTML = headImgHtml('gift') + '<div class="small-note">看广告领取铜钱礼包，今日已领 ' + adsUsed('gift') + '/2 次，每次 +' + CONFIG.giftReward + ' 铜钱。</div>' +
-    '<div class="btnrow"><button class="small accent" onclick="claimDailyGift()"' + (adsUsed('gift') >= CONFIG.adsLimit.gift ? ' disabled' : '') + '>领取每日礼包</button></div>';
+  box.innerHTML = headImgHtml('gift') + '<div class="small-note">看广告领取铜钱礼包，今日已领 ' + adsUsed('gift') + '/' + giftLimitToday() + ' 次，每次 +' + giftRewardToday() + ' 铜钱。' +
+    (calMod().giftTimes ? '（周末市集：今日礼包加量）' : '') + '</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="claimDailyGift()"' + (adsUsed('gift') >= giftLimitToday() ? ' disabled' : '') + '>领取每日礼包</button></div>';
 }
 function renderSettings(){
   const box = document.getElementById('settingsBox');
@@ -1933,7 +2199,9 @@ function renderSettings(){
       '<button class="small" onclick="toggleSetting(\'sfx\')">音效：' + (S.settings.sfx ? '开' : '关') + '</button>' +
       '<button class="small" onclick="document.getElementById(\'saveBox\').scrollIntoView()">前往存档</button>' +
       '<button class="small" onclick="tourStart(true)">重看新手引导</button>' +
+      '<button class="small" onclick="uiAddToDesktop()">添加到桌面</button>' +
     '</div>' +
+    '<div class="small-note" style="margin-top:6px;">把驿站放回桌面：离线房钱攒满 12 小时就溢出了，点桌面图标一键回来领取（需在虎扑 App 内使用）。</div>' +
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
@@ -2388,6 +2656,10 @@ window.YZ = {
   vaultPut: vaultPut, vaultGet: vaultGet,
   hasShellVault: function(){ return !!shellVault(); },
   offlineInfo: offlineInfo, tomorrowPreview: tomorrowPreview,
+  calEntry: calEntry, calMod: calMod, giftLimitToday: giftLimitToday, giftRewardToday: giftRewardToday,
+  tierDef: tierDef, signinSummary: signinSummary, claimSignin: claimSignin,
+  celebrationInfo: celebrationInfo, showCelebration: showCelebration, hideCelebration: hideCelebration, claimCelebration: claimCelebration,
+  uiAddToDesktop: uiAddToDesktop, desktopSupported: desktopSupported,
   todaySummary: todaySummary, codexGroupProgress: codexGroupProgress,
   switchTab: switchTab, switchSub: switchSub, gotoCard: gotoCard, updateTabDots: updateTabDots,
   uiState: function(){ return { tab: uiTab, sub: Object.assign({}, uiSub) }; },
