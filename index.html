@@ -89,6 +89,10 @@
   .cloud-code{font-size:20px; font-weight:700; letter-spacing:3px; color:var(--accent-ink); padding:4px 0 2px;}
   .bar{height:8px; background:var(--paper); border:1px solid var(--line); border-radius:5px; overflow:hidden; margin:6px 0 4px;}
   .bar i{display:block; height:100%; background:var(--accent); width:0;}
+  .quest-head{font-weight:700; letter-spacing:2px; margin:12px 0 4px; padding-top:10px; border-top:1px dashed var(--line);}
+  .quest-head .quest-sub{font-weight:400; letter-spacing:0; font-size:12px; color:var(--ink2, #8a7a63); margin-left:8px;}
+  .quest-row .quest-rw{color:var(--accent); font-size:12px; margin-left:6px;}
+  .quest-row .quest-todo{font-size:12px; color:var(--ink2, #8a7a63); white-space:nowrap;}
   .group-line{font-size:13px; font-weight:700; letter-spacing:2px; margin:10px 0 4px; border-top:1px dashed var(--line); padding-top:8px;}
   .group-line:first-child{border-top:none; margin-top:0; padding-top:0;}
   .modal-mask{
@@ -213,8 +217,10 @@ const CONFIG = {
   qualityNames: ['', '粗布陋室', '整洁客房', '雅致客房', '上房', '天字号上房'],
   maxRooms: 12,
   maxQuality: 5,
-  addRoomCostBase: 80,  addRoomCostGrowth: 1.55,
-  qualityCostBase: 120, qualityCostGrowth: 1.8,
+  /* 价格表（v1.2 曲线摊开：显式逐段价，前段与旧版逐项一致、尾段拉陡；upgradeCost 唯一出处）
+     roomCostTable[i] = 现间数 (startRooms+i) → 再扩一间的价；qualityCostTable[i] = 品质 (i+1) 档 → 升下一档的价 */
+  roomCostTable: [80, 124, 192, 400, 900, 2200, 6000, 20000, 70000, 250000],
+  qualityCostTable: [120, 260, 1100, 6000],
   arrivalChancePerTick: 0.45,
   stayMinTicks: 3, stayMaxTicks: 8,
   famePerCheckout: 1,
@@ -224,17 +230,18 @@ const CONFIG = {
   offlineCapHours: 12,
   offlineMinMinutes: 1,
   /* 厨房：餐饮附加 = 基础房费收入 × kitchenLv × kitchenMultPerLv（并入 incomeRate） */
-  kitchenMax: 10, kitchenCostBase: 100, kitchenCostGrowth: 1.6, kitchenMultPerLv: 0.08,
+  kitchenMax: 10, kitchenCostTable: [100, 160, 256, 450, 1100, 2800, 7000, 17000, 45000, 120000], kitchenMultPerLv: 0.08,
   /* 马厩：委托报酬 ×(1+stableLv×stableRewardPerLv)，到访率 +stableLv×stableArrivalPerLv（并入公式） */
-  stableMax: 10, stableCostBase: 100, stableCostGrowth: 1.6, stableRewardPerLv: 0.10, stableArrivalPerLv: 0.02,
+  stableMax: 10, stableCostTable: [100, 160, 256, 450, 1100, 2800, 7000, 17000, 45000, 120000], stableRewardPerLv: 0.10, stableArrivalPerLv: 0.02,
   /* 设施等级上限随驿站等级细化：厨房上限=min(kitchenMax, level+2)，马厩上限=min(stableMax, level+1) */
-  /* 伙计：hire 雇佣费，upBase/upGrowth 升级费；bonusPerLv 并入对应公式
+  /* 伙计：hire 雇佣费，升级费 = upBase × staffUpMult[现级-1]（v1.2 尾段拉陡）；bonusPerLv 并入对应公式
      innkeeper 掌柜→总收入 / waiter 小二→总收入(服务) / cook 厨子→餐饮收入 / groom 马夫→委托报酬 */
+  staffUpMult: [1, 2.0, 5.0, 16.0],
   staffTypes: [
-    { id:'innkeeper', face:'innkeeper', label:'掌柜', desc:'总收入 +6%/级', hire:150, upBase:90,  upGrowth:1.7, maxLv:5, incomePerLv:0.06 },
-    { id:'waiter',    face:'waiter',    label:'小二', desc:'总收入 +4%/级', hire:100, upBase:70,  upGrowth:1.7, maxLv:5, incomePerLv:0.04 },
-    { id:'cook',      face:'cook',      label:'厨子', desc:'总收入 +5%/级（餐饮）', hire:120, upBase:80, upGrowth:1.7, maxLv:5, incomePerLv:0.05 },
-    { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  upGrowth:1.7, maxLv:5, commissionPerLv:0.08 }
+    { id:'innkeeper', face:'innkeeper', label:'掌柜', desc:'总收入 +6%/级', hire:150, upBase:90,  maxLv:5, incomePerLv:0.06 },
+    { id:'waiter',    face:'waiter',    label:'小二', desc:'总收入 +4%/级', hire:100, upBase:70,  maxLv:5, incomePerLv:0.04 },
+    { id:'cook',      face:'cook',      label:'厨子', desc:'总收入 +5%/级（餐饮）', hire:120, upBase:80, maxLv:5, incomePerLv:0.05 },
+    { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
   gates: { commission:'2026-11-19', banquet:'2026-11-22', noble:'2026-11-26' },
@@ -253,6 +260,18 @@ const CONFIG = {
   eventsPerDay: 3,
   /* 新手引导走完谢礼（走 ledger 发放，仅一次） */
   guideReward: 30,
+  /* 掌柜日课（v1.2 上线自带）：每日 5 项，前 4 项恒定、第 5 项按委托日期门换项（未开门用 fame 项）。
+     metric = 当日行为计数键（quests.counters）；targets 按驿站等级取（guests 项）；奖励逐项领取、全清另开宝箱。
+     与里程碑分开：里程碑是终身累计一次性，日课是当日计数每日重置，两套领取态互不相干、同一笔奖励不会领两次。 */
+  dayQuests: [
+    { id:'q_guests',      metric:'guests',      label:'接待旅客',     unit:'位', targets:[20, 30, 40, 50, 60, 70, 80], coins:80,  fame:2 },
+    { id:'q_events',      metric:'events',      label:'完成今日抉择', unit:'张', target:3,  coins:60,  fame:2 },
+    { id:'q_upgrades',    metric:'upgrades',    label:'建设升级',     unit:'次', target:2,  coins:80,  fame:2 },
+    { id:'q_offline',     metric:'offline',     label:'领取离线收益', unit:'次', target:2,  coins:50,  fame:1 },
+    { id:'q_commissions', metric:'commissions', label:'完成商队委托', unit:'支', target:1,  coins:120, fame:3, gate:'commission' },
+    { id:'q_fame',        metric:'fame',        label:'今日积攒声望', unit:'点', target:20, coins:60,  fame:0 }
+  ],
+  dayQuestChest: { coins:250, fame:6 },
   /* 旅客池 32 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
   guestTypes: [
     { id:'scholar', face:'scholar',   label:'书生',     weight:30, priceMult:0.9, minLevel:1, lines: ['店家，可有安静的房间温书？', '此去京城，但愿金榜题名。'] },
@@ -479,6 +498,8 @@ function defaultState(){
     eventsToday: [],
     eventsDone: 0,
     morning: null,
+    quests: null,
+    questsNext: null,
     guideStep: 0,
     guideDone: false,
     guideRewarded: false,
@@ -521,6 +542,9 @@ function normalize(raw){
   s.eventsToday = Array.isArray(raw.eventsToday) ? raw.eventsToday.filter(id => CONFIG.events.some(e => e.id === id)) : [];
   s.eventsDone = clampInt(s.eventsDone, 0, CONFIG.eventsPerDay, 0);
   s.morning = (raw.morning && typeof raw.morning === 'object') ? raw.morning : null;
+  /* 日课字段（v1.2 加法加入）：形状合法照原值清洗；缺失/非法置 null，由 ensureQuests 按当日补生成，老档安全 */
+  s.quests = sanitizeQuests(raw.quests);
+  s.questsNext = sanitizeQuestsNext(raw.questsNext);
   s.settings = Object.assign({}, d.settings, (raw.settings && typeof raw.settings === 'object') ? raw.settings : {});
   /* 引导字段（v4 加法加入，不动既有字段语义）：带字段的档照原值；
      无字段的老档——已开张（有 name）默认标完成不补弹，未开张从头走 */
@@ -720,6 +744,7 @@ function ledger(kind, dCoins, dFame, note, dFavor){
   if(dFame) S.fame = Math.max(0, S.fame + dFame);
   if(dFavor) S.favor += dFavor;
   S.level = levelForFame(S.fame);
+  if(dFame > 0 && kind !== 'quest' && kind !== 'questChest') questBump('fame', dFame);   /* 日课声望项计数；日课奖励自身的声望不计，防自喂 */
   if(note) pushLog(note);
   if(dCoins > 0 && note) sfxPlay('coins');   /* 带账目说明的入账才响铜钱；每程自动进账 note 为空、不扰民 */
   return true;
@@ -787,19 +812,23 @@ function stableCap(){ return Math.min(CONFIG.stableMax, S.level + 1); }
 function upgradeCost(kind){
   if(kind === 'room'){
     if(S.rooms.count >= CONFIG.maxRooms) return null;
-    return Math.round(CONFIG.addRoomCostBase * Math.pow(CONFIG.addRoomCostGrowth, S.rooms.count - CONFIG.startRooms));
+    const c = CONFIG.roomCostTable[S.rooms.count - CONFIG.startRooms];
+    return (typeof c === 'number') ? c : null;
   }
   if(kind === 'quality'){
     if(S.rooms.quality >= CONFIG.maxQuality) return null;
-    return Math.round(CONFIG.qualityCostBase * Math.pow(CONFIG.qualityCostGrowth, S.rooms.quality - 1));
+    const c = CONFIG.qualityCostTable[S.rooms.quality - 1];
+    return (typeof c === 'number') ? c : null;
   }
   if(kind === 'kitchen'){
     if(S.kitchenLv >= kitchenCap()) return null;
-    return Math.round(CONFIG.kitchenCostBase * Math.pow(CONFIG.kitchenCostGrowth, S.kitchenLv));
+    const c = CONFIG.kitchenCostTable[S.kitchenLv];
+    return (typeof c === 'number') ? c : null;
   }
   if(kind === 'stable'){
     if(S.stableLv >= stableCap()) return null;
-    return Math.round(CONFIG.stableCostBase * Math.pow(CONFIG.stableCostGrowth, S.stableLv));
+    const c = CONFIG.stableCostTable[S.stableLv];
+    return (typeof c === 'number') ? c : null;
   }
   return null;
 }
@@ -810,7 +839,7 @@ function staffCost(id){
   const cur = S.staff[id];
   if(!cur) return t.hire;
   if(cur.lv >= t.maxLv) return null;
-  return Math.round(t.upBase * Math.pow(t.upGrowth, cur.lv - 1));
+  return Math.round(t.upBase * CONFIG.staffUpMult[cur.lv - 1]);
 }
 function guestPool(){
   return CONFIG.guestTypes.filter(t =>
@@ -887,8 +916,97 @@ function arriveGuest(){
   S.guestsSeen[t.id] = true;
   S.totalGuests++;
   S.dayStats.guests++;
+  questBump('guests', 1);
   const gline = guestLineFor(t, g.name);
   pushLog(t.label + ' ' + g.name + ' 推门入住' + (gline ? '：「' + gline + '」' : ''));
+  return true;
+}
+
+/* ================= 掌柜日课（v1.2） =================
+   状态：S.quests = { day, ids[5], counters{guests,events,upgrades,offline,commissions,fame}, claimed[], chest }
+         S.questsNext = { day, ids[5] }（明日预告用，跨日直接转正）
+   计数只走 questBump（行为点单点挂接）；奖励只走 ledger；领取态只存 quests 内，与里程碑 miles 互不相干。 */
+function questDef(id){ return CONFIG.dayQuests.find(q => q.id === id) || null; }
+function questTarget(def){
+  if(!def) return 0;
+  if(def.targets) return def.targets[Math.min(S.level, def.targets.length) - 1];
+  return def.target;
+}
+function pickQuestIds(forDayStr){
+  const ids = ['q_guests', 'q_events', 'q_upgrades', 'q_offline'];
+  ids.push(forDayStr >= CONFIG.gates.commission ? 'q_commissions' : 'q_fame');
+  return ids;
+}
+function freshQuests(day, ids){
+  return { day: day, ids: ids.slice(),
+           counters: { guests:0, events:0, upgrades:0, offline:0, commissions:0, fame:0 },
+           claimed: [], chest: false };
+}
+function tomorrowStr(){ const t = new Date(); t.setDate(t.getDate() + 1); return dayStr(t); }
+function ensureQuests(){
+  if(!S) return;
+  const today = dayStr();
+  if(!S.quests || S.quests.day !== today){
+    const ids = (S.questsNext && S.questsNext.day === today && Array.isArray(S.questsNext.ids) && S.questsNext.ids.length)
+      ? S.questsNext.ids : pickQuestIds(today);
+    S.quests = freshQuests(today, ids);
+  }
+  const tmr = tomorrowStr();
+  if(!S.questsNext || S.questsNext.day !== tmr){
+    S.questsNext = { day: tmr, ids: pickQuestIds(tmr) };
+  }
+}
+function sanitizeQuests(raw){
+  if(!raw || typeof raw !== 'object' || typeof raw.day !== 'string' || !Array.isArray(raw.ids)) return null;
+  const ids = raw.ids.filter(id => questDef(id));
+  if(!ids.length || ids.length !== raw.ids.length) return null;
+  const c = (raw.counters && typeof raw.counters === 'object') ? raw.counters : {};
+  const counters = {};
+  for(const k of ['guests', 'events', 'upgrades', 'offline', 'commissions', 'fame'])
+    counters[k] = Math.max(0, Math.floor(+c[k] || 0));
+  return { day: raw.day, ids: ids, counters: counters,
+           claimed: Array.isArray(raw.claimed) ? raw.claimed.filter(id => ids.includes(id)) : [],
+           chest: raw.chest === true };
+}
+function sanitizeQuestsNext(raw){
+  if(!raw || typeof raw !== 'object' || typeof raw.day !== 'string' || !Array.isArray(raw.ids)) return null;
+  const ids = raw.ids.filter(id => questDef(id));
+  if(!ids.length || ids.length !== raw.ids.length) return null;
+  return { day: raw.day, ids: ids };
+}
+function questBump(metric, n){
+  if(!S || !S.quests || S.quests.day !== dayStr()) return;
+  if(!(metric in S.quests.counters)) return;
+  S.quests.counters[metric] += (n || 1);
+  renderQuests();
+}
+function questDone(def){
+  return !!def && (S.quests.counters[def.metric] || 0) >= questTarget(def);
+}
+function questClaimable(){
+  if(!S || !S.quests) return false;
+  if(S.quests.ids.some(id => questDone(questDef(id)) && !S.quests.claimed.includes(id))) return true;
+  return S.quests.claimed.length >= S.quests.ids.length && !S.quests.chest;
+}
+function claimQuest(id){
+  const def = questDef(id);
+  if(!def || !S.quests || S.quests.day !== dayStr()) return false;
+  if(!S.quests.ids.includes(id) || S.quests.claimed.includes(id) || !questDone(def)) return false;
+  S.quests.claimed.push(id);
+  ledger('quest', def.coins, def.fame, '掌柜日课「' + def.label + '」完成');
+  save(); renderQuests(); updateDynamic(); renderLog();
+  showToast('日课奖励到账 +' + def.coins + ' 铜钱' + (def.fame ? ' / 声望 +' + def.fame : ''));
+  sfxPlay('reward');
+  return true;
+}
+function claimQuestChest(){
+  if(!S.quests || S.quests.day !== dayStr()) return false;
+  if(S.quests.chest || S.quests.claimed.length < S.quests.ids.length) return false;
+  S.quests.chest = true;
+  ledger('questChest', CONFIG.dayQuestChest.coins, CONFIG.dayQuestChest.fame, '掌柜日课全清，宝箱开启');
+  save(); renderQuests(); updateDynamic(); renderLog();
+  showToast('日课全清宝箱 +' + CONFIG.dayQuestChest.coins + ' 铜钱 / 声望 +' + CONFIG.dayQuestChest.fame);
+  sfxPlay('reward');
   return true;
 }
 
@@ -916,6 +1034,7 @@ function rollDayIfNeeded(){
   S.ads = {};
   S.eventsToday = pickEventsForDay();
   S.eventsDone = 0;
+  ensureQuests();   /* 日课随日界滚动：questsNext 转正＋生成新的明日预告 */
   pushLog('新的一天，晨间小结已备好');
   return true;
 }
@@ -970,6 +1089,7 @@ function buyUpgrade(kind){
   else if(kind === 'quality') S.rooms.quality++;
   else if(kind === 'kitchen') S.kitchenLv++;
   else if(kind === 'stable') S.stableLv++;
+  questBump('upgrades', 1);
   save();
   renderUpgrades();
   renderRooms();
@@ -991,6 +1111,7 @@ function buyStaff(id){
   }
   if(isHire) S.staff[id] = { lv: 1 };
   else S.staff[id].lv++;
+  questBump('upgrades', 1);
   save();
   renderStaff();
   renderMilestones();
@@ -1014,6 +1135,7 @@ function doEventChoice(idx){
   ledger('event', ch.coins, ch.fame, '事件「' + ev.title + '」已抉择', ch.favor);
   S.eventsDone++;
   S.totalEvents++;
+  questBump('events', 1);
   save();
   renderEvents();
   renderMilestones();
@@ -1058,6 +1180,7 @@ function claimCommission(id){
   c.claimed = true;
   S.commissions = S.commissions.filter(x => x.id !== id);
   S.totalCommissions++;
+  questBump('commissions', 1);
   ledger('commission', rw.coins, rw.fame, '商队委托完成，报酬 +' + rw.coins + ' 铜钱');
   save();
   renderCommissions();
@@ -1114,6 +1237,7 @@ function claimOfflineDouble(){
     S.offlinePending = 0;
     S.ads.offlineDouble = 1;
     ledger('offline_ad', amt, 0, '离线收益翻倍领取 +' + amt + ' 铜钱');
+    questBump('offline', 1);
     save(); renderOffline(); updateDynamic(); renderLog();
     showToast('翻倍领取到账 +' + amt + ' 铜钱');
     tourHook('offline');
@@ -1150,6 +1274,7 @@ function claimOffline(){
   const amt = Math.floor(S.offlinePending);
   S.offlinePending = 0;
   ledger('offline', amt, 0, '领取离线收益 +' + amt + ' 铜钱');
+  questBump('offline', 1);
   save();
   renderOffline();
   updateDynamic();
@@ -1367,7 +1492,7 @@ function gotoCard(tab, id){
 function updateTabDots(){
   if(!S || !S.name) return;
   const set = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? 'block' : 'none'; };
-  set('dot-home', Math.floor(S.offlinePending) >= 1 || !!S.morning);
+  set('dot-home', Math.floor(S.offlinePending) >= 1 || !!S.morning || questClaimable());
   set('dot-affair', (S.eventsToday.length - S.eventsDone) > 0 || S.commissions.some(c => commissionReady(c)));
   set('dot-collect', CONFIG.milestones.some(m => !S.miles[m.id] && metricValue(m.metric) >= m.target));
 }
@@ -1392,7 +1517,7 @@ function renderMain(){
         '<h3>离 线 明 牌</h3>' +
         '<div id="offlineBody"></div>' +
       '</div>' +
-      '<div class="card" id="todayCard"><h3>今 日 清 单</h3><div id="todayBody"></div></div>' +
+      '<div class="card" id="todayCard"><h3>今 日 清 单</h3><div id="todayBody"></div><div id="questBody"></div></div>' +
       '<div class="card"><h3>驿 站 动 态</h3><ul class="log" id="logList"></ul></div>' +
       '<div class="foot">自动存档中 · 累计接待 <span id="totalGuestsVal">0</span> 位旅客 · 旅客好感 <span id="favorVal">0</span></div>' +
     '</div>' +
@@ -1448,8 +1573,8 @@ function renderMain(){
     '</div></div>';
   document.getElementById('innNameView').textContent = S.name;
   document.body.classList.add('has-tabbar');
-  todaySig = ''; offlineSig = '';
-  renderMorning(); renderOffline(); renderToday(); renderRooms(); renderEvents(); renderUpgrades();
+  todaySig = ''; offlineSig = ''; questSig = '';
+  renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderEvents(); renderUpgrades();
   renderStaff(); renderCommissions(); renderMilestones(); renderCodex();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
@@ -1474,6 +1599,10 @@ function tomorrowPreview(){
   const nf = nextLevelFame();
   if(nf === null) parts.push('驿站已是最高等级');
   else parts.push('再攒 ' + Math.max(0, nf - S.fame) + ' 声望升至 ' + (S.level + 1) + ' 级（解锁更多旅客与设施上限）');
+  if(S.questsNext && Array.isArray(S.questsNext.ids) && S.questsNext.ids.length){
+    const labels = S.questsNext.ids.map(id => { const d = questDef(id); return d ? d.label : ''; }).filter(Boolean);
+    if(labels.length) parts.push('明日日课：' + labels.join('、'));
+  }
   return parts.join('；');
 }
 function renderMorning(){
@@ -1575,6 +1704,42 @@ function renderToday(){
     row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'affair', 'eventsCard', '去处理') +
     row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'affair', 'commissionsCard', '去查看') +
     row('每日礼包剩余：<b>' + t.giftLeft + '</b>/' + CONFIG.adsLimit.gift + ' 次', 'affair', 'adsCard', '去领取');
+}
+/* 掌柜日课分组（今日清单卡内）：进度条＋逐项领取＋全清宝箱；数据全走 quests 状态与 CONFIG，不另造口径 */
+let questSig = '';
+function renderQuests(){
+  const box = document.getElementById('questBody');
+  if(!box || !S || !S.quests) return;
+  const rows = S.quests.ids.map(id => {
+    const d = questDef(id);
+    if(!d) return null;
+    const t = questTarget(d);
+    return { id: id, label: d.label, unit: d.unit, t: t,
+             p: Math.min(Math.floor(S.quests.counters[d.metric] || 0), t),
+             done: questDone(d), claimed: S.quests.claimed.includes(id),
+             coins: d.coins, fame: d.fame };
+  }).filter(Boolean);
+  const chestReady = S.quests.claimed.length >= S.quests.ids.length && !S.quests.chest;
+  const sig = JSON.stringify([rows, S.quests.chest, S.quests.claimed.length]);
+  if(sig === questSig) return;
+  questSig = sig;
+  let html = '<div class="quest-head">掌 柜 日 课<span class="quest-sub">每日 5 项 · 全清开宝箱</span></div>';
+  for(const r of rows){
+    const pct = r.t > 0 ? Math.floor(r.p / r.t * 100) : 100;
+    html += '<div class="up-row quest-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+      esc(r.label) + ' <b>' + r.p + '</b>/' + r.t + ' ' + r.unit +
+      '<span class="quest-rw">奖 ' + r.coins + ' 铜钱' + (r.fame ? '＋' + r.fame + ' 声望' : '') + '</span></div>' +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div></div>' +
+      (r.claimed ? '<button class="small ghost" disabled>已领</button>'
+        : r.done ? '<button class="small accent" onclick="claimQuest(\'' + r.id + '\')">领取</button>'
+        : '<span class="quest-todo">进行中</span>') + '</div>';
+  }
+  html += '<div class="up-row quest-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">全清宝箱' +
+    '<span class="quest-rw">' + CONFIG.dayQuestChest.coins + ' 铜钱＋' + CONFIG.dayQuestChest.fame + ' 声望</span></div></div>' +
+    (S.quests.chest ? '<button class="small ghost" disabled>已开</button>'
+      : chestReady ? '<button class="small accent" onclick="claimQuestChest()">开宝箱</button>'
+      : '<span class="quest-todo">已领 ' + S.quests.claimed.length + '/' + S.quests.ids.length + '</span>') + '</div>';
+  box.innerHTML = html;
 }
 function renderRooms(){
   const grid = document.getElementById('roomsGrid');
@@ -2181,6 +2346,7 @@ function settleOffline(){
 }
 function startApp(){
   audioApplyPrefs();
+  ensureQuests();   /* 当日日课补生成（新档/老档/换槽共用同一入口） */
   renderMain();
   if(tickTimer) clearInterval(tickTimer);
   tickTimer = setInterval(tick, CONFIG.tickMs);
@@ -2230,6 +2396,9 @@ window.YZ = {
   setVaultApi: function(u){ CONFIG.vaultApi = u; },
   requestDelete: requestDelete, confirmDelete: confirmDelete,
   rollDayIfNeeded: rollDayIfNeeded, pickEventsForDay: pickEventsForDay,
+  quests: function(){ return S ? S.quests : null; }, questsNext: function(){ return S ? S.questsNext : null; },
+  ensureQuests: ensureQuests, claimQuest: claimQuest, claimQuestChest: claimQuestChest,
+  questTarget: function(id){ const d = questDef(id); return d ? questTarget(d) : null; },
   dismissMorning: dismissMorning,
   tourStart: tourStart, tourNext: tourNext, tourSkip: tourSkip, tourShow: tourShow,
   tourAutoStart: tourAutoStart, tourHook: tourHook, tourSteps: TOUR_STEPS,
