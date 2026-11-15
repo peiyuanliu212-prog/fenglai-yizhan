@@ -2539,7 +2539,7 @@ const TOUR_STEPS = [
     title:'里程碑：照着目标领赏',
     body:'接待、扩建、图鉴都有里程碑，达标回来点「领取」；最上面四条开张贴士，走完引导也留着复看。' },
   { id:'codex', page:'collect', sub:['collect','codex'], target:() => document.querySelector('#codexCard h3') || document.getElementById('codexCard'),
-    title:'图鉴：认全 32 种旅客',
+    title:'图鉴：认全 ' + CONFIG.guestTypes.length + ' 种旅客',
     body:'接待过的旅客会点亮图鉴；等级、厨房、马厩越高，来的客越金贵。' },
   { id:'save', page:'save', target:() => document.querySelector('#saveCard h3') || document.getElementById('saveCard'),
     title:'存档在「存档」栏，短码换设备取回',
