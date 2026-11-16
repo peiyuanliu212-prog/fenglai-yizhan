@@ -324,7 +324,7 @@ const CONFIG = {
     { days:5,  coins:300,  fame:6 },
     { days:8,  coins:600,  fame:12 },
     { days:11, coins:1200, fame:25 } ] },
-  /* 旅客池 32 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
+  /* 旅客池 36 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
   guestTypes: [
     { id:'scholar', face:'scholar',   label:'书生',     weight:30, priceMult:0.9, minLevel:1, lines: ['店家，可有安静的房间温书？', '此去京城，但愿金榜题名。'] },
     { id:'hunter', face:'farmer',    label:'猎户',     weight:20, priceMult:0.8, minLevel:1, lines: ['山里的野味，明儿给您送些。', '俺这皮子，可抵今晚房钱？'] },
@@ -410,7 +410,7 @@ const CONFIG = {
     { id:'b_guild', pool:'banquet', img:'ev_banquet', title:'宴会厅·商会年会', text:'商会要在宴会厅议事三日。', choices:[
       { label:'安排茶点伺候周到', coins:70, fame:4, favor:2 }, { label:'明码标价不多事', coins:100, fame:0, favor:0 } ] }
   ],
-  /* 旅客类别分组（图鉴套装进度明牌用，纯展示配置：32 种全覆盖，只读 guestsSeen 布尔） */
+  /* 旅客类别分组（图鉴套装进度明牌用，纯展示配置：36 种全覆盖，只读 guestsSeen 布尔） */
   guestGroups: [
     { label:'文士类', ids:['scholar','examiner','storyteller','painter','zhuangyuan','chess'] },
     { label:'商贾类', ids:['peddler','merchant','teamerchant','saltmerchant','herbmerchant','foreign','richman','richest'] },
@@ -475,7 +475,7 @@ const ANNOUNCE = [
   ]},
   { ver: 'v1.1', date: '2026-11-13', items: [
     '有了声音：背景古琴《阳关三叠》，点按、收钱、升级都有音效，设置里可关',
-    '36 种旅客都会说话了：进门、住店、图鉴里都有他们的台词'
+    '旅客们都会说话了：进门、住店、图鉴里都有他们的台词'
   ]}
 ];
 /* ==== 插图资源（水墨淡彩 WebP，base64 data URI 集中表；键名语义化；
@@ -2326,6 +2326,13 @@ function todaySummary(){
   };
 }
 let todaySig = '';
+/* 累计登录折叠区展开态：纯 UI 态、不入存档，默认折起 */
+let loginFoldOpen = false;
+function toggleLoginFold(){
+  loginFoldOpen = !loginFoldOpen;
+  todaySig = '';
+  renderToday();
+}
 function renderToday(){
   const box = document.getElementById('todayBody');
   if(!box) return;
@@ -2339,10 +2346,15 @@ function renderToday(){
   let html = '';
   if(t.calTitle) html += '<div class="cal-strip">今 日 上 新 · ' + esc(t.calTitle) + '</div>';
   html +=
-    row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'home', 'offlineCard', '去领取') +
+    row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'home', 'offlineCard', t.offline >= 1 ? '去领取' : '去看看') +
     row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'affair', 'eventsCard', '去处理') +
-    row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'affair', 'commissionsCard', '去查看') +
-    row('每日礼包剩余：<b>' + t.giftLeft + '</b>/' + t.giftLimit + ' 次', 'affair', 'adsCard', '去领取');
+    row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'affair', 'commissionsCard', '去查看');
+  /* 每日礼包行内直领（九问审计 Q4 动线优化：与事务页礼包按钮共用 claimDailyGift 同一出口，
+     免去「切页→找卡→再点」两步；领完显示已领完） */
+  html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+    '每日礼包剩余：<b>' + t.giftLeft + '</b>/' + t.giftLimit + ' 次</div></div>' +
+    (t.giftLeft > 0 ? '<button class="small accent" onclick="claimDailyGift()">领取礼包</button>'
+      : '<span class="quest-todo">已领完</span>') + '</div>';
   if(t.signin.open){
     html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
       (t.signin.claimedToday
@@ -2360,13 +2372,37 @@ function renderToday(){
   if(t.loginAct.inWindow){
     html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
       '运营期累计登录：已到访 <b>' + t.loginAct.count + '</b> 天（11-17～11-30，进店即记）</div></div></div>';
-    t.loginAct.tiers.forEach(function(tr, i){
-      html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+    /* 三态折叠（总台裁定）：已领档与「当前＋下一档」之外的更远未领档收进折叠区（默认折起）；
+       当前档＝首个未领档（已达可领或最接近的一档）、下一档＝其后首个未领档，两档常驻露面，
+       差一点看得见。常驻未领档恒 ≤2；只改呈现，计数/领取/幂等仍走 loginAct 原逻辑。 */
+    const loginRow = function(tr, i, state){
+      return '<div class="up-row login-tier" data-tier="' + i + '" data-state="' + state + '"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
         '到访满 <b>' + tr.days + '</b> 天：奖 ' + tr.coins + ' 铜钱＋' + tr.fame + ' 声望</div></div>' +
         (tr.claimed ? '<span class="quest-todo">已领</span>'
           : tr.reached ? '<button class="small accent" onclick="claimLoginTier(' + i + ')">领取</button>'
           : '<span class="quest-todo">' + t.loginAct.count + '/' + tr.days + ' 天</span>') + '</div>';
+    };
+    const curIdx = t.loginAct.tiers.findIndex(tr => !tr.claimed);
+    const nextIdx = curIdx < 0 ? -1 : t.loginAct.tiers.findIndex((tr, i) => i > curIdx && !tr.claimed);
+    const foldedTiers = [];
+    t.loginAct.tiers.forEach(function(tr, i){
+      if(i === curIdx) html += loginRow(tr, i, 'current');
+      else if(i === nextIdx) html += loginRow(tr, i, 'next');
+      else foldedTiers.push([tr, i]);
     });
+    if(foldedTiers.length){
+      const claimedN = foldedTiers.filter(x => x[0].claimed).length;
+      const farN = foldedTiers.length - claimedN;
+      const parts = [];
+      if(claimedN) parts.push('已领取 ' + claimedN + ' 档');
+      if(farN) parts.push('更远 ' + farN + ' 档未到');
+      html += '<div class="up-row" id="loginFoldHead"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+        parts.join(' · ') + '</div></div>' +
+        '<button class="small ghost" id="loginFoldBtn" onclick="toggleLoginFold()">' + (loginFoldOpen ? '收起' : '展开') + '</button></div>';
+      html += '<div id="loginFold" style="display:' + (loginFoldOpen ? '' : 'none') + ';">';
+      foldedTiers.forEach(function(x){ html += loginRow(x[0], x[1], x[0].claimed ? 'claimed' : 'far'); });
+      html += '</div>';
+    }
   }
   box.innerHTML = html;
 }
@@ -3081,6 +3117,7 @@ window.YZ = {
   claimAdoptReward: claimAdoptReward, refreshFeedbackHonors: refreshFeedbackHonors,
   fbHonors: function(){ return fbHonorsCache; },
   loginActSummary: loginActSummary, claimLoginTier: claimLoginTier, touchLoginDay: touchLoginDay,
+  toggleLoginFold: toggleLoginFold, loginFoldOpen: function(){ return loginFoldOpen; },
   celebrationInfo: celebrationInfo, showCelebration: showCelebration, hideCelebration: hideCelebration, claimCelebration: claimCelebration,
   uiAddToDesktop: uiAddToDesktop, desktopSupported: desktopSupported,
   todaySummary: todaySummary, codexGroupProgress: codexGroupProgress,
