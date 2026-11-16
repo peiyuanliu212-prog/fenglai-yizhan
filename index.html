@@ -252,7 +252,7 @@ const CONFIG = {
      加成翻倍 / giftTimes 礼包次数 / giftMult 礼包金额倍率），不改公式结构。已有日期门（委托/宴会/
      贵客）在此登记呈现，门的逻辑仍走 gates/packActive，不经日历。 */
   calendar: [
-    { date:'2026-11-17', title:'风来驿站开业', kind:'open' },
+    { date:'2026-11-17', title:'风来驿站开业 · 累计登录活动开启（11-17～11-30，到访满 3/5/8/11 天领奖）', kind:'open' },
     { date:'2026-11-18', title:'每日签到开启', kind:'system' },
     { date:'2026-11-19', title:'商队委托开门', kind:'gate' },
     { date:'2026-11-20', title:'远行季限定委托', kind:'data' },
@@ -312,6 +312,18 @@ const CONFIG = {
      索引 rewards 发一份庆典奖，一次为限；感谢信文案在庆典弹窗内呈现 */
   celebration: { date:'2026-11-30', guestTarget:300, seenTarget:24, levelTarget:6,
     rewards: [ { coins:100, fame:0 }, { coins:300, fame:4 }, { coins:700, fame:10 }, { coins:1500, fame:25 } ] },
+  /* 意见反馈（v1.4，四款统一口径复用联赛自建轨）：正文 1–2000 字符；同档名同正文在待处理期
+     不可重复提交；限频每人 10 分钟 ≤5 次（前端计数＋后端按档名兜底）；首提小奖每档一次、
+     被采纳大奖＋鸣谢公示。收单走云端 yz_feedback 表（档名即身份，本作无 puid 体系） */
+  feedback: { maxLen: 2000, rateMax: 5, rateWindowMin: 10, firstReward: 80,
+    adoptReward: { coins: 600, fame: 10 } },
+  /* 运营期累计登录（v1.4）：窗口锁定 2026-11-17～11-30，进游戏即记当天（与每日签到并行不互斥，
+     签到是「点领累计天数」、本活动是「到访累计天数」，两套计数互不替代）；四档领取走 ledger 幂等 */
+  loginAct: { start:'2026-11-17', end:'2026-11-30', tiers: [
+    { days:3,  coins:150,  fame:3 },
+    { days:5,  coins:300,  fame:6 },
+    { days:8,  coins:600,  fame:12 },
+    { days:11, coins:1200, fame:25 } ] },
   /* 旅客池 32 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
   guestTypes: [
     { id:'scholar', face:'scholar',   label:'书生',     weight:30, priceMult:0.9, minLevel:1, lines: ['店家，可有安静的房间温书？', '此去京城，但愿金榜题名。'] },
@@ -441,6 +453,10 @@ const CONFIG = {
 };
 /* ==== 更新公告（设置区点击查看，只许点击触发、严禁进门自动弹；新版本往数组最前面加一条即可） ==== */
 const ANNOUNCE = [
+  { ver: 'v1.4', date: '2026-11-17', items: [
+    '设置里新增「意见反馈」：第一条反馈有铜钱奖励，建议被采纳还有答谢大奖并登上鸣谢名单',
+    '运营期累计登录开启（11-17～11-30）：进店即记一天，到访满 3/5/8/11 天逐档领奖'
+  ]},
   { ver: 'v1.3.2', date: '2026-11-14', items: [
     '设置里新增「退出游戏」与本公告入口，存档、音乐、音效开关都集中到了设置区',
     '看广告的奖励加了保险：奖励没到账前先记一笔，万一中途退出，下次进店自动补发',
@@ -592,6 +608,8 @@ function defaultState(){
     signin: { count: 0, day: '' },
     streak: { count: 0, last: '', b3: false, b7: false },
     celebClaimed: false,
+    feedback: { count: 0, granted: false, times: [], adoptClaimed: [] },
+    loginAct: { days: [], claimed: [] },
     guideStep: 0,
     guideDone: false,
     guideRewarded: false,
@@ -672,6 +690,20 @@ function normalize(raw){
         b3: raw.streak.b3 === true, b7: raw.streak.b7 === true }
     : { count: 0, last: '', b3: false, b7: false };
   s.celebClaimed = raw.celebClaimed === true;
+  /* v1.4 加法字段：意见反馈态 / 运营期累计登录态，形状非法一律回默认，老档安全 */
+  s.feedback = (raw.feedback && typeof raw.feedback === 'object')
+    ? { count: Math.max(0, Math.floor(+raw.feedback.count || 0)),
+        granted: raw.feedback.granted === true,
+        times: Array.isArray(raw.feedback.times) ? raw.feedback.times.filter(t => +t > 0).slice(-20).map(t => Math.floor(+t)) : [],
+        adoptClaimed: Array.isArray(raw.feedback.adoptClaimed) ? raw.feedback.adoptClaimed.filter(x => typeof x === 'string' || typeof x === 'number').map(String).slice(0, 50) : [] }
+    : { count: 0, granted: false, times: [], adoptClaimed: [] };
+  s.loginAct = (raw.loginAct && typeof raw.loginAct === 'object')
+    ? { days: Array.isArray(raw.loginAct.days)
+          ? Array.from(new Set(raw.loginAct.days.filter(x => typeof x === 'string' &&
+              x >= CONFIG.loginAct.start && x <= CONFIG.loginAct.end))).sort().slice(0, 14) : [],
+        claimed: Array.isArray(raw.loginAct.claimed)
+          ? Array.from(new Set(raw.loginAct.claimed.filter(x => Number.isInteger(x) && x >= 0 && x < CONFIG.loginAct.tiers.length))) : [] }
+    : { days: [], claimed: [] };
   s.settings = Object.assign({}, d.settings, (raw.settings && typeof raw.settings === 'object') ? raw.settings : {});
   /* 引导字段（v4 加法加入，不动既有字段语义）：带字段的档照原值；
      无字段的老档——已开张（有 name）默认标完成不补弹，未开张从头走 */
@@ -825,6 +857,190 @@ async function vaultGet(code){
 }
 function normalizeVaultCode(text){
   return String(text || '').trim().toUpperCase().replace(/^YZ-/, '').replace(/\s+/g, '');
+}
+/* ---- 意见反馈通道（v1.4）：与短码同一双路请求层（壳内 cloud.request / 非壳 fetch），
+   路由 /yzfeedback/submit|mine|honors；应答剥层口径同 vaultShellData，但业务对象形状不同，
+   单独剥层：信封 code 非 0/200 即失败并把业务错误码（FB_*）透传给调用方映射玩家话术 ---- */
+function fbShellData(r){
+  if(!r || typeof r !== 'object') return null;
+  if(typeof r.statusCode === 'number' && r.statusCode !== 200) return null;
+  let d = r;
+  for(let i = 0; i < 3 && d && typeof d === 'object'; i++){
+    if(d.code !== undefined && d.code !== null){
+      if(String(d.code) !== '0' && String(d.code) !== '200') return { __err: (d.data && d.data.err) || d.message || 'FB_FAIL' };
+      d = d.data; continue;
+    }
+    if(d.data && typeof d.data === 'object' && !Array.isArray(d)){ d = d.data; continue; }
+    break;
+  }
+  return (d && typeof d === 'object') ? d : null;
+}
+async function fbRequest(path, data){
+  const cloud = shellVault();
+  if(cloud){
+    const req = { url: CONFIG.vaultShellBase + '/api/yzfeedback/' + path, method:'POST', data: data || {} };
+    if(CONFIG.vaultShellEnvId) req.envId = CONFIG.vaultShellEnvId;
+    const d = fbShellData(await cloud.request(req));
+    if(!d) throw new Error('FB_FAIL');
+    if(d.__err) throw new Error(d.__err);
+    return d;
+  }
+  const res = await fetch(CONFIG.vaultApi + '/yzfeedback/' + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(data || {}) });
+  const j = await res.json().catch(() => null);
+  if(!j || (j.code !== 0 && j.code !== 200)){
+    throw new Error((j && j.data && j.data.err) || (j && j.message) || 'FB_FAIL');
+  }
+  return j.data || {};
+}
+/* ================= 意见反馈（v1.4） =================
+   入口在设置区（与更新公告同栏）；档名/正文一切展示走 textContent，禁 innerHTML 直拼。
+   首提奖与采纳大奖都走 ledger；采纳名单由后台把 yz_feedback.status 置 adopted 并填 summary，
+   客户端读 honors 公示，进游戏时静默核一次「我被采纳且未领」并在反馈弹窗里给领取口。 */
+let fbSubmitting = false;
+let fbHonorsCache = null;
+let fbCheckedAdopt = false;
+function fbRateLeft(){
+  const win = CONFIG.feedback.rateWindowMin * 60000, now = Date.now();
+  S.feedback.times = S.feedback.times.filter(t => now - t < win);
+  return CONFIG.feedback.rateMax - S.feedback.times.length;
+}
+async function submitFeedback(){
+  if(fbSubmitting) return false;
+  const ta = document.getElementById('fbText');
+  const text = ta ? ta.value.trim() : '';
+  if(!text){ showToast('先写点什么再提交吧'); return false; }
+  if(text.length > CONFIG.feedback.maxLen){ showToast('太长了，最多 ' + CONFIG.feedback.maxLen + ' 字，精简一下'); return false; }
+  if(!vaultConfigured()){ showToast('反馈通道正在开通中，请稍后再来'); return false; }
+  if(fbRateLeft() <= 0){ showToast('发得有点勤，先歇一会儿再来'); return false; }
+  fbSubmitting = true;
+  const btn = document.getElementById('fbSubmitBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '提交中…'; }
+  try{
+    const r = await fbRequest('submit', { name: S.name, text: text, version: 'v1.4' });
+    S.feedback.count++;
+    S.feedback.times.push(Date.now());
+    let msg = '反馈收到，谢谢你！我们会认真看';
+    if(r && r.grant && !S.feedback.granted){
+      S.feedback.granted = true;
+      ledger('feedback', CONFIG.feedback.firstReward, 0, '首条反馈奖励');
+      msg = '反馈收到！首提奖励 +' + CONFIG.feedback.firstReward + ' 铜钱已到账';
+    }
+    save();
+    if(ta) ta.value = '';
+    fbUpdateCount();
+    renderFeedbackMine();
+    showToast(msg);
+    return true;
+  }catch(e){
+    const code = (e && e.message) || '';
+    if(code === 'FB_DUPLICATE') showToast('这条已经提过啦，正在等我们看，换个说法或新想法再来');
+    else if(code === 'FB_RATE_LIMITED') showToast('发得有点勤，先歇一会儿再来');
+    else if(code === 'FB_TOO_LONG') showToast('太长了，最多 ' + CONFIG.feedback.maxLen + ' 字，精简一下');
+    else if(code === 'FB_EMPTY') showToast('先写点什么再提交吧');
+    else showToast('提交失败，网络可能不稳，请稍后再试');
+    return false;
+  }finally{
+    fbSubmitting = false;
+    const b2 = document.getElementById('fbSubmitBtn');
+    if(b2){ b2.disabled = false; b2.textContent = '提交反馈'; }
+  }
+}
+function fbUpdateCount(){
+  const c = document.getElementById('fbCount');
+  if(c && document.getElementById('fbText')) c.textContent = document.getElementById('fbText').value.length + ' / ' + CONFIG.feedback.maxLen;
+}
+function renderFeedbackMine(){
+  const box = document.getElementById('fbMine');
+  if(!box) return;
+  box.textContent = '';
+  const line = document.createElement('div');
+  line.className = 'small-note';
+  line.textContent = '我提交的反馈：' + S.feedback.count + ' 条' +
+    (S.feedback.granted ? '（首提奖励已领取）' : '（第一条通过校验的反馈有 +' + CONFIG.feedback.firstReward + ' 铜钱奖励）');
+  box.appendChild(line);
+  /* 我被采纳且未领：领取口（honors 名单按档名匹配本档，id 幂等） */
+  const mine = (fbHonorsCache || []).filter(h => h && h.name === S.name && !S.feedback.adoptClaimed.includes(String(h.id)));
+  for(const h of mine){
+    const row = document.createElement('div');
+    row.className = 'btnrow';
+    const b = document.createElement('button');
+    b.className = 'small accent';
+    b.textContent = '你的建议被采纳了，领取答谢 +' + CONFIG.feedback.adoptReward.coins + ' 铜钱 / 声望 +' + CONFIG.feedback.adoptReward.fame;
+    b.onclick = function(){ claimAdoptReward(h.id); };
+    row.appendChild(b);
+    box.appendChild(row);
+  }
+}
+function renderFeedbackHonors(){
+  const box = document.getElementById('fbHonors');
+  if(!box) return;
+  box.textContent = '';
+  const head = document.createElement('div');
+  head.className = 'sect';
+  head.textContent = '鸣 谢 名 单';
+  box.appendChild(head);
+  if(!fbHonorsCache){
+    const d = document.createElement('div'); d.className = 'small-note';
+    d.textContent = vaultConfigured() ? '正在读取鸣谢名单…' : '反馈通道正在开通中，进虎扑 App 里看最新鸣谢名单。';
+    box.appendChild(d); return;
+  }
+  if(!fbHonorsCache.length){
+    const d = document.createElement('div'); d.className = 'small-note';
+    d.textContent = '暂无——期待你的建议第一个被采纳。';
+    box.appendChild(d); return;
+  }
+  for(const h of fbHonorsCache){
+    const d = document.createElement('div'); d.className = 'small-note';
+    const who = document.createElement('b'); who.textContent = String(h.name || '');
+    d.appendChild(who);
+    d.appendChild(document.createTextNode('：' + String(h.summary || '建议被采纳')));
+    box.appendChild(d);
+  }
+}
+async function refreshFeedbackHonors(){
+  if(!vaultConfigured()){ fbHonorsCache = null; renderFeedbackHonors(); return; }
+  try{
+    const r = await fbRequest('honors', {});
+    fbHonorsCache = (r && Array.isArray(r.list)) ? r.list : [];
+  }catch(e){ fbHonorsCache = []; }
+  renderFeedbackHonors();
+  renderFeedbackMine();
+}
+/* 进游戏静默核一次：我被采纳且大奖未领 → 动态日志留一行（不弹窗，公告红线口径）。
+   只走壳内通道：正式分发在壳内；网页试玩打开反馈弹窗时同样会刷新名单并露出领取口，不漏领。 */
+async function checkAdoptedOnce(){
+  if(fbCheckedAdopt || !S || !S.name || !shellVault()) return;
+  fbCheckedAdopt = true;
+  try{
+    const r = await fbRequest('honors', {});
+    fbHonorsCache = (r && Array.isArray(r.list)) ? r.list : fbHonorsCache;
+    const mine = (fbHonorsCache || []).some(h => h && h.name === S.name && !S.feedback.adoptClaimed.includes(String(h.id)));
+    if(mine) pushLog('你有一条建议被采纳了，去设置里的「意见反馈」领答谢奖');
+  }catch(e){ /* 静默核失败不打扰玩家 */ }
+}
+function claimAdoptReward(id){
+  const key = String(id);
+  if(S.feedback.adoptClaimed.includes(key)) return false;
+  S.feedback.adoptClaimed.push(key);
+  ledger('feedback_adopt', CONFIG.feedback.adoptReward.coins, CONFIG.feedback.adoptReward.fame, '反馈被采纳答谢');
+  save();
+  renderFeedbackMine();
+  showToast('答谢已到账：+' + CONFIG.feedback.adoptReward.coins + ' 铜钱 / 声望 +' + CONFIG.feedback.adoptReward.fame);
+  return true;
+}
+function showFeedback(){
+  const mask = document.getElementById('fbMask');
+  if(!mask) return;
+  fbUpdateCount();
+  renderFeedbackMine();
+  renderFeedbackHonors();
+  refreshFeedbackHonors();
+  sfxPlay('page');
+  mask.style.display = 'flex';
+}
+function hideFeedback(){
+  const mask = document.getElementById('fbMask');
+  if(mask) mask.style.display = 'none';
 }
 async function cloudExport(){
   if(!S || !S.name) return { ok:false, msg:'尚未开张，没有可导出的存档' };
@@ -1075,6 +1291,41 @@ function questTarget(def){
   if(!def) return 0;
   if(def.targets) return def.targets[Math.min(S.level, def.targets.length) - 1];
   return def.target;
+}
+/* ================= 运营期累计登录（v1.4） =================
+   窗口 2026-11-17～11-30，进游戏即记当天（startApp 调用 touchLoginDay），按窗口内到访天数计；
+   与每日签到并行不互斥——签到按「点领」累计、本活动按「到访」累计，两套计数互不替代。
+   窗口外不记天数、不露入口；四档领取走 ledger、claimed 幂等。 */
+function loginActInWindow(ds){ ds = ds || dayStr(); return ds >= CONFIG.loginAct.start && ds <= CONFIG.loginAct.end; }
+function touchLoginDay(){
+  if(!S || !S.name) return false;
+  const today = dayStr();
+  if(!loginActInWindow(today)) return false;
+  if(S.loginAct.days.includes(today)) return false;
+  S.loginAct.days.push(today);
+  S.loginAct.days.sort();
+  save();
+  return true;
+}
+function loginActSummary(){
+  return { inWindow: loginActInWindow(), count: S.loginAct.days.length,
+    tiers: CONFIG.loginAct.tiers.map(function(t, i){
+      return { days: t.days, coins: t.coins, fame: t.fame,
+        reached: S.loginAct.days.length >= t.days, claimed: S.loginAct.claimed.includes(i) };
+    }) };
+}
+function claimLoginTier(i){
+  const t = CONFIG.loginAct.tiers[i];
+  if(!t) return false;
+  if(S.loginAct.claimed.includes(i)){ showToast('这一档已经领过了'); return false; }
+  if(S.loginAct.days.length < t.days){ showToast('累计到访满 ' + t.days + ' 天才能领这一档'); return false; }
+  S.loginAct.claimed.push(i);
+  ledger('login_act', t.coins, t.fame, '运营期累计登录 ' + t.days + ' 天档');
+  save();
+  todaySig = '';
+  renderToday();
+  showToast('累计登录奖励到账：+' + t.coins + ' 铜钱 / 声望 +' + t.fame);
+  return true;
 }
 function pickQuestIds(forDayStr){
   const ids = ['q_guests', 'q_events', 'q_upgrades', 'q_offline'];
@@ -1877,6 +2128,16 @@ function renderMain(){
     '<div id="noticeMask" class="modal-mask" style="display:none"><div class="modal-box">' +
       '<h3>更 新 公 告</h3><div id="noticeBody"></div>' +
       '<div class="btnrow"><button class="small accent" onclick="hideNotice()">知道了</button></div>' +
+    '</div></div>' +
+    '<div id="fbMask" class="modal-mask" style="display:none"><div class="modal-box">' +
+      '<h3>意 见 反 馈</h3>' +
+      '<div class="small-note">哪里不好玩、想要什么新功能，直接写给我们看。认真提的第一条反馈有 +' + CONFIG.feedback.firstReward + ' 铜钱奖励；被采纳的建议会登上鸣谢名单，还有答谢大奖。</div>' +
+      '<textarea id="fbText" maxlength="' + (CONFIG.feedback.maxLen + 100) + '" placeholder="写下你的想法（1–' + CONFIG.feedback.maxLen + ' 字）" oninput="fbUpdateCount()" style="margin-top:8px;"></textarea>' +
+      '<div class="small-note" id="fbCount">0 / ' + CONFIG.feedback.maxLen + '</div>' +
+      '<div class="btnrow"><button class="small accent" id="fbSubmitBtn" onclick="submitFeedback()">提交反馈</button>' +
+      '<button class="small ghost" onclick="hideFeedback()">关闭</button></div>' +
+      '<div id="fbMine" style="margin-top:8px;"></div>' +
+      '<div id="fbHonors" style="margin-top:8px;"></div>' +
     '</div></div>';
   document.getElementById('innNameView').textContent = S.name;
   document.body.classList.add('has-tabbar');
@@ -2060,7 +2321,8 @@ function todaySummary(){
     giftLimit: giftLimitToday(),
     calTitle: (calEntry(dayStr()) || {}).title || '',
     signin: signinSummary(),
-    celeb: celebrationInfo()
+    celeb: celebrationInfo(),
+    loginAct: loginActSummary()
   };
 }
 let todaySig = '';
@@ -2094,6 +2356,17 @@ function renderToday(){
     html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
       '运营庆典：十四天的驿站，到了结算答谢的日子——掌柜备了一封感谢信和庆典奖。</div></div>' +
       '<button class="small accent" onclick="showCelebration()">去看看</button></div>';
+  }
+  if(t.loginAct.inWindow){
+    html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+      '运营期累计登录：已到访 <b>' + t.loginAct.count + '</b> 天（11-17～11-30，进店即记）</div></div></div>';
+    t.loginAct.tiers.forEach(function(tr, i){
+      html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+        '到访满 <b>' + tr.days + '</b> 天：奖 ' + tr.coins + ' 铜钱＋' + tr.fame + ' 声望</div></div>' +
+        (tr.claimed ? '<span class="quest-todo">已领</span>'
+          : tr.reached ? '<button class="small accent" onclick="claimLoginTier(' + i + ')">领取</button>'
+          : '<span class="quest-todo">' + t.loginAct.count + '/' + tr.days + ' 天</span>') + '</div>';
+    });
   }
   box.innerHTML = html;
 }
@@ -2340,6 +2613,7 @@ function renderSettings(){
     '</div>' +
     '<div class="btnrow">' +
       '<button class="small" onclick="showNotice()">更新公告</button>' +
+      '<button class="small" onclick="showFeedback()">意见反馈</button>' +
       '<button class="small ghost" onclick="uiExitGame()">退出游戏</button>' +
     '</div>' +
     '<div class="small-note" style="margin-top:6px;">把驿站放回桌面：离线房钱攒满 12 小时就溢出了，点桌面图标一键回来领取（需在虎扑 App 内使用）。</div>' +
@@ -2756,6 +3030,8 @@ function settleOffline(){
 }
 function startApp(){
   audioApplyPrefs();
+  touchLoginDay();   /* 运营期累计登录：进游戏即记当天（窗口外自动不记） */
+  checkAdoptedOnce();   /* 反馈采纳静默核一次（仅日志提示，不弹窗） */
   ensureQuests();   /* 当日日课补生成（新档/老档/换槽共用同一入口） */
   renderMain();
   recoverAdPending();   /* 广告欠账补发：重开/换槽/导入后先清 PENDING 欠账（幂等，重复进入不重发） */
@@ -2801,6 +3077,10 @@ window.YZ = {
   offlineInfo: offlineInfo, tomorrowPreview: tomorrowPreview,
   calEntry: calEntry, calMod: calMod, giftLimitToday: giftLimitToday, giftRewardToday: giftRewardToday,
   tierDef: tierDef, signinSummary: signinSummary, claimSignin: claimSignin,
+  submitFeedback: submitFeedback, showFeedback: showFeedback, hideFeedback: hideFeedback,
+  claimAdoptReward: claimAdoptReward, refreshFeedbackHonors: refreshFeedbackHonors,
+  fbHonors: function(){ return fbHonorsCache; },
+  loginActSummary: loginActSummary, claimLoginTier: claimLoginTier, touchLoginDay: touchLoginDay,
   celebrationInfo: celebrationInfo, showCelebration: showCelebration, hideCelebration: hideCelebration, claimCelebration: claimCelebration,
   uiAddToDesktop: uiAddToDesktop, desktopSupported: desktopSupported,
   todaySummary: todaySummary, codexGroupProgress: codexGroupProgress,
