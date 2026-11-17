@@ -9,6 +9,11 @@
   :root{
     --paper:#F4EFE4; --card:#FBF8F0; --ink:#2B2620; --ink2:#6B6151;
     --line:#D8CFBB; --accent:#A93226; --accent-ink:#8C2B20; --ok:#3E6B34;
+    /* 全屏安全区单一事实源（v1.3.6）：默认取 env()；壳内启动时由 applyShellSafeTop()
+       按官方 getFullscreenSafeTop() 返回值抬升（取 max，不与 env 叠加双计）。
+       壳 WebView 普遍不注入 env(safe-area-inset-*)（恒 0），只靠 env 会被状态栏/刘海压。 */
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0;}
@@ -17,7 +22,7 @@
     font-family:"Noto Serif SC","Songti SC","STSong",serif;
     font-size:15px; line-height:1.55;
   }
-  #app{max-width:480px; margin:0 auto; padding:calc(14px + env(safe-area-inset-top)) 14px 40px;}
+  #app{max-width:480px; margin:0 auto; padding:calc(14px + var(--sat)) 14px 40px;}
   .card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:12px; box-shadow:0 1px 2px rgba(43,38,32,.05);}
   .card h3{margin:0 0 10px; font-size:15px; letter-spacing:2px; border-bottom:1px solid var(--line); padding-bottom:8px;}
   .card h3::before, .sect::before{content:''; display:inline-block; width:9px; height:9px; background:var(--accent); border-radius:2px; margin-right:8px; vertical-align:1px;}
@@ -25,7 +30,7 @@
   .sign .inn-name{font-size:26px; letter-spacing:6px; font-weight:700;}
   .sign .inn-sub{color:var(--ink2); font-size:13px; letter-spacing:3px; margin-top:4px;}
   .sign .seal{display:inline-block; margin-top:8px; color:var(--accent-ink); border:1px solid var(--accent); border-radius:4px; padding:0 8px; font-size:12px; letter-spacing:2px;}
-  .wallet{display:flex; gap:8px; margin-bottom:12px; position:sticky; top:6px; z-index:30; background:var(--paper); padding:4px; border-radius:12px;}
+  .wallet{display:flex; gap:8px; margin-bottom:12px; position:sticky; top:calc(6px + var(--sat)); z-index:30; background:var(--paper); padding:4px; border-radius:12px;}
   .wallet .cell{flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 6px; text-align:center;}
   .wallet .k{font-size:12px; color:var(--ink2); letter-spacing:2px;}
   .wallet .v{font-size:19px; font-weight:700;}
@@ -103,7 +108,7 @@
     position:fixed; inset:0; background:rgba(43,38,32,.45); z-index:60;
     display:flex; align-items:center; justify-content:center; padding:18px;
   }
-  .modal-box{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; max-width:420px; width:100%; max-height:calc(100vh - 36px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto;}
+  .modal-box{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; max-width:420px; width:100%; max-height:calc(100vh - 36px - var(--sat) - var(--sab)); max-height:calc(100dvh - 36px - var(--sat) - var(--sab)); overflow-y:auto;}
   .modal-box h3{margin:0 0 10px; font-size:15px; letter-spacing:2px; border-bottom:1px solid var(--line); padding-bottom:8px;}
   @keyframes toastpop{0%{transform:translateX(-50%) translateY(8px);}100%{transform:translateX(-50%) translateY(0);}}
   #toast.pop{animation:toastpop .18s ease-out;}
@@ -120,7 +125,7 @@
   .up-row img.up-thumb{width:56px; height:44px; object-fit:cover; border-radius:6px; border:1px solid var(--line); flex:none; background:var(--card);}
   .tourRing{position:fixed; z-index:300; border:2px solid var(--accent); border-radius:12px; box-shadow:0 0 0 9999px rgba(43,38,32,.48); pointer-events:none; animation:tourPulse 1.6s ease-in-out infinite;}
   @keyframes tourPulse{0%,100%{outline:0 solid rgba(169,50,38,0)}50%{outline:6px solid rgba(169,50,38,.18)}}
-  #tourBubble{position:fixed; z-index:310; left:50%; transform:translateX(-50%); width:100%; max-width:480px; bottom:0; max-height:36vh; overflow-y:auto; background:var(--card); color:var(--ink); border-top:2px solid var(--accent); border-radius:16px 16px 0 0; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); box-shadow:0 -8px 28px rgba(43,38,32,.35); pointer-events:none;}
+  #tourBubble{position:fixed; z-index:310; left:50%; transform:translateX(-50%); width:100%; max-width:480px; bottom:0; max-height:36vh; max-height:36dvh; overflow-y:auto; background:var(--card); color:var(--ink); border-top:2px solid var(--accent); border-radius:16px 16px 0 0; padding:12px 16px calc(12px + var(--sab)); box-shadow:0 -8px 28px rgba(43,38,32,.35); pointer-events:none;}
   #tourBubble button{pointer-events:auto;}
   #tourBubble .tmeta{color:var(--ink2); font-size:12px; letter-spacing:1px;}
   #tourBubble .ttitle{font-size:15px; font-weight:700; margin:3px 0;}
@@ -131,18 +136,18 @@
   #tourBubble .tbtns{display:flex; gap:8px; align-items:center; margin-top:9px;}
   body.touring #app{padding-bottom:330px;}
   #toast{
-    position:fixed; left:50%; bottom:34px; transform:translateX(-50%);
+    position:fixed; left:50%; bottom:calc(34px + var(--sab)); transform:translateX(-50%);
     background:var(--ink); color:var(--paper); padding:9px 18px; border-radius:8px;
     font-size:14px; letter-spacing:1px; display:none; z-index:50; max-width:86vw; text-align:center;
   }
   /* ---- UI 分栏（v0.9）：底部五栏 + 页内小栏目 + 卡片网格，一屏一个主题，禁一长条 ---- */
   :root{ --tabbar-h:58px; }
-  body.has-tabbar #app{padding-bottom:calc(var(--tabbar-h) + 30px + env(safe-area-inset-bottom));}
-  body.touring.has-tabbar #app{padding-bottom:calc(330px + var(--tabbar-h) + env(safe-area-inset-bottom));}
-  body.has-tabbar #tourBubble{bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom));}
-  body.has-tabbar #toast{bottom:calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom));}
+  body.has-tabbar #app{padding-bottom:calc(var(--tabbar-h) + 30px + var(--sab));}
+  body.touring.has-tabbar #app{padding-bottom:calc(330px + var(--tabbar-h) + var(--sab));}
+  body.has-tabbar #tourBubble{bottom:calc(var(--tabbar-h) + var(--sab));}
+  body.has-tabbar #toast{bottom:calc(var(--tabbar-h) + 14px + var(--sab));}
   .tabbar{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:480px; z-index:40;
-    display:flex; background:var(--card); border-top:2px solid var(--ink); padding-bottom:env(safe-area-inset-bottom);}
+    display:flex; background:var(--card); border-top:2px solid var(--ink); padding-bottom:var(--sab);}
   .tabbar .tab{flex:1; position:relative; background:transparent; border:none; border-radius:0; color:var(--ink2);
     font-size:13px; letter-spacing:2px; padding:12px 0 10px; cursor:pointer;}
   .tabbar .tab.on{color:var(--accent-ink); font-weight:700; box-shadow:inset 0 3px 0 var(--accent);}
@@ -1766,26 +1771,58 @@ function claimMilestone(id){
   return true;
 }
 
-/* ================= 广告（vatask 口径） ================= */
-function shellAd(){
-  if(typeof window !== 'undefined'){
-    if(window.vataskAd && typeof window.vataskAd.showRewarded === 'function') return window.vataskAd;
-    if(window.VATASK && typeof window.VATASK.showRewarded === 'function') return window.VATASK;
-  }
+/* ================= 广告（官方 vatask 技能口径，v1.3.6 按驳回修复） =================
+   技能包 colorbox-vatask / colorbox-vatask-complete-reward-video 原文口径：
+   - 唯一合法调用 window.ColorboxAI.vatask.completeRewardVideo()，无参数（活动 id 由底座配置
+     自动注入 window.__COLORBOX_AI_CONFIG__.ActivityId，无需也不能传参），返回 Promise；
+   - 仅 res.code === 200 且 res.data.rewarded === true 才代表原生已确认奖励到账；
+   - 成功后调用 getActivityTaskState() 刷新任务状态（只读，失败静默）；
+   - 失败时用 res.message 向用户提示，禁止自行补发奖励（API 明确失败≠PENDING 无返回场景）；
+   - 必须由用户点击触发、流程进行中只允许一个激励流程（adInFlight 守卫）；
+   - 创建应用时勾选「激励广告」后活动/广告位由平台自动绑定，代码侧零配置（后台项，非代码）。
+   v1.3.5 及以前误用不存在的 vataskAd/VATASK.showRewarded：壳内恒探测不到 → 落入非壳模拟
+   分支直发奖励，审核判定「激励广告功能没有配置成功」，本版按原文改净。 */
+function shellVatask(){
+  if(typeof window !== 'undefined' && window.ColorboxAI && window.ColorboxAI.vatask &&
+     typeof window.ColorboxAI.vatask.completeRewardVideo === 'function') return window.ColorboxAI.vatask;
   return null;
 }
-function showRewardAd(placement, onReward){
-  const shell = shellAd();
-  if(shell){
-    let done = false;
-    shell.showRewarded(placement, function(res){
-      if(done) return; done = true;
-      if(res && res.code === 200 && res.rewarded === true) onReward();
-      else showToast('广告未看完，没有奖励');
+let adInFlight = false;   /* 技能约束：同一页面同一时间只允许一个激励视频流程 */
+function showRewardAd(placement, onReward, onFail){
+  const vt = shellVatask();
+  if(vt){
+    if(adInFlight) return;   /* 已有流程进行中：本次不重复拉起，PENDING 标记留待 recoverAdPending 处置 */
+    adInFlight = true;
+    let settled = false;
+    const settle = function(){ if(settled) return false; settled = true; adInFlight = false; return true; };
+    const fail = function(msg){ if(onFail) onFail(); showToast(msg); };   /* 明确失败：调用方清 PENDING（技能：失败禁止补发） */
+    let p = null;
+    try{ p = vt.completeRewardVideo(); }catch(e){ p = null; }
+    if(!p || typeof p.then !== 'function'){
+      settle();
+      fail('广告拉起失败，请稍后再试');
+      return;
+    }
+    p.then(function(res){
+      if(!settle()) return;
+      if(res && res.code === 200 && res.data && res.data.rewarded === true){
+        try{ const q = vt.getActivityTaskState(); if(q && typeof q.catch === 'function') q.catch(function(){}); }catch(e){}
+        onReward();
+      }else{
+        fail((res && res.message) ? res.message : '广告未看完，没有奖励');
+      }
+    }, function(){
+      if(!settle()) return;
+      fail('广告拉起失败，请稍后再试');
     });
   }else{
-    setTimeout(onReward, CONFIG.adSimMs);   /* 非壳环境模拟 */
+    setTimeout(onReward, CONFIG.adSimMs);   /* 非壳环境模拟（站外无广告能力，技能口径 code 403 APP_REQUIRED；仅试玩/网页通道） */
   }
+}
+/* API 明确失败（未看完/拉起失败/未登录等）→ 流程已定论未到账，清掉本次 PENDING 标记防下次补发；
+   与「无返回」（进程被杀、Promise 永不 settle）严格区分：后者标记保留、走 recoverAdPending 防丢。 */
+function adClearPending(p){
+  if(S && p && S.adPending && S.adPending.token === p.token){ S.adPending = null; save(); }
 }
 function adsUsed(kind){ return Math.floor(+S.ads[kind] || 0); }
 /* ---- PENDING 防丢（v1.3.1，P0 口径）----
@@ -1833,6 +1870,7 @@ function adApply(p, recovered){
 function recoverAdPending(){
   if(!S || !S.adPending) return false;
   if(!adApply(S.adPending, true)) return false;
+  adInFlight = false;   /* 欠账已被消费＝旧流程就此定论，释放并发守卫放行新流程（欠账优先口径） */
   renderOffline(); renderAdsBox(); renderCommissions(); renderToday(); updateDynamic(); renderLog();
   showToast('上次广告奖励已补发');
   return true;
@@ -1849,7 +1887,7 @@ function claimOfflineDouble(){
       showToast('翻倍领取到账 +' + (p.amt * 2) + ' 铜钱');
       tourHook('offline');
     }
-  });
+  }, function(){ adClearPending(p); });
 }
 function claimDailyGift(){
   if(S.adPending) recoverAdPending();
@@ -1861,7 +1899,7 @@ function claimDailyGift(){
       renderAdsBox(); renderToday(); updateDynamic(); renderLog();
       showToast('礼包到账 +' + amt + ' 铜钱');
     }
-  });
+  }, function(){ adClearPending(p); });
   return true;
 }
 function instantCommission(id){
@@ -1876,7 +1914,7 @@ function instantCommission(id){
       renderCommissions(); renderAdsBox();
       showToast('商队已提前归来，可领取报酬');
     }
-  });
+  }, function(){ adClearPending(p); });
   return true;
 }
 
@@ -3165,7 +3203,25 @@ function startApp(){
   if(tickTimer) clearInterval(tickTimer);
   tickTimer = setInterval(tick, CONFIG.tickMs);
 }
+/* 全屏顶部安全距（技能 colorbox-fullscreen-safe-top 原文口径，v1.3.6）：
+   同步调用 window.ColorboxAI.getFullscreenSafeTop()，启动时读一次、直接返回 CSS px；
+   以 max(env, 返回值) 写入 --sat：宿主未预留空间时按返回值避让，env 已给值时不叠加双计。
+   无该 API（非壳/旧版）时静默保持 env 口径。返回值同时存 shellSafeTopPx 供探针核。 */
+let shellSafeTopPx = -1;
+function applyShellSafeTop(){
+  try{
+    if(typeof window !== 'undefined' && window.ColorboxAI && typeof window.ColorboxAI.getFullscreenSafeTop === 'function'){
+      const v = Number(window.ColorboxAI.getFullscreenSafeTop());
+      if(isFinite(v) && v >= 0){
+        shellSafeTopPx = v;
+        if(v > 0) document.documentElement.style.setProperty('--sat', 'max(env(safe-area-inset-top, 0px), ' + v + 'px)');
+      }
+    }
+  }catch(e){}
+  return shellSafeTopPx;
+}
 function boot(){
+  applyShellSafeTop();
   const loaded = load();
   if(loaded && loaded.name){
     S = loaded;
@@ -3214,6 +3270,7 @@ window.YZ = {
   toggleLoginFold: toggleLoginFold, loginFoldOpen: function(){ return loginFoldOpen; },
   celebrationInfo: celebrationInfo, showCelebration: showCelebration, hideCelebration: hideCelebration, claimCelebration: claimCelebration,
   uiAddToDesktop: uiAddToDesktop, desktopSupported: desktopSupported,
+  applyShellSafeTop: applyShellSafeTop, shellSafeTopPx: function(){ return shellSafeTopPx; },
   todaySummary: todaySummary, codexGroupProgress: codexGroupProgress,
   switchTab: switchTab, switchSub: switchSub, gotoCard: gotoCard, updateTabDots: updateTabDots,
   updateDynamic: updateDynamic, renderEvents: renderEvents,
