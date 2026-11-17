@@ -435,9 +435,13 @@ const CONFIG = {
   maxRooms: 12,
   maxQuality: 5,
   /* 价格表（v1.2 曲线摊开：显式逐段价，前段与旧版逐项一致、尾段拉陡；upgradeCost 唯一出处）
-     roomCostTable[i] = 现间数 (startRooms+i) → 再扩一间的价；qualityCostTable[i] = 品质 (i+1) 档 → 升下一档的价 */
-  roomCostTable: [80, 124, 192, 400, 900, 2200, 6000, 20000, 70000, 250000],
-  qualityCostTable: [120, 260, 1100, 6000],
+     roomCostTable[i] = 现间数 (startRooms+i) → 再扩一间的价；qualityCostTable[i] = 品质 (i+1) 档 → 升下一档的价
+     v1.4 经济加厚批 A1（2026-11-18 主人拍板，审计定版数字）：尾段再拉陡——客房末三间
+     20000/70000/250000 → 35000/140000/500000，品质全线 120/260/1100/6000 → 120/400/2500/12000，
+     厨房/马厩末三级 17000/45000/120000 → 25000/80000/240000。计价按当前等级查表，
+     只影响未购档位，已购档位零回溯、零贬值 */
+  roomCostTable: [80, 124, 192, 400, 900, 2200, 6000, 35000, 140000, 500000],
+  qualityCostTable: [120, 400, 2500, 12000],
   arrivalChancePerTick: 0.45,
   stayMinTicks: 3, stayMaxTicks: 8,
   famePerCheckout: 1,
@@ -447,13 +451,13 @@ const CONFIG = {
   offlineCapHours: 12,
   offlineMinMinutes: 1,
   /* 厨房：餐饮附加 = 基础房费收入 × kitchenLv × kitchenMultPerLv（并入 incomeRate） */
-  kitchenMax: 10, kitchenCostTable: [100, 160, 256, 450, 1100, 2800, 7000, 17000, 45000, 120000], kitchenMultPerLv: 0.08,
+  kitchenMax: 10, kitchenCostTable: [100, 160, 256, 450, 1100, 2800, 7000, 25000, 80000, 240000], kitchenMultPerLv: 0.08,
   /* 马厩：委托报酬 ×(1+stableLv×stableRewardPerLv)，到访率 +stableLv×stableArrivalPerLv（并入公式） */
-  stableMax: 10, stableCostTable: [100, 160, 256, 450, 1100, 2800, 7000, 17000, 45000, 120000], stableRewardPerLv: 0.10, stableArrivalPerLv: 0.02,
+  stableMax: 10, stableCostTable: [100, 160, 256, 450, 1100, 2800, 7000, 25000, 80000, 240000], stableRewardPerLv: 0.10, stableArrivalPerLv: 0.02,
   /* 设施等级上限随驿站等级细化：厨房上限=min(kitchenMax, level+2)，马厩上限=min(stableMax, level+1) */
   /* 伙计：hire 雇佣费，升级费 = upBase × staffUpMult[现级-1]（v1.2 尾段拉陡）；bonusPerLv 并入对应公式
      innkeeper 掌柜→总收入 / waiter 小二→总收入(服务) / cook 厨子→餐饮收入 / groom 马夫→委托报酬 */
-  staffUpMult: [1, 2.0, 5.0, 16.0],
+  staffUpMult: [1, 2.0, 5.0, 20.0],   /* v1.4 A1：尾档倍率 16→20 */
   staffTypes: [
     { id:'innkeeper', face:'innkeeper', label:'掌柜', desc:'总收入 +6%/级', hire:150, upBase:90,  maxLv:5, incomePerLv:0.06 },
     { id:'waiter',    face:'waiter',    label:'小二', desc:'总收入 +4%/级', hire:100, upBase:70,  maxLv:5, incomePerLv:0.04 },
@@ -502,7 +506,7 @@ const CONFIG = {
   giftReward: 150,
   adSimMs: 900,
   /* 每日事件张数 */
-  eventsPerDay: 3,
+  eventsPerDay: 4,   /* v1.4 B1：每日抉择 3→4 张 */
   /* 新手引导走完谢礼（走 ledger 发放，仅一次） */
   guideReward: 30,
   /* 掌柜日课（v1.2 上线自带）：每日 5 项，前 4 项恒定、第 5 项按委托日期门换项（未开门用 fame 项）。
@@ -540,6 +544,22 @@ const CONFIG = {
     { days:5,  coins:300,  fame:6 },
     { days:8,  coins:600,  fame:12 },
     { days:11, coins:1200, fame:25 } ] },
+  /* 加急单（v1.4 经济加厚批 B3）：每日 1 张，接单窗口 minutes 分钟、过期作废，报酬 ×mult；
+     基档在常驻三档中随机，走既有委托状态机（实例带 urgent 标记，结算走 commissionPayout 唯一出口） */
+  urgent: { minutes: 30, mult: 2 },
+  /* 离线托付（v1.4 经济加厚批 B5）：领离线时可把待领房钱押进托付槽，hours 小时后按 (1+bonus) 结回；
+     托付期间占用一个委托在途位（activeCommissionCount 唯一口径），到期 settleEntrust 自动结算走 ledger */
+  entrust: { hours: 6, bonus: 0.4 },
+  /* 好感谢礼（v1.4 经济加厚批 B4）：favor 每 cost 点在图鉴页换一份谢礼，
+     铜钱 = incomeRate() × coinMinutes（走公式出口、随成长缩放）＋ fame 声望；兑换走 ledger 幂等 */
+  favorGift: { cost: 50, fame: 5, coinMinutes: 12 },
+  /* 连环故事伪链（v1.4 经济加厚批 B1）：种子卡走随机池，抉择后同链下一幕于次日必出
+     （pickEventsForDay 唯一排卡口）；acts 顺序即幕次，进度存 chainProg[chainId]＝已完成幕数；
+     11/25 引擎批承接同一进度字段 */
+  chains: [
+    { id:'chain_umbrella', label:'借伞的姑娘', acts:['e_umbrella', 'e_umbrella2', 'e_umbrella3'] },
+    { id:'chain_song', label:'夜半歌声', acts:['e_song', 'e_song2', 'e_song3'] }
+  ],
   /* 旅客池 36 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
   guestTypes: [
     { id:'scholar', face:'scholar',   label:'书生',     weight:30, priceMult:0.9, minLevel:1, lines: ['店家，可有安静的房间温书？', '此去京城，但愿金榜题名。'] },
@@ -600,10 +620,18 @@ const CONFIG = {
       { label:'全数转交厨子', coins:10, fame:1, favor:3 }, { label:'驿站留一半', coins:25, fame:0, favor:-1 } ] },
     /* 新事件批（v1.3，2026-11-25 上新，from 日期门控）：其中 e_umbrella / e_song 带 chainSeed 标记，
        为后续事件链 B 埋线——本批只作普通卡结算，标记仅为数据字段、无引擎行为 */
-    { id:'e_umbrella', pool:'daily', img:'ev_night', from:'2026-11-25', chainSeed:true, title:'借伞的姑娘', text:'雨夜里，一位姑娘借走驿站的油纸伞，说明日一准送回。', choices:[
+    { id:'e_umbrella', pool:'daily', img:'ev_night', from:'2026-11-25', chainSeed:true, chain:'chain_umbrella', title:'借伞的姑娘', text:'雨夜里，一位姑娘借走驿站的油纸伞，说明日一准送回。', choices:[
       { label:'借她，伞不值钱人心贵', coins:0, fame:2, favor:3 }, { label:'收三文押金再借', coins:15, fame:0, favor:0 } ] },
-    { id:'e_song', pool:'daily', img:'ev_night', from:'2026-11-25', chainSeed:true, title:'夜半歌声', text:'后院有人轻声哼着一支旧曲，住客们都支起耳朵。原来是路过的歌者借宿，想唱一曲抵房钱。', choices:[
+    { id:'e_song', pool:'daily', img:'ev_night', from:'2026-11-25', chainSeed:true, chain:'chain_song', title:'夜半歌声', text:'后院有人轻声哼着一支旧曲，住客们都支起耳朵。原来是路过的歌者借宿，想唱一曲抵房钱。', choices:[
       { label:'请她堂前唱一曲', coins:10, fame:3, favor:3 }, { label:'夜深了，劝她早歇', coins:0, fame:0, favor:-1 } ] },
+    { id:'e_umbrella2', pool:'daily', img:'ev_night', from:'2026-11-25', chain:'chain_umbrella', title:'还伞的姑娘', text:'姑娘如约来还伞，还带了一包自家晒的桂花，说是谢礼。', choices:[
+      { label:'收下桂花，留她喝茶', coins:0, fame:3, favor:3 }, { label:'伞归原主，桂花折钱收下', coins:30, fame:0, favor:0 } ] },
+    { id:'e_umbrella3', pool:'daily', img:'ev_night', from:'2026-11-25', chain:'chain_umbrella', title:'伞下的约定', text:'桂花香还没散，姑娘又来借宿，说下月要随商队远行，临行想再住一晚。', choices:[
+      { label:'免房钱为她送行', coins:-10, fame:4, favor:4 }, { label:'按常价留房', coins:35, fame:1, favor:0 } ] },
+    { id:'e_song2', pool:'daily', img:'ev_night', from:'2026-11-25', chain:'chain_song', title:'歌者的新曲', text:'歌者留下了一支新曲，说是那夜听了驿站的雨声写的，托你转交下一位过路的歌者。', choices:[
+      { label:'挂在堂前任人学唱', coins:0, fame:4, favor:3 }, { label:'收进柜里当镇店之宝', coins:10, fame:1, favor:0 } ] },
+    { id:'e_song3', pool:'daily', img:'ev_night', from:'2026-11-25', chain:'chain_song', title:'满堂的歌声', text:'又是一个雨夜，堂前有住客自发唱起那支旧曲——原来早传遍了这一路。', choices:[
+      { label:'添酒助兴，同唱一曲', coins:-15, fame:5, favor:4 }, { label:'含笑听着，不扰雅兴', coins:0, fame:2, favor:2 } ] },
     { id:'e_well', pool:'daily', img:'ev_night', from:'2026-11-25', title:'井边的铜铃', text:'小二打水时在井边拾到一枚刻着字的铜铃，像是哪个旅客落下的。', choices:[
       { label:'挂在柜台等失主', coins:0, fame:3, favor:2 }, { label:'熔了换钱', coins:30, fame:-2, favor:-2 } ] },
     { id:'e_dog', pool:'daily', img:'ev_caravan', from:'2026-11-25', title:'黏人的黄狗', text:'一只黄狗蹲在驿站门口三天了，谁赶都不走，只望着马厩的方向。', choices:[
@@ -669,6 +697,13 @@ const CONFIG = {
 };
 /* ==== 更新公告（设置区点击查看，只许点击触发、严禁进门自动弹；新版本往数组最前面加一条即可） ==== */
 const ANNOUNCE = [
+  { ver: 'v1.4.1', date: '2026-11-18', items: [
+    '每日抉择增至 4 张；抉择里攒下的「旅客好感」能在图鉴页换谢礼了，善意选项不再白选',
+    '商队委托每日多一张「加急单」：半小时内接单、报酬翻倍，过期作废',
+    '离线房钱可以「托付商队」：押出去 6 小时，归来多结四成（托付期间占一个委托位）',
+    '连环故事将随 11 月 25 日新事件登场：一张卡埋下种子，后面两日的抉择会接着往下讲',
+    '中后期扩建、厨房、马厩尾段与伙计升阶的价格上调——只影响还没买的档位，已经买的不受影响'
+  ]},
   { ver: 'v1.4', date: '2026-11-17', items: [
     '设置里新增「意见反馈」：第一条反馈有铜钱奖励，建议被采纳还有答谢大奖并登上鸣谢名单',
     '运营期累计登录开启（11-17～11-30）：进店即记一天，到访满 3/5/8/11 天逐档领奖'
@@ -848,6 +883,9 @@ function defaultState(){
     celebClaimed: false,
     feedback: { count: 0, granted: false, times: [], adoptClaimed: [] },
     loginAct: { days: [], claimed: [] },
+    chainProg: {},
+    urgent: null,
+    entrust: null,
     guideStep: 0,
     guideDone: false,
     guideRewarded: false,
@@ -942,6 +980,18 @@ function normalize(raw){
         claimed: Array.isArray(raw.loginAct.claimed)
           ? Array.from(new Set(raw.loginAct.claimed.filter(x => Number.isInteger(x) && x >= 0 && x < CONFIG.loginAct.tiers.length))) : [] }
     : { days: [], claimed: [] };
+  /* v1.4 经济加厚批加法字段：连环进度 / 加急单 / 离线托付，形状非法一律回默认，老档安全 */
+  s.chainProg = {};
+  if(raw.chainProg && typeof raw.chainProg === 'object'){
+    for(const c of CONFIG.chains) s.chainProg[c.id] = clampInt(raw.chainProg[c.id], 0, c.acts.length, 0);
+  }
+  s.urgent = (raw.urgent && typeof raw.urgent === 'object' && typeof raw.urgent.day === 'string'
+      && CONFIG.commissionTiers.some(t => t.id === raw.urgent.tierId) && +raw.urgent.expiresAt > 0)
+    ? { day: raw.urgent.day, tierId: raw.urgent.tierId, expiresAt: Math.floor(+raw.urgent.expiresAt), taken: raw.urgent.taken === true }
+    : null;
+  s.entrust = (raw.entrust && typeof raw.entrust === 'object' && Math.floor(+raw.entrust.amt || 0) > 0 && +raw.entrust.end > 0)
+    ? { amt: Math.floor(+raw.entrust.amt), end: Math.floor(+raw.entrust.end) }
+    : null;
   s.settings = Object.assign({}, d.settings, (raw.settings && typeof raw.settings === 'object') ? raw.settings : {});
   /* 引导字段（v4 加法加入，不动既有字段语义）：带字段的档照原值；
      无字段的老档——已开张（有 name）默认标完成不补弹，未开张从头走 */
@@ -1789,11 +1839,26 @@ function claimCelebration(){
 }
 
 /* ================= 跨日与晨间小结 ================= */
+function chainDefOf(ev){
+  if(!ev || !ev.chain) return null;
+  return CONFIG.chains.find(c => c.id === ev.chain) || null;
+}
+function chainActNo(ev){
+  const c = chainDefOf(ev);
+  return c ? c.acts.indexOf(ev.id) + 1 : 0;
+}
 function pickEventsForDay(){
-  const pool = eventPool().slice();
   const picked = [];
+  /* 伪链接续（B1）：进行中的连环故事，下一幕今日必出、排在当日首张；种子卡仍走随机池，
+     后续幕不入随机池（eventPool 含全池，此处过滤 act>1 的链卡） */
+  for(const c of CONFIG.chains){
+    const prog = clampInt(S && S.chainProg && S.chainProg[c.id], 0, c.acts.length, 0);
+    if(prog > 0 && prog < c.acts.length) picked.push(c.acts[prog]);
+  }
+  const pool = eventPool().filter(e => !(e.chain && chainActNo(e) > 1)).slice();
   while(picked.length < CONFIG.eventsPerDay && pool.length){
-    picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0].id);
+    const id = pool.splice(Math.floor(Math.random() * pool.length), 1)[0].id;
+    if(picked.indexOf(id) < 0) picked.push(id);
   }
   return picked;
 }
@@ -1810,6 +1875,7 @@ function rollDayIfNeeded(){
   S.day = today;
   S.dayStats = { guests: 0, earned: 0 };
   S.ads = {};
+  S.urgent = null;   /* 加急单跨日作废，新一日由 ensureUrgent 重新刷 */
   S.eventsToday = pickEventsForDay();
   S.eventsDone = 0;
   ensureQuests();   /* 日课随日界滚动：questsNext 转正＋生成新的明日预告 */
@@ -1829,6 +1895,7 @@ function tick(){
   if(!S || !S.name) return;
   let changed = false;
   if(rollDayIfNeeded()){ changed = true; renderMorning(); renderEvents(); renderAdsBox(); }
+  if(settleEntrust()) changed = true;   /* 离线托付到期结算（走 ledger，与晨间小结同账） */
   if(S.guests.length < S.rooms.count && Math.random() < arrivalChance()){
     if(arriveGuest()) changed = true;
   }
@@ -1915,6 +1982,9 @@ function doEventChoice(idx){
   const effCoins = ch.coins > 0 ? Math.round(ch.coins * evMult) : ch.coins;
   const effFame = ch.fame > 0 ? Math.round(ch.fame * evMult) : ch.fame;
   ledger('event', effCoins, effFame, '事件「' + ev.title + '」已抉择', ch.favor);
+  const chnDone = chainDefOf(ev);   /* 伪链推进：按幕次顺序完成才推进进度，乱序不算 */
+  if(chnDone && chainActNo(ev) === clampInt(S.chainProg[chnDone.id], 0, chnDone.acts.length, 0) + 1)
+    S.chainProg[chnDone.id] = chainActNo(ev);
   S.eventsDone++;
   S.totalEvents++;
   questBump('events', 1);
@@ -1939,7 +2009,7 @@ function startCommission(tierId){
   const tier = tierDef(tierId);
   if(!tier) return false;
   if(tier.name && !packActive('journey')){ showToast('远行季限定委托将于 2026-11-20 开放'); return false; }
-  if(S.commissions.length >= CONFIG.commissionMaxActive){ showToast('同时进行的委托已满'); return false; }
+  if(activeCommissionCount() >= CONFIG.commissionMaxActive){ showToast('同时进行的委托已满'); return false; }
   const now = Date.now();
   S.commissions.push({
     id: 'cm' + now + '_' + Math.floor(Math.random() * 100000),
@@ -1960,12 +2030,12 @@ function claimCommission(id){
   if(!commissionReady(c)){ showToast('商队尚未归来'); return false; }
   const tier = tierDef(c.tierId);
   if(!tier) return false;
-  const rw = commissionReward(tier);
+  const rw = commissionPayout(c);
   c.claimed = true;
   S.commissions = S.commissions.filter(x => x.id !== id);
   S.totalCommissions++;
   questBump('commissions', 1);
-  ledger('commission', rw.coins, rw.fame, tier.name ? '远行委托「' + tier.name + '」完成，报酬 +' + rw.coins + ' 铜钱' : '商队委托完成，报酬 +' + rw.coins + ' 铜钱');
+  ledger('commission', rw.coins, rw.fame, c.urgent ? '加急单完成，报酬 +' + rw.coins + ' 铜钱（翻倍）' : (tier.name ? '远行委托「' + tier.name + '」完成，报酬 +' + rw.coins + ' 铜钱' : '商队委托完成，报酬 +' + rw.coins + ' 铜钱'));
   if(tier.line) pushLog(tier.line);   /* 远行季专属完成台词 */
   save();
   renderCommissions();
@@ -1973,6 +2043,96 @@ function claimCommission(id){
   updateDynamic();
   renderLog();
   showToast('委托报酬到账 +' + rw.coins + ' 铜钱' + (rw.fame ? ' / 声望 +' + rw.fame : ''));
+  return true;
+}
+
+/* ================= 加急单 / 离线托付 / 好感谢礼（v1.4 经济加厚批 B3/B5/B4） ================= */
+function activeCommissionCount(){ return S.commissions.length + (S.entrust ? 1 : 0); }
+function commissionPayout(c){
+  const t = tierDef(c.tierId);
+  if(!t) return null;
+  const rw = commissionReward(t);
+  if(c.urgent) rw.coins = rw.coins * CONFIG.urgent.mult;   /* 加急单报酬翻倍：结算唯一出口 */
+  return rw;
+}
+function ensureUrgent(){
+  if(!S || !packActive('commission')) return null;
+  const today = dayStr();
+  if(S.urgent && S.urgent.day === today) return S.urgent;
+  const tiers = CONFIG.commissionTiers;
+  const t = tiers[Math.floor(Math.random() * tiers.length)];
+  S.urgent = { day: today, tierId: t.id, expiresAt: Date.now() + CONFIG.urgent.minutes * 60000, taken: false };
+  save();
+  return S.urgent;
+}
+function urgentOffer(){
+  const u = ensureUrgent();
+  if(!u || u.taken || Date.now() >= u.expiresAt) return null;
+  return u;
+}
+function startUrgent(){
+  const u = urgentOffer();
+  if(!u){ showToast('今日加急单已过期或已接下'); return false; }
+  if(activeCommissionCount() >= CONFIG.commissionMaxActive){ showToast('同时进行的委托已满'); return false; }
+  const tier = tierDef(u.tierId);
+  if(!tier) return false;
+  u.taken = true;
+  const now = Date.now();
+  S.commissions.push({
+    id: 'cm' + now + '_' + Math.floor(Math.random() * 100000),
+    tierId: tier.id, hours: tier.hours,
+    start: now, end: now + tier.hours * 3600 * 1000,
+    claimed: false, urgent: true
+  });
+  pushLog('接下加急单（' + tier.hours + ' 小时商队，报酬翻倍）');
+  save();
+  renderCommissions();
+  renderLog();
+  showToast('加急单已接下，归来报酬翻倍');
+  return true;
+}
+function entrustPayout(){ return S.entrust ? Math.floor(S.entrust.amt * (1 + CONFIG.entrust.bonus)) : 0; }
+function entrustOffline(){
+  if(!S || S.offlinePending < 1) return false;
+  if(S.entrust){ showToast('已有一笔托付在途，归来后再托付新的'); return false; }
+  const amt = Math.floor(S.offlinePending);
+  S.offlinePending = 0;
+  S.entrust = { amt: amt, end: Date.now() + CONFIG.entrust.hours * 3600 * 1000 };
+  questBump('offline', 1);   /* 托付也是领取离线收益的一种，日课同口径计数 */
+  pushLog('把离线房钱 ' + amt + ' 铜钱托付商队，' + CONFIG.entrust.hours + ' 小时后结回');
+  save();
+  renderOffline();
+  updateDynamic();
+  renderLog();
+  showToast('已托付 ' + amt + ' 铜钱，' + CONFIG.entrust.hours + ' 小时后结回 ' + entrustPayout() + ' 铜钱');
+  tourHook('offline');
+  return true;
+}
+function settleEntrust(){
+  if(!S || !S.entrust || Date.now() < S.entrust.end) return false;
+  const pay = entrustPayout(), amt = S.entrust.amt;
+  S.entrust = null;
+  ledger('entrust', pay, 0, '托付商队归来：本金 ' + amt + '＋酬金 ' + (pay - amt) + '，结回 +' + pay + ' 铜钱');
+  save();
+  renderOffline();
+  updateDynamic();
+  renderLog();
+  showToast('托付结回 +' + pay + ' 铜钱');
+  return true;
+}
+function favorGiftReward(){
+  return { coins: Math.max(50, Math.round(incomeRate() * CONFIG.favorGift.coinMinutes)), fame: CONFIG.favorGift.fame };
+}
+function claimFavorGift(){
+  if(!S) return false;
+  if(S.favor < CONFIG.favorGift.cost){ showToast('好感不足（需 ' + CONFIG.favorGift.cost + ' 点）'); return false; }
+  const rw = favorGiftReward();
+  if(!ledger('favorGift', rw.coins, rw.fame, '旅客谢礼：好感 -' + CONFIG.favorGift.cost + '，铜钱 +' + rw.coins + ' / 声望 +' + rw.fame, -CONFIG.favorGift.cost)) return false;
+  save();
+  renderCodex();
+  updateDynamic();
+  renderLog();
+  showToast('谢礼到账 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame);
   return true;
 }
 
@@ -2419,7 +2579,7 @@ function renderMain(){
     '</div>' +
     '<div class="tabpage" id="page-affair">' +
       resbarHtml() +
-      '<div class="card" id="eventsCard"><h3>今 日 抉 择（<span id="evLeft">0</span>/3）</h3><div id="eventsBox"></div></div>' +
+      '<div class="card" id="eventsCard"><h3>今 日 抉 择（<span id="evLeft">0</span>/' + CONFIG.eventsPerDay + '）</h3><div id="eventsBox"></div></div>' +
       '<div class="card" id="commissionsCard"><h3>商 队 委 托</h3><div id="commissionsBox"></div></div>' +
       '<div class="card" id="adsCard"><h3>每 日 礼 包</h3><div id="adsBox"></div></div>' +
     '</div>' +
@@ -2518,7 +2678,8 @@ function renderMorning(){
       headImgHtml('morning') +
       '昨夜（' + esc(S.morning.date) + '）共接待 <b>' + S.morning.guests + '</b> 位旅客，进账 <b>' +
       S.morning.earned + '</b> 铜钱' + (S.morning.offline > 0 ? '；离线房钱 <b>' + S.morning.offline + '</b> 铜钱待领取（见离线明牌）' : '') + '。' +
-      '<div class="small-note" style="margin-top:6px;">' + esc(tomorrowPreview()) + '</div>';
+      '<div class="small-note" style="margin-top:6px;">' + esc(tomorrowPreview()) + '</div>' +
+      (S.entrust ? '<div class="small-note" style="margin-top:4px;">托付在途：本金 ' + S.entrust.amt + ' 铜钱，约 ' + fmtLeft(S.entrust.end - Date.now()) + '后结回 ' + entrustPayout() + ' 铜钱（结回当日计入晨间小结）。</div>' : '');
   }else{
     card.style.display = 'none';
   }
@@ -2535,7 +2696,7 @@ function renderOffline(){
   const card = document.getElementById('offlineCard');
   if(card) card.style.display = 'block';   /* 明牌卡常驻展示（凭数据渲染，非自动弹窗） */
   const info = offlineInfo();
-  const sig = [Math.round(info.rate * 10), info.pending, Math.floor(info.progressPct), info.capAmt, S.ads.offlineDouble ? 1 : 0].join('|');
+  const sig = [Math.round(info.rate * 10), info.pending, Math.floor(info.progressPct), info.capAmt, S.ads.offlineDouble ? 1 : 0, S.entrust ? S.entrust.amt : 0].join('|');
   if(sig === offlineSig) return;
   offlineSig = sig;
   let html =
@@ -2558,9 +2719,14 @@ function renderOffline(){
   }else{
     html += '<div class="small-note" style="margin-top:6px;">暂无在住旅客，离线进账为 0——等旅客入住后开始累计。</div>';
   }
+  if(S.entrust){
+    html += '<div style="margin-top:6px;">托付在途：本金 <b>' + S.entrust.amt + '</b> 铜钱 · 预计结回 <b>' + entrustPayout() + '</b> 铜钱 · 剩余 <span class="cm-left" data-end="' + S.entrust.end + '">' + fmtLeft(S.entrust.end - Date.now()) + '</span></div>';
+  }
   if(info.pending >= 1){
     html += '<div class="btnrow"><button class="accent" id="claimBtn" onclick="claimOffline()">领取</button>' +
-      '<button id="claimDoubleBtn" onclick="claimOfflineDouble()"' + (S.ads.offlineDouble ? ' disabled' : '') + '>看广告翻倍领取</button></div>';
+      '<button id="claimDoubleBtn" onclick="claimOfflineDouble()"' + (S.ads.offlineDouble ? ' disabled' : '') + '>看广告翻倍领取</button>' +
+      '<button id="entrustBtn" onclick="entrustOffline()"' + (S.entrust ? ' disabled' : '') + '>托付商队 · ' + CONFIG.entrust.hours + ' 小时 +' + Math.round(CONFIG.entrust.bonus * 100) + '%</button></div>' +
+      '<div class="small-note">「托付商队」把这笔房钱押出去 ' + CONFIG.entrust.hours + ' 小时，归来多结 ' + Math.round(CONFIG.entrust.bonus * 100) + '%；托付期间占一个委托在途位。</div>';
   }
   html += '<div class="btnrow"><button class="small ghost" onclick="showOfflineRules()">离线规则说明</button>' +
     '<button class="small ghost" onclick="uiAddToDesktop()">添加到桌面，下次一键回来领钱</button></div>';
@@ -2631,7 +2797,8 @@ function showOfflineRules(){
     '<div>· 离线期间，在住旅客的房钱按当前收入速率的 <b>' + Math.round(CONFIG.offlineRate * 100) + '%</b> 折算累计。</div>' +
     '<div style="margin-top:6px;">· 累计封顶 <b>' + CONFIG.offlineCapHours + ' 小时</b>：满仓后不再增长，回来领取后重新累计。</div>' +
     '<div style="margin-top:6px;">· 回来点「领取」即到账；「看广告翻倍领取」每份离线收益限 1 次，到账为待领金额的 2 倍，壳内须看完广告才发放。</div>' +
-    '<div style="margin-top:6px;">· 收入速率随在住旅客、客房品质、厨房与伙计加成变化，明牌卡上的数字与实际结算同源。</div>';
+    '<div style="margin-top:6px;">· 收入速率随在住旅客、客房品质、厨房与伙计加成变化，明牌卡上的数字与实际结算同源。</div>' +
+    '<div style="margin-top:6px;">· 「托付商队」：把待领房钱押出去 ' + CONFIG.entrust.hours + ' 小时，归来多结 ' + Math.round(CONFIG.entrust.bonus * 100) + '%，到期自动结回；托付期间占一个委托在途位。</div>';
   sfxPlay('page');
   mask.style.display = 'flex';
 }
@@ -2800,21 +2967,36 @@ function eventAnyAffordable(){
   return ev.choices.some(choiceAffordable);
 }
 let evAffordSig = '';   /* 事件选项可负担签名：updateDynamic 比对变化才重绘，防置灰随铜钱过期失真 */
+function chainStatusHtml(){
+  const rows = [];
+  for(const c of CONFIG.chains){
+    const prog = clampInt(S.chainProg && S.chainProg[c.id], 0, c.acts.length, 0);
+    if(prog > 0 && prog < c.acts.length)
+      rows.push('<div class="small-note">连环故事「' + esc(c.label) + '」进行中：第 ' + prog + ' 幕已了，下一幕就在今日抉择里。</div>');
+    else if(prog >= c.acts.length)
+      rows.push('<div class="small-note">连环故事「' + esc(c.label) + '」已完结。</div>');
+  }
+  return rows.join('');
+}
 function renderEvents(){
   const box = document.getElementById('eventsBox');
   if(!box) return;
   const left = document.getElementById('evLeft');
   if(left) left.textContent = S.eventsDone;
   const ev = currentEvent();
+  const chainHtml = chainStatusHtml();
   if(!ev){
     evAffordSig = '';
-    box.innerHTML = '<div class="empty-note">' + emptyImgHtml('ev_night') + '<span>今日 3 次抉择已处理完，明日再来。</span></div>';
+    box.innerHTML = chainHtml + '<div class="empty-note">' + emptyImgHtml('ev_night') + '<span>今日抉择已处理完，明日再来。</span></div>';
     return;
   }
   evAffordSig = ev.id + ':' + ev.choices.map(c => choiceAffordable(c) ? '1' : '0').join('');
+  const chn = chainDefOf(ev);
   box.innerHTML =
+    chainHtml +
     evImgHtml(ev) +
-    '<div class="up-row"><div class="info"><div class="t">' + esc(ev.title) + '</div>' +
+    '<div class="up-row"><div class="info"><div class="t">' + esc(ev.title) +
+    (chn ? ' <span class="claim-chip">连环故事 · 第 ' + chainActNo(ev) + '/' + chn.acts.length + ' 幕</span>' : '') + '</div>' +
     '<div class="d">' + esc(ev.text) + (ev.pool === 'banquet' ? '（宴会厅事件）' : '') + '</div></div></div>' +
     '<div class="btnrow">' + ev.choices.map((c, i) =>
       '<button class="small"' + (choiceAffordable(c) ? '' : ' disabled') + ' onclick="doEventChoice(' + i + ')">' + esc(c.label) + '</button>').join('') + '</div>';
@@ -2883,6 +3065,7 @@ function renderCommissions(){
       '<div class="small-note">商队委托将于 2026-11-19（开业第 3 日）开放，敬请期待。</div>';
     return;
   }
+  ensureUrgent();
   let html = headImgHtml('caravan') + '<div class="btnrow">' + CONFIG.commissionTiers.map(t => {
     const rw = commissionReward(t);
     return '<button class="small" onclick="startCommission(\'' + t.id + '\')">' + t.hours + ' 小时 · 报酬 ' + rw.coins + ' 文</button>';
@@ -2894,11 +3077,24 @@ function renderCommissions(){
         return '<button class="small" onclick="startCommission(\'' + t.id + '\')">' + t.name + ' · ' + t.hours + ' 小时 · 报酬 ' + rw.coins + ' 文</button>';
       }).join('') + '</div>';
   }
+  const uo = S.urgent;
+  if(uo && !uo.taken && Date.now() < uo.expiresAt){
+    const ut = tierDef(uo.tierId);
+    const urw = ut ? commissionReward(ut) : { coins: 0, fame: 0 };
+    html += '<div class="up-row"><div class="info"><div class="t">加 急 单 · ' + (ut ? ut.hours : '') + ' 小时商队</div>' +
+      '<div class="d">报酬翻倍 ' + (urw.coins * CONFIG.urgent.mult) + ' 铜钱 / 声望 ' + urw.fame + ' · 接单倒计时 <span class="cm-left" data-end="' + uo.expiresAt + '">' + fmtLeft(uo.expiresAt - Date.now()) + '</span></div></div>' +
+      '<button class="small" onclick="startUrgent()">接单</button></div>';
+  }else if(uo && uo.taken){
+    html += '<div class="small-note">今日加急单已接下（在下方委托里，报酬翻倍）。</div>';
+  }else if(uo){
+    html += '<div class="small-note">今日加急单已过期作废，明日再来。</div>';
+  }
+  if(S.entrust) html += '<div class="small-note">离线托付在途（本金 ' + S.entrust.amt + ' 铜钱），占用一个委托在途位。</div>';
   if(!S.commissions.length) html += '<div class="empty-note" style="margin-top:8px;">' + emptyImgHtml('caravan') + '<span>暂无进行中的委托，挑一支商队派出去走一趟。</span></div>';
   for(const c of S.commissions){
     const ct = tierDef(c.tierId);
-    const rw = commissionReward(ct);
-    html += '<div class="up-row"><div class="info"><div class="t">' + (ct && ct.name ? '远行委托 · ' + esc(ct.name) : '商队委托') + ' · ' + c.hours + ' 小时</div>' +
+    const rw = commissionPayout(c) || { coins: 0, fame: 0 };
+    html += '<div class="up-row"><div class="info"><div class="t">' + (c.urgent ? '加急单 · ' : '') + (ct && ct.name ? '远行委托 · ' + esc(ct.name) : '商队委托') + ' · ' + c.hours + ' 小时</div>' +
       '<div class="d">报酬 ' + rw.coins + ' 铜钱 / 声望 ' + rw.fame + ' · <span class="cm-left" data-end="' + c.end + '">' + fmtLeft(c.end - Date.now()) + '</span></div></div>' +
       '<button class="small" onclick="claimCommission(\'' + c.id + '\')"' + (commissionReady(c) ? '' : ' disabled') + '>领取</button>' +
       '<button class="small" onclick="instantCommission(\'' + c.id + '\')">广告立即完成</button></div>';
@@ -2944,6 +3140,12 @@ function codexGroupProgress(){
     return { label: g.label, seen: types.filter(t => S.guestsSeen[t.id]).length, total: types.length };
   });
 }
+function favorGiftHtml(){
+  const fg = favorGiftReward();
+  return '<div class="up-row" style="margin-top:10px;"><div class="info"><div class="t">旅 客 谢 礼</div>' +
+    '<div class="d">旅客好感 ' + S.favor + ' 点 · 每 ' + CONFIG.favorGift.cost + ' 点换一份谢礼：铜钱 ' + fg.coins + ' / 声望 ' + fg.fame + '（好感来自抉择里的善意选项，攒着别浪费）</div></div>' +
+    '<button class="small" onclick="claimFavorGift()"' + (S.favor >= CONFIG.favorGift.cost ? '' : ' disabled') + '>领取谢礼</button></div>';
+}
 function renderCodex(){
   const box = document.getElementById('codexBox');
   if(!box) return;
@@ -2965,6 +3167,7 @@ function renderCodex(){
     return '<div class="group-line">' + esc(g.label) + '（' + seenN + '/' + types.length + '）' +
       (seenN === types.length ? ' · 已集齐' : '') + '</div>' + types.map(tagHtml).join('');
   }).join('') +
+  favorGiftHtml() +
   '<div class="small-note" style="margin-top:8px;">集齐一类旅客的奖励筹备中，后续更新送上。</div>';
 }
 function renderAdsBox(){
@@ -3186,8 +3389,8 @@ const TOUR_STEPS = [
     title:'伙计：雇来帮你多赚钱',
     body:'掌柜、小二、厨子、马夫各管一条加成，雇佣和升级都在这一区办。' },
   { id:'eventIntro', page:'affair', target:() => document.getElementById('eventsBox'),
-    title:'每日抉择：一天三张，先讲规矩',
-    body:'旅客的小麻烦、小机缘，一天三张，任选一个处置——影响铜钱、声望和好感。下一张由你亲手选。' },
+    title:'每日抉择：一天四张，先讲规矩',
+    body:'旅客的小麻烦、小机缘，一天四张，任选一个处置——影响铜钱、声望和好感。下一张由你亲手选。' },
   { id:'eventDo', action:'event', page:'affair', target:() => document.getElementById('eventsBox'),
     title:'亲手处理一张抉择',
     body:'点下面任意一个选项，选完自动继续；铜钱不够的选项点不动。' },
@@ -3419,6 +3622,7 @@ function startApp(){
   touchLoginDay();   /* 运营期累计登录：进游戏即记当天（窗口外自动不记） */
   checkAdoptedOnce();   /* 反馈采纳静默核一次（仅日志提示，不弹窗） */
   ensureQuests();   /* 当日日课补生成（新档/老档/换槽共用同一入口） */
+  settleEntrust();   /* 离线托付若已到期，进店先结回 */
   renderMain();
   recoverAdPending();   /* 广告欠账补发：重开/换槽/导入后先清 PENDING 欠账（幂等，重复进入不重发） */
   if(tickTimer) clearInterval(tickTimer);
@@ -3471,6 +3675,10 @@ window.YZ = {
   startCommission: startCommission, claimCommission: claimCommission, instantCommission: instantCommission,
   claimMilestone: claimMilestone, claimDailyGift: claimDailyGift,
   claimOffline: claimOffline, claimOfflineDouble: claimOfflineDouble,
+  entrustOffline: entrustOffline, settleEntrust: settleEntrust, entrustPayout: entrustPayout,
+  claimFavorGift: claimFavorGift, favorGiftReward: favorGiftReward,
+  ensureUrgent: ensureUrgent, urgentOffer: urgentOffer, startUrgent: startUrgent,
+  commissionPayout: commissionPayout, chainStatusHtml: chainStatusHtml, renderCommissions: renderCommissions,
   showRewardAd: showRewardAd, recoverAdPending: recoverAdPending,
   adPending: function(){ return S ? S.adPending : null; },
   saveSlot: saveSlot, loadSlot: loadSlot, slotInfo: slotInfo,
