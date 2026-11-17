@@ -30,6 +30,9 @@
   .wallet .k{font-size:12px; color:var(--ink2); letter-spacing:2px;}
   .wallet .v{font-size:19px; font-weight:700;}
   .wallet .v.coin{color:var(--accent-ink);}
+  /* v1.3.4 退出显眼化：经营页钱包条＋各子页资源条右端常驻退出格（朱砂底白字，与数据格对比拉开），任一页首屏即见 */
+  .wallet .exit-cell{flex:0 0 74px; background:var(--accent); border-color:var(--accent-ink); color:#FBF3E4; font-size:14.5px; font-weight:700; letter-spacing:2px; border-radius:10px; padding:8px 2px;}
+  .resbar .exit-cell{flex:0 0 74px; background:var(--accent); border-color:var(--accent-ink); color:#FBF3E4; font-size:14.5px; font-weight:700; letter-spacing:2px; border-radius:8px; padding:5px 2px;}
   .rooms{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
   .room{border:1px solid var(--line); border-radius:8px; padding:8px 4px 6px; text-align:center; min-height:118px; background:var(--paper);}
   .room.empty{color:var(--ink2); display:flex; align-items:center; justify-content:center; font-size:12px; letter-spacing:2px;}
@@ -554,7 +557,8 @@ function resbarHtml(){
   return '<div class="resbar stickbar">' +
     '<span>铜 钱<b class="coin rb-coins">0</b></span>' +
     '<span>声 望<b class="rb-fame">0</b></span>' +
-    '<span>入 住<b class="rb-occ">0/0</b></span></div>';
+    '<span>入 住<b class="rb-occ">0/0</b></span>' +
+    '<button class="exit-cell" onclick="uiExitGame()">退出游戏</button></div>';
 }
 /* 底部五栏线条图标（深墨线 SVG，currentColor 随选中态变朱砂） */
 const TAB_ICONS = {
@@ -2061,6 +2065,7 @@ function renderMain(){
         '<div class="cell"><div class="k">铜 钱</div><div class="v coin" id="coinsVal">0</div></div>' +
         '<div class="cell"><div class="k">声 望</div><div class="v" id="fameVal">0</div></div>' +
         '<div class="cell"><div class="k">入 住</div><div class="v" id="occVal">0/0</div></div>' +
+        '<button class="exit-cell" id="exitBtnHome" onclick="uiExitGame()">退出游戏</button>' +
       '</div>' +
       '<div class="card" id="morningCard"><h3>晨 间 小 结</h3><div id="morningBody"></div>' +
         '<div class="btnrow"><button class="small" onclick="dismissMorning()">收好小结</button></div></div>' +
