@@ -44,6 +44,11 @@
   .room .gname{font-size:13px; font-weight:700; margin-top:2px;}
   .room .gtype{font-size:11px; color:var(--ink2); letter-spacing:1px;}
   .room .gstay{font-size:11px; color:var(--accent-ink);}
+  .room .gwish{margin-top:5px; font-size:11px; color:var(--accent-ink); line-height:1.5; border-top:1px dashed var(--line); padding-top:4px;}
+  .room .gwish .gwish-hint{color:var(--ink2);}
+  .room .gwish button{margin-top:3px;}
+  .plot-bar{height:6px; background:rgba(90,62,32,.15); border-radius:3px; overflow:hidden; margin:6px 0;}
+  .plot-bar i{display:block; height:100%; background:var(--accent);}
   .room .gline{font-size:11px; color:var(--ink2); line-height:1.5; margin-top:2px; padding:0 3px;}
   .rate-line{margin-top:10px; font-size:13px; color:var(--ink2); text-align:center;}
   .rate-line b{color:var(--ink);}
@@ -553,6 +558,53 @@ const CONFIG = {
   /* 好感谢礼（v1.4 经济加厚批 B4）：favor 每 cost 点在图鉴页换一份谢礼，
      铜钱 = incomeRate() × coinMinutes（走公式出口、随成长缩放）＋ fame 声望；兑换走 ledger 幂等 */
   favorGift: { cost: 50, fame: 5, coinMinutes: 12 },
+  /* 每日天气（竞品调研 P9）：weatherOf(ds) 按日期种子定天气、全天不变、次日刷新，为唯一出处；
+     rateMult 经 weatherRateMult() 并入 incomeRate；fav 名单经 guestWeightToday() 抬当日客流构成权重。
+     天气只读日期、不入存档，老档零回溯 */
+  weather: [
+    { id:'sunny',    label:'晴空万里', desc:'日头正好，文士游人更爱出门投店', rateMult:1.10, fav:['scholar','examiner','painter','storyteller','chess'], favMult:1.8 },
+    { id:'overcast', label:'阴云薄日', desc:'不冷不热，客流四平八稳',         rateMult:1.00, fav:[], favMult:1 },
+    { id:'rain',     label:'细雨绵绵', desc:'雨天路滑，商队镖行多在店里久坐', rateMult:0.95, fav:['merchant','teamerchant','saltmerchant','escort','escortboss'], favMult:1.8 },
+    { id:'wind',     label:'大风扬尘', desc:'赶路人脚程紧，江湖客与脚夫多投店', rateMult:1.00, fav:['hero','hunter','porter','falconer'], favMult:1.8 },
+    { id:'fog',      label:'晨雾锁江', desc:'雾里行路难，方外人与手艺人多歇脚', rateMult:0.92, fav:['monk','hermit','doctor','weaver'], favMult:1.8 },
+    { id:'snow',     label:'初雪飘落', desc:'雪天客稀，肯出门的多是贵客',     rateMult:0.90, fav:['richman','foreign','richest','magistrate'], favMult:2.0 }
+  ],
+  /* 招牌菜轮换（竞品调研 P2-lite）：每日定 1 道今日招牌，targets 客群在住进账 ×mult
+     （dishMultFor 为唯一加成出口，并入 incomeRate 逐间计价）；随厨房等级解锁，换菜无惩罚、随时可换；
+     选择只存当日（S.dish.day 对齐才生效），跨日自动失效待重选 */
+  dishes: [
+    { id:'d_bing', name:'葱花烙饼', minKitchen:0, mult:1.20, targets:['porter','farmer','peddler','weaver','beekeeper','tailor'], blurb:'赶路人的实在吃食，行旅类最认' },
+    { id:'d_gao',  name:'桂花蒸糕', minKitchen:1, mult:1.25, targets:['scholar','examiner','painter','storyteller','chess','musician','singer'], blurb:'清甜不腻，文士与艺人的心头好' },
+    { id:'d_rou',  name:'酱烧蹄膀', minKitchen:2, mult:1.25, targets:['escort','escortboss','hero','hunter','blacksmith','falconer'], blurb:'大油大荤，江湖人吃个痛快' },
+    { id:'d_su',   name:'罗汉素斋', minKitchen:3, mult:1.30, targets:['monk','hermit','doctor','fortune'], blurb:'清淡养身，方外人最喜' },
+    { id:'d_yu',   name:'清蒸河鲜', minKitchen:4, mult:1.30, targets:['merchant','teamerchant','saltmerchant','herbmerchant'], blurb:'鲜货上桌，商贾舍得花钱' },
+    { id:'d_tang', name:'莲子甜羹', minKitchen:5, mult:1.35, targets:['constable','magistrate'], blurb:'润口养神，官面上的人讲究这个' },
+    { id:'d_yan',  name:'山珍小宴', minKitchen:6, mult:1.35, targets:['richman','foreign','richest'], blurb:'山珍齐上，富贵客的排场' },
+    { id:'d_dou',  name:'云水豆腐', minKitchen:7, mult:1.40, targets:['zhuangyuan','inspector','junzhu','wangye'], blurb:'至味清淡，贵客识货' }
+  ],
+  /* 旅客心愿（竞品调研 P3-lite）：入住时按 chance 挂心愿（挂旅客实例，随客离店过期、无惩罚）；
+     满足条件走 wishCheck 唯一判定，遂愿奖励走 wishReward＋ledger：小费 coins＋fame 声望＋favor 好感
+     （好感与 B4 谢礼同账闭环）；带心愿的客至少住满 minStayTicks 程，给掌柜留遂愿时间 */
+  wish: { chance: 0.35, minStayTicks: 12, fame: 1, favor: 2, tipMult: 6,
+    kinds: [
+      { id:'dish',  text:'想吃一口对味的今日招牌' },
+      { id:'quiet', text:'想要个清净，睡个整觉', needQuality: 2 },
+      { id:'hurry', text:'赶时间，想吃口热乎的早些上路', needKitchen: 1 },
+      { id:'music', text:'想听人唱曲说书，解解乏', types:['musician','singer','storyteller'] }
+    ] },
+  /* 吆喝揽客（竞品调研 P11）：经营页主动按钮，冷却 cooldownMin 分钟，触发 durMin 分钟客流高峰：
+     到访率 +arrivalAdd（arrivalChance 唯一出口）、在住进账 ×(1+rateAdd)（shoutRateMult 并入 incomeRate）；
+     状态只存 last/until 两个时间戳，防连点守卫在 shoutNow */
+  shout: { cooldownMin: 30, durMin: 10, arrivalAdd: 0.35, rateAdd: 0.15 },
+  /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
+     收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
+     +bonusPerUnit/份、上限 bonusCap（并入 incomeRate 的加成括号，与厨房/伙计同层） */
+  crops: [
+    { id:'greens',  name:'青菜', hours:2,  yield:2,  blurb:'长得快，后厨常备' },
+    { id:'pumpkin', name:'南瓜', hours:6,  yield:5,  blurb:'个头大，顶大半日用量' },
+    { id:'lotus',   name:'莲藕', hours:12, yield:10, blurb:'睡前种下，明早正好起塘' }
+  ],
+  garden: { plots: 4, dailyUse: 4, bonusPerUnit: 0.01, bonusCap: 0.25 },
   /* 连环故事伪链（v1.4 经济加厚批 B1）：种子卡走随机池，抉择后同链下一幕于次日必出
      （pickEventsForDay 唯一排卡口）；acts 顺序即幕次，进度存 chainProg[chainId]＝已完成幕数；
      11/25 引擎批承接同一进度字段 */
@@ -697,6 +749,13 @@ const CONFIG = {
 };
 /* ==== 更新公告（设置区点击查看，只许点击触发、严禁进门自动弹；新版本往数组最前面加一条即可） ==== */
 const ANNOUNCE = [
+  { ver: 'v1.4.2', date: '2026-11-18', items: [
+    '每天有天气了：晨间小结和今日清单会播报今日天气，天气会影响来的客人构成和全天进账',
+    '建设页能定「今日招牌」了：选一道对味的菜，常来那类客人付的房钱更高；新菜随厨房等级解锁，换菜不罚',
+    '住客会许心愿了：遂了心愿有小费、声望和好感（好感照样能在图鉴页换谢礼）；遂不了也不罚，随他离店作罢',
+    '经营页多了「吆喝揽客」：喊一嗓子，接下来十分钟客人涌进来；半小时能喊一次',
+    '后院开了一畦菜园：四块田种青菜、南瓜、莲藕，收了送后厨，食材越足进账越旺；睡前种莲藕，明早正好收'
+  ]},
   { ver: 'v1.4.1', date: '2026-11-18', items: [
     '每日抉择增至 4 张；抉择里攒下的「旅客好感」能在图鉴页换谢礼了，善意选项不再白选',
     '商队委托每日多一张「加急单」：半小时内接单、报酬翻倍，过期作废',
@@ -886,6 +945,9 @@ function defaultState(){
     chainProg: {},
     urgent: null,
     entrust: null,
+    dish: null,
+    shout: { last: 0, until: 0 },
+    garden: { plots: [null, null, null, null], stock: 0 },
     guideStep: 0,
     guideDone: false,
     guideRewarded: false,
@@ -931,7 +993,8 @@ function normalize(raw){
     if(!t){ delete s.staff[k]; continue; }
     s.staff[k] = { lv: clampInt(s.staff[k] && s.staff[k].lv, 1, t.maxLv, 1) };
   }
-  s.guests = Array.isArray(raw.guests) ? raw.guests.filter(g => g && g.type && g.name) : [];
+  s.guests = Array.isArray(raw.guests) ? raw.guests.filter(g => g && g.type && g.name).map(g =>
+    Object.assign({}, g, { wish: (g.wish && CONFIG.wish.kinds.some(k => k.id === g.wish.kind)) ? { kind: g.wish.kind } : null })) : [];
   s.guestsSeen = (raw.guestsSeen && typeof raw.guestsSeen === 'object') ? raw.guestsSeen : {};
   s.miles = (raw.miles && typeof raw.miles === 'object') ? raw.miles : {};
   s.commissions = Array.isArray(raw.commissions) ? raw.commissions.filter(c => c && c.tierId && !c.claimed) : [];
@@ -992,6 +1055,27 @@ function normalize(raw){
   s.entrust = (raw.entrust && typeof raw.entrust === 'object' && Math.floor(+raw.entrust.amt || 0) > 0 && +raw.entrust.end > 0)
     ? { amt: Math.floor(+raw.entrust.amt), end: Math.floor(+raw.entrust.end) }
     : null;
+  /* 竞品短名单批加法字段：今日招牌 / 吆喝时间戳 / 后院菜园，形状非法一律回默认，老档安全 */
+  s.dish = (raw.dish && typeof raw.dish === 'object' && typeof raw.dish.day === 'string'
+      && CONFIG.dishes.some(d => d.id === raw.dish.id))
+    ? { day: raw.dish.day, id: raw.dish.id }
+    : null;
+  s.shout = (raw.shout && typeof raw.shout === 'object')
+    ? { last: Math.max(0, Math.floor(+raw.shout.last || 0)), until: Math.max(0, Math.floor(+raw.shout.until || 0)) }
+    : { last: 0, until: 0 };
+  s.garden = { plots: [], stock: 0 };
+  if(raw.garden && typeof raw.garden === 'object'){
+    s.garden.stock = clampInt(raw.garden.stock, 0, 9999, 0);
+    const rp = Array.isArray(raw.garden.plots) ? raw.garden.plots : [];
+    for(let i = 0; i < CONFIG.garden.plots; i++){
+      const p = rp[i];
+      s.garden.plots.push((p && typeof p === 'object' && CONFIG.crops.some(c => c.id === p.crop) && +p.end > 0)
+        ? { crop: p.crop, start: Math.max(0, Math.floor(+p.start || 0)), end: Math.floor(+p.end) }
+        : null);
+    }
+  }else{
+    for(let i = 0; i < CONFIG.garden.plots; i++) s.garden.plots.push(null);
+  }
   s.settings = Object.assign({}, d.settings, (raw.settings && typeof raw.settings === 'object') ? raw.settings : {});
   /* 引导字段（v4 加法加入，不动既有字段语义）：带字段的档照原值；
      无字段的老档——已开张（有 name）默认标完成不补弹，未开张从头走 */
@@ -1453,6 +1537,43 @@ function calMod(ds){
   const e = calEntry(ds || dayStr());
   return (e && e.mod) ? e.mod : {};
 }
+/* ================= 每日天气（竞品调研 P9，与 calMod 同层） =================
+   weatherOf(ds) 按日期字符串种子取天气：同日恒同、跨日刷新，纯函数不入存档；
+   修正只经两个出口——weatherRateMult() 并入 incomeRate、guestWeightToday() 并入 arriveGuest 抽客权重 */
+function weatherOf(ds){
+  ds = ds || dayStr();
+  let h = 0;
+  for(let i = 0; i < ds.length; i++) h = (h * 31 + ds.charCodeAt(i)) >>> 0;
+  return CONFIG.weather[h % CONFIG.weather.length];
+}
+function weatherRateMult(){ return weatherOf().rateMult || 1; }
+function guestWeightToday(t){
+  const w = weatherOf();
+  return t.weight * ((w.fav && w.fav.indexOf(t.id) >= 0) ? (w.favMult || 1) : 1);
+}
+/* ================= 今日招牌（竞品调研 P2-lite） =================
+   dishOf() 为当日招牌唯一定位（S.dish.day 与今日对齐才算数，跨日自动失效）；
+   dishMultFor(type) 为加成唯一出口，并入 incomeRate 逐间计价 */
+function dishDef(id){ return CONFIG.dishes.find(d => d.id === id) || null; }
+function dishOf(){
+  if(!S || !S.dish || S.dish.day !== dayStr()) return null;
+  return dishDef(S.dish.id);
+}
+function dishMultFor(type){
+  const d = dishOf();
+  return (d && d.targets.indexOf(type) >= 0) ? d.mult : 1;
+}
+/* ================= 吆喝揽客（竞品调研 P11） =================
+   shoutActive() 为高峰态唯一判定；shoutRateMult() 并入 incomeRate、arrivalChance 读 arrivalAdd */
+function shoutActive(){ return !!(S && S.shout && Date.now() < S.shout.until); }
+function shoutRateMult(){ return shoutActive() ? 1 + CONFIG.shout.rateAdd : 1; }
+/* ================= 后院菜园（竞品调研 P1-lite） =================
+   gardenStockMult() 为食材加成唯一出口，并入 incomeRate 加成括号（与厨房/伙计同层） */
+function cropDef(id){ return CONFIG.crops.find(c => c.id === id) || null; }
+function gardenStockMult(){
+  if(!S || !S.garden) return 0;
+  return Math.min(S.garden.stock * CONFIG.garden.bonusPerUnit, CONFIG.garden.bonusCap);
+}
 function giftLimitToday(){ return Math.floor(calMod().giftTimes || CONFIG.adsLimit.gift); }
 function giftRewardToday(){ return Math.round(CONFIG.giftReward * (calMod().giftMult || 1)); }
 /* 委托档位统一出处：常驻档＋远行季限定档共用结算/渲染，禁止各处只查一张表 */
@@ -1469,14 +1590,15 @@ function staffIncomeMult(){
   return m;
 }
 function roomPrice(){ return CONFIG.roomPriceBase * CONFIG.qualityMult[S.rooms.quality]; }
-function incomeRate(){  /* 每分钟铜钱：在住旅客逐间计价 ×(1+厨房加成+伙计收入加成)；名厨日（日历修正）厨房加成翻倍 */
+function incomeRate(){  /* 每分钟铜钱：在住旅客逐间计价（招牌菜对味 ×dishMultFor）×(1+厨房加成+伙计收入加成+菜园食材加成)×天气修正×吆喝高峰修正；名厨日（日历修正）厨房加成翻倍 */
   let r = 0;
-  for(const g of S.guests) r += roomPrice() * (g.priceMult || 1);
+  for(const g of S.guests) r += roomPrice() * (g.priceMult || 1) * dishMultFor(g.type);
   const kitchenMult = S.kitchenLv * CONFIG.kitchenMultPerLv * (calMod().kitchenDouble ? 2 : 1);
-  return r * (1 + kitchenMult + staffIncomeMult());
+  return r * (1 + kitchenMult + staffIncomeMult() + gardenStockMult()) * weatherRateMult() * shoutRateMult();
 }
 function arrivalChance(){
-  return Math.min(0.9, CONFIG.arrivalChancePerTick + S.stableLv * CONFIG.stableArrivalPerLv);
+  return Math.min(0.95, CONFIG.arrivalChancePerTick + S.stableLv * CONFIG.stableArrivalPerLv
+    + (shoutActive() ? CONFIG.shout.arrivalAdd : 0));
 }
 function commissionReward(tier){
   const groom = CONFIG.staffTypes.find(t => t.id === 'groom');
@@ -1603,19 +1725,27 @@ function arriveGuest(){
   if(S.guests.length >= S.rooms.count) return false;
   const pool = guestPool();
   if(!pool.length) return false;
-  const t = pickWeighted(pool);
+  /* 抽客权重经 guestWeightToday（天气偏好客群当日权重抬升），pickWeighted 仍是唯一抽取口 */
+  const t = pickWeighted(pool.map(x => Object.assign({}, x, { weight: guestWeightToday(x) })));
   const g = {
     type: t.id, label: t.label, name: randName(),
     priceMult: t.priceMult,
-    stayLeft: randInt(CONFIG.stayMinTicks, CONFIG.stayMaxTicks)
+    stayLeft: randInt(CONFIG.stayMinTicks, CONFIG.stayMaxTicks),
+    wish: null
   };
+  /* 旅客心愿（P3-lite）：入住按概率挂心愿，带心愿至少住满 minStayTicks 程留遂愿时间 */
+  if(Math.random() < CONFIG.wish.chance){
+    const k = CONFIG.wish.kinds[randInt(0, CONFIG.wish.kinds.length - 1)];
+    g.wish = { kind: k.id };
+    g.stayLeft = Math.max(g.stayLeft, CONFIG.wish.minStayTicks);
+  }
   S.guests.push(g);
   S.guestsSeen[t.id] = true;
   S.totalGuests++;
   S.dayStats.guests++;
   questBump('guests', 1);
   const gline = guestLineFor(t, g.name);
-  pushLog(t.label + ' ' + g.name + ' 推门入住' + (gline ? '：「' + gline + '」' : ''));
+  pushLog(t.label + ' ' + g.name + ' 推门入住' + (gline ? '：「' + gline + '」' : '') + (g.wish ? '（有个心愿，见客房）' : ''));
   return true;
 }
 
@@ -1874,6 +2004,12 @@ function rollDayIfNeeded(){
   };
   S.day = today;
   S.dayStats = { guests: 0, earned: 0 };
+  /* 菜园食材日耗（P1-lite）：后厨每日用去 dailyUse 份食材，存量见底即止；招牌/吆喝/天气都按新一日日期口径自动刷新，不在此清 */
+  if(S.garden && S.garden.stock > 0){
+    const used = Math.min(S.garden.stock, CONFIG.garden.dailyUse);
+    S.garden.stock -= used;
+    if(used > 0) pushLog('后厨昨日用去食材 ' + used + ' 份，余 ' + S.garden.stock + ' 份');
+  }
   S.ads = {};
   S.urgent = null;   /* 加急单跨日作废，新一日由 ensureUrgent 重新刷 */
   S.eventsToday = pickEventsForDay();
@@ -2133,6 +2269,129 @@ function claimFavorGift(){
   updateDynamic();
   renderLog();
   showToast('谢礼到账 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame);
+  return true;
+}
+
+/* ================= 竞品短名单五件（2026-11-18 主人拍板全上） =================
+   天气/招牌/心愿/吆喝/菜园：修正与判定全走前文单一出口（weatherOf/dishMultFor/wishCheck/
+   shoutActive/gardenStockMult），本节只放玩家动作；一切铜钱/声望/好感进出只走 ledger */
+
+/* 招牌菜：定/换今日招牌（厨房等级不够不可选；换菜无惩罚，选择只对当日有效） */
+function setDish(id){
+  const d = dishDef(id);
+  if(!d || !S) return false;
+  if(S.kitchenLv < d.minKitchen){ showToast('厨房升到 ' + d.minKitchen + ' 级才能做这道菜'); return false; }
+  S.dish = { day: dayStr(), id: d.id };
+  pushLog('今日招牌定为「' + d.name + '」——' + d.blurb);
+  save();
+  renderDish();
+  renderRooms();
+  updateDynamic();
+  renderLog();
+  showToast('今日招牌：' + d.name);
+  sfxPlay('tap');
+  return true;
+}
+/* 旅客心愿：wishKindDef/wishCheck 为条件唯一出处（渲染与遂愿共用，口径不分叉） */
+function wishKindDef(kind){ return CONFIG.wish.kinds.find(k => k.id === kind) || null; }
+function wishCheck(g){
+  if(!g || !g.wish) return { ok: false, hint: '' };
+  const k = wishKindDef(g.wish.kind);
+  if(!k) return { ok: false, hint: '' };
+  if(k.id === 'dish'){
+    const d = dishOf();
+    return (d && d.targets.indexOf(g.type) >= 0)
+      ? { ok: true, hint: '' }
+      : { ok: false, hint: '把今日招牌换成对他口味的菜（见建设页）' };
+  }
+  if(k.id === 'quiet'){
+    return S.rooms.quality >= (k.needQuality || 1)
+      ? { ok: true, hint: '' }
+      : { ok: false, hint: '客房品质升到 ' + (k.needQuality || 1) + ' 档后可遂愿' };
+  }
+  if(k.id === 'hurry'){
+    return S.kitchenLv >= (k.needKitchen || 1)
+      ? { ok: true, hint: '' }
+      : { ok: false, hint: '厨房升到 ' + (k.needKitchen || 1) + ' 级后可遂愿' };
+  }
+  if(k.id === 'music'){
+    return S.guests.some(x => x !== g && k.types.indexOf(x.type) >= 0)
+      ? { ok: true, hint: '' }
+      : { ok: false, hint: '等乐师、歌姬或说书人住店时可遂愿' };
+  }
+  return { ok: false, hint: '' };
+}
+function wishReward(g){
+  return { coins: Math.max(10, Math.round(roomPrice() * (g.priceMult || 1) * CONFIG.wish.tipMult)),
+           fame: CONFIG.wish.fame, favor: CONFIG.wish.favor };
+}
+function fulfillWish(i){
+  const g = S && S.guests[i];
+  if(!g || !g.wish) return false;
+  const chk = wishCheck(g);
+  if(!chk.ok){ showToast(chk.hint || '眼下还遂不了这个心愿'); return false; }
+  const kind = g.wish.kind, rw = wishReward(g);
+  g.wish = null;   /* 先摘心愿再发奖：重复点击天然幂等 */
+  ledger('wish', rw.coins, rw.fame, '遂了 ' + g.label + ' ' + g.name + ' 的心愿：小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor, rw.favor);
+  if(kind === 'hurry'){
+    S.guests.splice(S.guests.indexOf(g), 1);
+    pushLog(g.name + ' 吃上一口热乎的，心满意足提前上路了');
+  }
+  save();
+  renderRooms();
+  updateDynamic();
+  renderLog();
+  showToast('心愿遂了 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor);
+  sfxPlay('reward');
+  return true;
+}
+/* 吆喝揽客：守卫＝高峰中不可重喊、冷却内不可喊（shoutNow 唯一入口） */
+function shoutNow(){
+  if(!S || !S.name) return false;
+  const now = Date.now();
+  if(shoutActive()){ showToast('客流高峰还没散，再等等'); return false; }
+  if(now - (S.shout.last || 0) < CONFIG.shout.cooldownMin * 60000){ showToast('刚喊过，嗓子还哑着，过会儿再吆喝'); return false; }
+  S.shout = { last: now, until: now + CONFIG.shout.durMin * 60000 };
+  pushLog('掌柜在门口吆喝了一嗓子，过路的客人闻声而来');
+  save();
+  renderShout();
+  updateDynamic();
+  renderLog();
+  showToast('吆喝开了！接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰');
+  sfxPlay('tap');
+  return true;
+}
+/* 后院菜园：种/收两段式，生长按时间戳（离线照长）；收获入食材 stock 走 gardenStockMult 加成 */
+function plantCrop(i, cropId){
+  const c = cropDef(cropId);
+  if(!c || !S || !S.garden) return false;
+  if(i < 0 || i >= S.garden.plots.length || S.garden.plots[i]){ showToast('这块田还没空出来'); return false; }
+  const now = Date.now();
+  S.garden.plots[i] = { crop: c.id, start: now, end: now + c.hours * 3600 * 1000 };
+  pushLog('后院田里种下了' + c.name + '，约 ' + c.hours + ' 小时可收');
+  save();
+  renderGarden();
+  renderLog();
+  showToast('种下' + c.name + '，约 ' + c.hours + ' 小时可收');
+  sfxPlay('tap');
+  return true;
+}
+function harvestPlot(i){
+  if(!S || !S.garden) return false;
+  const p = S.garden.plots[i];
+  if(!p) return false;
+  if(Date.now() < p.end){ showToast('还没长熟，再等等'); return false; }
+  const c = cropDef(p.crop);
+  S.garden.plots[i] = null;
+  if(!c){ save(); renderGarden(); return false; }
+  S.garden.stock += c.yield;
+  pushLog('后院收了 ' + c.yield + ' 份' + c.name + '，送进后厨（食材存量 ' + S.garden.stock + ' 份）');
+  save();
+  renderGarden();
+  updateDynamic();
+  renderLog();
+  showToast('收获 +' + c.yield + ' 份食材');
+  sfxPlay('reward');
   return true;
 }
 
@@ -2514,7 +2773,7 @@ function switchSub(group, sub){
 }
 function applySubs(){
   for(const g of Object.keys(uiSub)){
-    for(const s of ['fac', 'staff', 'codex', 'miles']){
+    for(const s of ['fac', 'staff', 'garden', 'codex', 'miles']){
       const c = document.getElementById('sub-' + g + '-' + s);
       if(c) c.style.display = uiSub[g] === s ? '' : 'none';
       const b = document.getElementById('subBtn-' + g + '-' + s);
@@ -2558,6 +2817,7 @@ function renderMain(){
         '<h3>离 线 明 牌</h3>' +
         '<div id="offlineBody"></div>' +
       '</div>' +
+      '<div class="card" id="shoutCard"><h3>吆 喝 揽 客</h3><div id="shoutBody"></div></div>' +
       '<div class="card" id="todayCard"><h3>今 日 清 单</h3><div id="todayBody"></div><div id="questBody"></div></div>' +
       '<div class="card"><h3>驿 站 动 态</h3><ul class="log" id="logList"></ul></div>' +
       '<div class="foot">自动存档中 · 累计接待 <span id="totalGuestsVal">0</span> 位旅客 · 旅客好感 <span id="favorVal">0</span></div>' +
@@ -2567,6 +2827,7 @@ function renderMain(){
       '<div class="subtabs">' +
         '<button id="subBtn-build-fac" onclick="switchSub(\'build\',\'fac\')">客房与设施</button>' +
         '<button id="subBtn-build-staff" onclick="switchSub(\'build\',\'staff\')">伙计</button>' +
+        '<button id="subBtn-build-garden" onclick="switchSub(\'build\',\'garden\')">后厨与菜园</button>' +
       '</div>' +
       '<div id="sub-build-fac">' +
         '<div class="card" id="roomsCard"><h3>客 房</h3><div class="rooms" id="roomsGrid"></div>' +
@@ -2575,6 +2836,10 @@ function renderMain(){
       '</div>' +
       '<div id="sub-build-staff" style="display:none">' +
         '<div class="card" id="staffCard"><h3>伙 计</h3><div id="staffBox"></div></div>' +
+      '</div>' +
+      '<div id="sub-build-garden" style="display:none">' +
+        '<div class="card" id="dishCard"><h3>今 日 招 牌</h3><div id="dishBox"></div></div>' +
+        '<div class="card" id="gardenCard"><h3>后 院 菜 园</h3><div id="gardenBox"></div></div>' +
       '</div>' +
     '</div>' +
     '<div class="tabpage" id="page-affair">' +
@@ -2633,6 +2898,7 @@ function renderMain(){
   document.body.classList.add('has-tabbar');
   todaySig = ''; offlineSig = ''; questSig = '';
   renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderEvents(); renderUpgrades();
+  renderShout(); renderDish(); renderGarden();
   renderStaff(); renderCommissions(); renderMilestones(); renderCodex();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
@@ -2678,6 +2944,7 @@ function renderMorning(){
       headImgHtml('morning') +
       '昨夜（' + esc(S.morning.date) + '）共接待 <b>' + S.morning.guests + '</b> 位旅客，进账 <b>' +
       S.morning.earned + '</b> 铜钱' + (S.morning.offline > 0 ? '；离线房钱 <b>' + S.morning.offline + '</b> 铜钱待领取（见离线明牌）' : '') + '。' +
+      (function(){ const w = weatherOf(); return '<div class="small-note" style="margin-top:6px;">今日天气：<b>' + esc(w.label) + '</b>——' + esc(w.desc) + '（全天进账 ×' + w.rateMult + '）。</div>'; })() +
       '<div class="small-note" style="margin-top:6px;">' + esc(tomorrowPreview()) + '</div>' +
       (S.entrust ? '<div class="small-note" style="margin-top:4px;">托付在途：本金 ' + S.entrust.amt + ' 铜钱，约 ' + fmtLeft(S.entrust.end - Date.now()) + '后结回 ' + entrustPayout() + ' 铜钱（结回当日计入晨间小结）。</div>' : '');
   }else{
@@ -2816,6 +3083,7 @@ function todaySummary(){
     commissionsReady: S.commissions.filter(c => commissionReady(c)).length,
     giftLeft: Math.max(0, giftLimitToday() - adsUsed('gift')),
     giftLimit: giftLimitToday(),
+    weather: (function(){ const w = weatherOf(); return { label: w.label, desc: w.desc, rateMult: w.rateMult }; })(),
     calTitle: (calEntry(dayStr()) || {}).title || '',
     signin: signinSummary(),
     celeb: celebrationInfo(),
@@ -2842,6 +3110,8 @@ function renderToday(){
     (anchor ? '<button class="small ghost" onclick="gotoCard(\'' + tab + '\',\'' + anchor + '\')">' + btn + '</button>' : '') + '</div>';
   let html = '';
   if(t.calTitle) html += '<div class="cal-strip">今 日 上 新 · ' + esc(t.calTitle) + '</div>';
+  html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+    '今日天气：<b>' + esc(t.weather.label) + '</b>，' + esc(t.weather.desc) + '（全天进账 ×' + t.weather.rateMult + '）</div></div></div>';
   html +=
     row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'home', 'offlineCard', t.offline >= 1 ? '去领取' : '去看看') +
     row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'affair', 'eventsCard', '去处理') +
@@ -2952,7 +3222,11 @@ function renderRooms(){
         '<div class="gname">' + esc(g.name) + '</div>' +
         '<div class="gtype">' + esc(g.label) + '</div>' +
         '<div class="gstay">余 ' + Math.max(1, g.stayLeft) + ' 程</div>' +
-        (guestLineByType(g.type, g.name) ? '<div class="gline">「' + esc(guestLineByType(g.type, g.name)) + '」</div>' : '') + '</div>';
+        (guestLineByType(g.type, g.name) ? '<div class="gline">「' + esc(guestLineByType(g.type, g.name)) + '」</div>' : '') +
+        (g.wish ? (function(){ const k = wishKindDef(g.wish.kind), chk = wishCheck(g), rw = wishReward(g);
+          return '<div class="gwish">心愿：' + esc(k ? k.text : '') + '<br>' +
+            (chk.ok ? '<button class="small accent" onclick="fulfillWish(' + i + ')">遂愿（小费 ' + rw.coins + '）</button>'
+                    : '<span class="gwish-hint">' + esc(chk.hint) + '</span>') + '</div>'; })() : '') + '</div>';
     }else{
       html += '<div class="room empty">' + (IMG.rooms ? '<img class="room-empty-img" src="' + IMG.rooms + '" alt="">' : '') + '<span>空 房</span></div>';
     }
@@ -3030,6 +3304,68 @@ function refreshUpgradeDisabled(){
     const b = document.getElementById(id), c = upgradeCost(kind);
     if(b && c !== null) b.disabled = S.coins < c;
   }
+}
+/* 吆喝卡（经营页）：三态——可喊 / 高峰中 / 冷却中，签名防每 tick 重绘 */
+let shoutSig = '';
+function renderShout(){
+  const box = document.getElementById('shoutBody');
+  if(!box || !S) return;
+  const now = Date.now();
+  const active = shoutActive();
+  const cdLeft = Math.max(0, CONFIG.shout.cooldownMin * 60000 - (now - (S.shout.last || 0)));
+  const sig = [active ? Math.ceil((S.shout.until - now) / 1000) : 0, Math.ceil(cdLeft / 1000), S.shout.last].join('|');
+  if(sig === shoutSig) return;
+  shoutSig = sig;
+  let html = '<div class="small-note">在门口吆喝一嗓子，接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰：客人来得勤、在住进账 +' + Math.round(CONFIG.shout.rateAdd * 100) + '%；每 ' + CONFIG.shout.cooldownMin + ' 分钟能喊一次。</div>';
+  if(active) html += '<div class="btnrow"><button class="small" disabled>客流高峰中 · 余 ' + fmtLeft(S.shout.until - now) + '</button></div>';
+  else if(cdLeft > 0) html += '<div class="btnrow"><button class="small" disabled>嗓子还哑着 · ' + fmtLeft(cdLeft) + ' 后可再喊</button></div>';
+  else html += '<div class="btnrow"><button class="small accent" onclick="shoutNow()">吆喝一嗓子</button></div>';
+  box.innerHTML = html;
+}
+/* 招牌菜卡（建设页）：当前招牌＋全菜谱（未解锁明示厨房等级），加成口径读 dishOf/dishMultFor */
+let dishSig = '';
+function renderDish(){
+  const box = document.getElementById('dishBox');
+  if(!box || !S) return;
+  const cur = dishOf();
+  const sig = [dayStr(), S.kitchenLv, cur ? cur.id : ''].join('|');
+  if(sig === dishSig) return;
+  dishSig = sig;
+  let html = '<div class="small-note">今日招牌：' + (cur
+    ? '<b>' + esc(cur.name) + '</b>——' + esc(cur.blurb) + '（对味客人房钱 ×' + cur.mult + '）'
+    : '还没定，从下面挑一道') + '。每日一换、换菜不罚，新菜随厨房等级解锁。</div>';
+  html += '<div class="cardgrid">' + CONFIG.dishes.map(d => {
+    const locked = S.kitchenLv < d.minKitchen, isCur = !!cur && cur.id === d.id;
+    return '<div class="up-card"><div class="t">' + esc(d.name) + (isCur ? '（今日招牌）' : '') + '</div>' +
+      '<div class="d">' + esc(d.blurb) + ' · 对味客人房钱 ×' + d.mult + '</div>' +
+      (locked ? '<button disabled>厨房 ' + d.minKitchen + ' 级解锁</button>'
+        : isCur ? '<button disabled>今日就它了</button>'
+        : '<button class="small" onclick="setDish(\'' + d.id + '\')">定为今日招牌</button>') + '</div>';
+  }).join('') + '</div>';
+  box.innerHTML = html;
+}
+/* 菜园卡（建设页）：存量加成明牌＋逐田三态（空/长/熟），生长进度按时间戳折算 */
+let gardenSig = '';
+function renderGarden(){
+  const box = document.getElementById('gardenBox');
+  if(!box || !S || !S.garden) return;
+  const now = Date.now();
+  const sig = [S.garden.stock, S.garden.plots.map(p => p ? p.crop + ':' + (now >= p.end ? 'R' : Math.ceil((p.end - now) / 60000)) : '-').join(',')].join('|');
+  if(sig === gardenSig) return;
+  gardenSig = sig;
+  let html = '<div class="small-note">食材存量 <b>' + S.garden.stock + '</b> 份：后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；存量每份给总收入 +' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '%（当前 +' + Math.round(gardenStockMult() * 100) + '%，上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%）。睡前种上长时的，明早回来正好收。</div>';
+  html += '<div class="cardgrid">' + S.garden.plots.map((p, i) => {
+    if(!p) return '<div class="up-card"><div class="t">田 ' + (i + 1) + ' · 空着</div><div class="d">挑一样种下（种下离线也照长）：</div>' +
+      CONFIG.crops.map(c => '<button class="small" onclick="plantCrop(' + i + ', \'' + c.id + '\')">' + esc(c.name) + ' · ' + c.hours + ' 小时收 ' + c.yield + ' 份</button>').join('') + '</div>';
+    const c = cropDef(p.crop);
+    const ready = now >= p.end;
+    const pct = ready ? 100 : Math.max(0, Math.min(100, Math.floor((now - p.start) / Math.max(1, p.end - p.start) * 100)));
+    return '<div class="up-card"><div class="t">田 ' + (i + 1) + ' · ' + esc(c ? c.name : '作物') + '</div>' +
+      '<div class="plot-bar"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="d">' + (ready ? '熟了！收下得 ' + (c ? c.yield : 0) + ' 份食材' : '长着呢，余 ' + fmtLeft(p.end - now)) + '</div>' +
+      (ready ? '<button class="small accent" onclick="harvestPlot(' + i + ')">收获</button>' : '<button disabled>未熟</button>') + '</div>';
+  }).join('') + '</div>';
+  box.innerHTML = html;
 }
 function renderStaff(){
   const box = document.getElementById('staffBox');
@@ -3198,6 +3534,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:6px;">把驿站放回桌面：离线房钱攒满 12 小时就溢出了，点桌面图标一键回来领取（需在虎扑 App 内使用）。</div>' +
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
+    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
       '。贵客图鉴段 2026-11-26 开启。重置说明：如需重开驿站，请到本页存档区两步确认删档，删除后不可恢复（导入前备份除外）。</div>' +
@@ -3325,6 +3662,9 @@ function updateDynamic(){
   refreshUpgradeDisabled();
   renderOffline();
   renderToday();
+  renderShout();
+  renderDish();
+  renderGarden();
   updateTabDots();
   /* 事件选项置灰随铜钱实时对齐：可负担签名变化才重绘事件卡（买得起的零变化、不扰阅读） */
   if(document.getElementById('eventsBox')){
@@ -3677,6 +4017,12 @@ window.YZ = {
   claimOffline: claimOffline, claimOfflineDouble: claimOfflineDouble,
   entrustOffline: entrustOffline, settleEntrust: settleEntrust, entrustPayout: entrustPayout,
   claimFavorGift: claimFavorGift, favorGiftReward: favorGiftReward,
+  weatherOf: weatherOf, guestWeightToday: guestWeightToday,
+  dishOf: dishOf, dishDef: dishDef, dishMultFor: dishMultFor, setDish: setDish,
+  wishCheck: wishCheck, wishReward: wishReward, fulfillWish: fulfillWish,
+  shoutActive: shoutActive, shoutNow: shoutNow,
+  cropDef: cropDef, plantCrop: plantCrop, harvestPlot: harvestPlot, gardenStockMult: gardenStockMult,
+  renderShout: renderShout, renderDish: renderDish, renderGarden: renderGarden, renderRooms: renderRooms,
   ensureUrgent: ensureUrgent, urgentOffer: urgentOffer, startUrgent: startUrgent,
   commissionPayout: commissionPayout, chainStatusHtml: chainStatusHtml, renderCommissions: renderCommissions,
   showRewardAd: showRewardAd, recoverAdPending: recoverAdPending,
