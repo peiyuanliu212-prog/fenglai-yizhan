@@ -213,7 +213,15 @@ const CONFIG = {
   vaultShellEnvId: 'app-6951e65789-d6g3ox54lee460989',
   vaultPrefix: 'YZ-',
   vaultPayloadMax: 262144,
+  /* 请求超时（P1，对齐联赛 HF 口径：超时必释放、必给可见提示）：壳内 cloud.request 与非壳 fetch
+     两路统一上限，超时按 NET_TIMEOUT 抛错，调用方映射玩家话术；绝不无限期悬挂锁死按钮/守卫。 */
+  reqTimeoutMs: 8000,
   startCoins: 100,
+  /* 招牌名池（平台口径：玩家不可手动输入游戏名称）：新档开张时从池中随机挂一块，
+     玩家只能点「换一块招牌」换池中另一块、不可手输；openInn 唯一写名入口。
+     老档已存的 S.name 由 normalize 原样保留（存量数据不动），不走本池。 */
+  innNames: ['风来驿站', '听雨驿站', '望云驿站', '归雁驿站', '临溪驿站', '松风驿站',
+             '半山驿站', '江畔驿站', '沐风驿站', '栖云驿站', '落霞驿站', '迎客驿站'],
   startRooms: 2,
   tickMs: 2000,
   roomPriceBase: 5,
@@ -829,18 +837,53 @@ function vaultConfigured(){
   if(shellVault()) return true;
   return typeof CONFIG.vaultApi === 'string' && /^https?:\/\//.test(CONFIG.vaultApi);
 }
+/* ---- 请求超时兜底（P1）：壳内 SDK 请求无原生超时参数，用竞速兜底；非壳 fetch 用
+   AbortController 真中止＋竞速双保险。超时统一抛 NET_TIMEOUT（name=TimeoutError），
+   调用方据 isTimeoutErr 给玩家「网络有点慢，请重试」话术并释放按钮/守卫，绝不静默悬挂。
+   只包裹 vault/fb 两条业务请求线，不碰广告回调与 PENDING 补发逻辑。 ---- */
+function reqTimeoutError(){
+  const e = new Error('NET_TIMEOUT');
+  e.name = 'TimeoutError';
+  return e;
+}
+function isTimeoutErr(e){ return !!e && (e.name === 'TimeoutError' || e.message === 'NET_TIMEOUT'); }
+function withReqTimeout(p){
+  const ms = CONFIG.reqTimeoutMs || 8000;
+  let timer = null;
+  const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(reqTimeoutError()), ms); });
+  return Promise.race([Promise.resolve(p), timeout]).finally(() => { if(timer) clearTimeout(timer); });
+}
+async function fetchWithTimeout(url, opts){
+  const ms = CONFIG.reqTimeoutMs || 8000;
+  let ctrl = null;
+  try{
+    if(typeof AbortController !== 'undefined'){
+      ctrl = new AbortController();
+      opts = Object.assign({}, opts, { signal: ctrl.signal });
+    }
+  }catch(e){ ctrl = null; }
+  let timer = null;
+  const timeout = new Promise((_, rej) => { timer = setTimeout(() => { try{ if(ctrl) ctrl.abort(); }catch(e){} rej(reqTimeoutError()); }, ms); });
+  try{
+    return await Promise.race([fetch(url, opts), timeout]);
+  }catch(e){
+    if(isTimeoutErr(e)) throw e;
+    if(e && e.name === 'AbortError') throw reqTimeoutError();   /* 自家计时器中止 fetch 迟到落败 */
+    throw e;
+  }finally{ if(timer) clearTimeout(timer); }
+}
 async function vaultPut(payload){
   const cloud = shellVault();
   if(cloud){
     const req = { url: CONFIG.vaultShellBase + '/api/yzvault/put', method:'POST', data:{ payload } };
     if(CONFIG.vaultShellEnvId) req.envId = CONFIG.vaultShellEnvId;
-    const r = await cloud.request(req);
+    const r = await withReqTimeout(cloud.request(req));
     const d = vaultShellData(r);
     if(!d || !d.shortCode) throw new Error('vault_put_fail');   /* 内部码仅供调用方归类，绝不原样弹给玩家 */
     return d.shortCode;
   }
-  const res = await fetch(CONFIG.vaultApi + '/yzvault/put', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ payload }) });
-  const j = await res.json().catch(() => null);
+  const res = await fetchWithTimeout(CONFIG.vaultApi + '/yzvault/put', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ payload }) });
+  const j = await withReqTimeout(res.json().catch(() => null));   /* body 读取同入超时，防头到身悬挂 */
   if(!res.ok || !j || j.code !== 0 || !j.data || !j.data.shortCode) throw new Error('vault_put_fail');
   return j.data.shortCode;
 }
@@ -849,13 +892,13 @@ async function vaultGet(code){
   if(cloud){
     const req = { url: CONFIG.vaultShellBase + '/api/yzvault/get', method:'POST', data:{ code } };
     if(CONFIG.vaultShellEnvId) req.envId = CONFIG.vaultShellEnvId;
-    const r = await cloud.request(req);
+    const r = await withReqTimeout(cloud.request(req));
     const d = vaultShellData(r);
     if(!d || typeof d.payload !== 'string') throw new Error('vault_get_fail');
     return d.payload;
   }
-  const res = await fetch(CONFIG.vaultApi + '/yzvault/get', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ code }) });
-  const j = await res.json().catch(() => null);
+  const res = await fetchWithTimeout(CONFIG.vaultApi + '/yzvault/get', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ code }) });
+  const j = await withReqTimeout(res.json().catch(() => null));   /* body 读取同入超时，防头到身悬挂 */
   if(!res.ok || !j || j.code !== 0 || !j.data || typeof j.data.payload !== 'string') throw new Error('vault_get_fail');
   return j.data.payload;
 }
@@ -884,13 +927,13 @@ async function fbRequest(path, data){
   if(cloud){
     const req = { url: CONFIG.vaultShellBase + '/api/yzfeedback/' + path, method:'POST', data: data || {} };
     if(CONFIG.vaultShellEnvId) req.envId = CONFIG.vaultShellEnvId;
-    const d = fbShellData(await cloud.request(req));
+    const d = fbShellData(await withReqTimeout(cloud.request(req)));
     if(!d) throw new Error('FB_FAIL');
     if(d.__err) throw new Error(d.__err);
     return d;
   }
-  const res = await fetch(CONFIG.vaultApi + '/yzfeedback/' + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(data || {}) });
-  const j = await res.json().catch(() => null);
+  const res = await fetchWithTimeout(CONFIG.vaultApi + '/yzfeedback/' + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(data || {}) });
+  const j = await withReqTimeout(res.json().catch(() => null));   /* body 读取同入超时，防头到身悬挂 */
   if(!j || (j.code !== 0 && j.code !== 200)){
     throw new Error((j && j.data && j.data.err) || (j && j.message) || 'FB_FAIL');
   }
@@ -902,6 +945,7 @@ async function fbRequest(path, data){
    客户端读 honors 公示，进游戏时静默核一次「我被采纳且未领」并在反馈弹窗里给领取口。 */
 let fbSubmitting = false;
 let fbHonorsCache = null;
+let fbHonorsError = false;   /* P4：名单读取失败与真空名单分开呈现，失败不伪装「暂无」 */
 let fbCheckedAdopt = false;
 function fbRateLeft(){
   const win = CONFIG.feedback.rateWindowMin * 60000, now = Date.now();
@@ -937,7 +981,8 @@ async function submitFeedback(){
     return true;
   }catch(e){
     const code = (e && e.message) || '';
-    if(code === 'FB_DUPLICATE') showToast('这条已经提过啦，正在等我们看，换个说法或新想法再来');
+    if(isTimeoutErr(e)) showToast('提交超时，网络有点慢，这条还没发出去，请重试');
+    else if(code === 'FB_DUPLICATE') showToast('这条已经提过啦，正在等我们看，换个说法或新想法再来');
     else if(code === 'FB_RATE_LIMITED') showToast('发得有点勤，先歇一会儿再来');
     else if(code === 'FB_TOO_LONG') showToast('太长了，最多 ' + CONFIG.feedback.maxLen + ' 字，精简一下');
     else if(code === 'FB_EMPTY') showToast('先写点什么再提交吧');
@@ -983,6 +1028,17 @@ function renderFeedbackHonors(){
   head.className = 'sect';
   head.textContent = '鸣 谢 名 单';
   box.appendChild(head);
+  if(fbHonorsError && (!fbHonorsCache || !fbHonorsCache.length)){
+    const d = document.createElement('div'); d.className = 'small-note';
+    d.textContent = '鸣谢名单加载失败，网络可能不稳。';
+    box.appendChild(d);
+    const row = document.createElement('div'); row.className = 'btnrow';
+    const b = document.createElement('button');
+    b.className = 'small'; b.id = 'fbHonorsRetry'; b.textContent = '点击重试';
+    b.onclick = function(){ refreshFeedbackHonors(); };
+    row.appendChild(b); box.appendChild(row);
+    return;
+  }
   if(!fbHonorsCache){
     const d = document.createElement('div'); d.className = 'small-note';
     d.textContent = vaultConfigured() ? '正在读取鸣谢名单…' : '反馈通道正在开通中，进虎扑 App 里看最新鸣谢名单。';
@@ -1002,11 +1058,12 @@ function renderFeedbackHonors(){
   }
 }
 async function refreshFeedbackHonors(){
-  if(!vaultConfigured()){ fbHonorsCache = null; renderFeedbackHonors(); return; }
+  if(!vaultConfigured()){ fbHonorsCache = null; fbHonorsError = false; renderFeedbackHonors(); return; }
   try{
     const r = await fbRequest('honors', {});
     fbHonorsCache = (r && Array.isArray(r.list)) ? r.list : [];
-  }catch(e){ fbHonorsCache = []; }
+    fbHonorsError = false;
+  }catch(e){ fbHonorsError = true; /* 失败保留旧缓存（有名单照常展示），无缓存时渲染失败态＋重试钮，不置空伪装 */ }
   renderFeedbackHonors();
   renderFeedbackMine();
 }
@@ -1054,7 +1111,7 @@ async function cloudExport(){
   try{
     const code = await vaultPut(payload);
     return { ok:true, code: CONFIG.vaultPrefix + code };
-  }catch(e){ console.warn('cloudExport failed', e); return { ok:false, msg:'上传失败，网络可能不稳，请稍后再试，或改用下方长码导出' }; }
+  }catch(e){ console.warn('cloudExport failed', e); return { ok:false, msg: isTimeoutErr(e) ? '上传超时，网络有点慢，请重试，或改用下方长码导出' : '上传失败，网络可能不稳，请稍后再试，或改用下方长码导出' }; }
 }
 async function cloudImport(text){
   const code = normalizeVaultCode(text);
@@ -1063,7 +1120,7 @@ async function cloudImport(text){
   if(!vaultConfigured()) return { ok:false, msg:'云端短码尚未开通（后端部署中），请改用长码导入' };
   let payload = null;
   try{ payload = await vaultGet(code); }
-  catch(e){ console.warn('cloudImport failed', e); return { ok:false, msg:'取档失败：短码可能不对，或网络不稳，请核对后重试' }; }
+  catch(e){ console.warn('cloudImport failed', e); return { ok:false, msg: isTimeoutErr(e) ? '取档超时，网络有点慢，请核对短码后重试' : '取档失败：短码可能不对，或网络不稳，请核对后重试' }; }
   /* 落地走 importCode 同一通道：JSON/形状校验不过不动现档，通过则先备份当前档再覆盖 */
   return importCode(btoa(unescape(encodeURIComponent(payload))))
     ? { ok:true }
@@ -1626,7 +1683,7 @@ function doEventChoice(idx){
   if(!ev) return false;
   const ch = ev.choices[idx];
   if(!ch) return false;
-  if(ch.coins < 0 && S.coins + ch.coins < 0){ showToast('铜钱不足，选不了这一项'); return false; }
+  if(!choiceAffordable(ch)){ showToast('铜钱不足，选不了这一项'); return false; }
   /* 丰收日（日历修正）：抉择的正向奖励 ×1.5，支出与负向项不放大 */
   const evMult = calMod().eventMult || 1;
   const effCoins = ch.coins > 0 ? Math.round(ch.coins * evMult) : ch.coins;
@@ -1975,25 +2032,34 @@ document.addEventListener('click', function(e){
 
 /* ================= 渲染 ================= */
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* 开张招牌：名池随机一块（uiInnPick 仅内存、不入存档），「换一块招牌」换池中另一块；
+   全程无文本输入框——玩家不可手输驿站名（平台红线口径）。 */
+let uiInnPick = '';
+function rollInnName(){
+  const pool = CONFIG.innNames;
+  let n = pool[Math.floor(Math.random() * pool.length)];
+  if(pool.length > 1){ let guard = 0; while(n === uiInnPick && guard++ < 20) n = pool[Math.floor(Math.random() * pool.length)]; }
+  uiInnPick = n;
+  const s = document.getElementById('innPickSeal');
+  if(s) s.textContent = n;
+}
 function renderNaming(){
   document.body.classList.remove('has-tabbar');
   document.getElementById('app').innerHTML =
     '<div class="open-wrap">' +
       bannerImg() +
       '<div class="big">风来驿站</div>' +
-      '<div class="sub">官道之旁 · 灯火可亲<br>给你的驿站起个名字，今夜开张</div>' +
-      '<div><span class="seal-art">风来驿站</span></div>' +
-      '<input id="innName" type="text" maxlength="8" placeholder="风来驿站" autocomplete="off">' +
+      '<div class="sub">官道之旁 · 灯火可亲<br>招牌是老字号传下来的，今夜就挂它开张</div>' +
+      '<div><span class="seal-art" id="innPickSeal">风来驿站</span></div>' +
+      '<br><button class="small" id="rollBtn" onclick="rollInnName()">换一块招牌</button>' +
       '<br><button class="accent" id="openBtn" onclick="openInn()" style="font-size:16px; padding:12px 34px;">开张大吉</button>' +
       '<div class="foot">旅客自动到访 · 离线也有进账（55% 速率）</div>' +
     '</div>';
-  const inp = document.getElementById('innName');
-  inp.addEventListener('keydown', e => { if(e.key === 'Enter') openInn(); });
-  inp.focus();
+  uiInnPick = '';
+  rollInnName();
 }
 function openInn(){
-  const inp = document.getElementById('innName');
-  const name = (inp.value || '').trim() || '风来驿站';
+  const name = CONFIG.innNames.includes(uiInnPick) ? uiInnPick : CONFIG.innNames[0];
   S.name = name;
   if(!S.eventsToday.length) S.eventsToday = pickEventsForDay();
   pushLog('驿站「' + name + '」挂牌开张');
@@ -2467,6 +2533,14 @@ function renderRooms(){
   }
   grid.innerHTML = html;
 }
+/* 选项可负担判定（P2/P3 唯一出处）：付费选项且铜钱不够＝买不起，与 doEventChoice 的拒绝口径一致 */
+function choiceAffordable(c){ return !(c.coins < 0 && S.coins + c.coins < 0); }
+function eventAnyAffordable(){
+  const ev = currentEvent();
+  if(!ev) return false;
+  return ev.choices.some(choiceAffordable);
+}
+let evAffordSig = '';   /* 事件选项可负担签名：updateDynamic 比对变化才重绘，防置灰随铜钱过期失真 */
 function renderEvents(){
   const box = document.getElementById('eventsBox');
   if(!box) return;
@@ -2474,15 +2548,17 @@ function renderEvents(){
   if(left) left.textContent = S.eventsDone;
   const ev = currentEvent();
   if(!ev){
+    evAffordSig = '';
     box.innerHTML = '<div class="empty-note">' + emptyImgHtml('ev_night') + '<span>今日 3 次抉择已处理完，明日再来。</span></div>';
     return;
   }
+  evAffordSig = ev.id + ':' + ev.choices.map(c => choiceAffordable(c) ? '1' : '0').join('');
   box.innerHTML =
     evImgHtml(ev) +
     '<div class="up-row"><div class="info"><div class="t">' + esc(ev.title) + '</div>' +
     '<div class="d">' + esc(ev.text) + (ev.pool === 'banquet' ? '（宴会厅事件）' : '') + '</div></div></div>' +
     '<div class="btnrow">' + ev.choices.map((c, i) =>
-      '<button class="small" onclick="doEventChoice(' + i + ')">' + esc(c.label) + '</button>').join('') + '</div>';
+      '<button class="small"' + (choiceAffordable(c) ? '' : ' disabled') + ' onclick="doEventChoice(' + i + ')">' + esc(c.label) + '</button>').join('') + '</div>';
 }
 function upCardHtml(kind, title, desc, btnId, imgKey){
   const cost = upgradeCost(kind);
@@ -2788,6 +2864,12 @@ function updateDynamic(){
   renderOffline();
   renderToday();
   updateTabDots();
+  /* 事件选项置灰随铜钱实时对齐：可负担签名变化才重绘事件卡（买得起的零变化、不扰阅读） */
+  if(document.getElementById('eventsBox')){
+    const evNow = currentEvent();
+    const sig = evNow ? evNow.id + ':' + evNow.choices.map(c => choiceAffordable(c) ? '1' : '0').join('') : '';
+    if(sig !== evAffordSig) renderEvents();
+  }
 }
 
 /* ================= 工具 ================= */
@@ -2830,8 +2912,8 @@ function showToast(msg){
    新档（未开张）从头走；老档默认标完成不补弹；删档后新档重新走。 */
 const TOUR_STEPS = [
   { id:'open', action:'open', target:() => document.getElementById('openBtn'),
-    title:'先开张：给驿站起个名字',
-    body:'名字随你起，不填就叫「风来驿站」。点高亮的「开张大吉」，今夜就挂牌。' },
+    title:'先开张：挂起你的招牌',
+    body:'招牌是老字号传下来的，不合意就点「换一块招牌」换一块；点高亮的「开张大吉」，今夜就挂牌。' },
   { id:'guests', page:'build', sub:['build','fac'], target:() => document.getElementById('roomsGrid'),
     title:'旅客自己会来，房钱自动进账',
     body:'旅客自动推门入住，住满就不再进客；房钱按分钟慢慢攒，人在不在都算。' },
@@ -2940,6 +3022,10 @@ function tourShow(){
     if(st.id === 'open' && S.name){ S.guideStep++; continue; }
     if(st.id !== 'open' && !S.name){ S.guideStep = 0; break; }
     if(st.action === 'event' && !currentEvent()){ S.guideStep++; continue; }
+    /* P3：当前抉择全是付费选项且一个都买不起（如 e_dog 需 5 铜钱而玩家只剩 3）时，
+       本步亲手操作无从完成——自动跳过本步（与「无抉择」同机制），事件本身保留，
+       攒够铜钱回事务页照常处理，不逼玩家只剩「跳过引导」一条路。 */
+    if(st.action === 'event' && !eventAnyAffordable()){ S.guideStep++; continue; }
     if(st.action === 'offline' && tourSeededOffline && S.offlinePending < 1){ S.guideStep++; continue; }
     break;
   }
@@ -3121,12 +3207,16 @@ window.YZ = {
   submitFeedback: submitFeedback, showFeedback: showFeedback, hideFeedback: hideFeedback,
   claimAdoptReward: claimAdoptReward, refreshFeedbackHonors: refreshFeedbackHonors,
   fbHonors: function(){ return fbHonorsCache; },
+  fbHonorsState: function(){ return { cache: fbHonorsCache, error: fbHonorsError }; },
+  fbRequest: fbRequest, isTimeoutErr: isTimeoutErr,
+  choiceAffordable: choiceAffordable, eventAnyAffordable: eventAnyAffordable,
   loginActSummary: loginActSummary, claimLoginTier: claimLoginTier, touchLoginDay: touchLoginDay,
   toggleLoginFold: toggleLoginFold, loginFoldOpen: function(){ return loginFoldOpen; },
   celebrationInfo: celebrationInfo, showCelebration: showCelebration, hideCelebration: hideCelebration, claimCelebration: claimCelebration,
   uiAddToDesktop: uiAddToDesktop, desktopSupported: desktopSupported,
   todaySummary: todaySummary, codexGroupProgress: codexGroupProgress,
   switchTab: switchTab, switchSub: switchSub, gotoCard: gotoCard, updateTabDots: updateTabDots,
+  updateDynamic: updateDynamic, renderEvents: renderEvents,
   uiState: function(){ return { tab: uiTab, sub: Object.assign({}, uiSub) }; },
   showOfflineRules: showOfflineRules, hideOfflineRules: hideOfflineRules,
   renderOffline: renderOffline, renderToday: renderToday, renderMorning: renderMorning,
