@@ -196,6 +196,12 @@
   .soon-plaque .soon-tag{font-size:11px; color:var(--ink2); border:1px solid var(--line); border-radius:6px; padding:2px 6px; white-space:nowrap;}
   .soon-plaque .soon-name{font-family:'PF-MSZ','PF-LXGW',"Kaiti SC",serif; font-size:17px; letter-spacing:2px; color:var(--ink);}
   .soon-plaque .soon-date{margin-left:auto; font-size:12px; color:var(--accent-ink); letter-spacing:1px; white-space:nowrap;}
+  /* 吆喝口号碎片（亲手操控层试点）：span 芯片非 button——引导动作步的目标选择器只认吆喝按钮，不许被碎片抢焦点 */
+  .frag-row{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px;}
+  .frag-lab{font-size:11px; color:var(--ink2); width:100%; letter-spacing:2px;}
+  .frag-chip{display:inline-block; border:1px solid var(--line); border-radius:999px; padding:4px 11px; font-size:13px; color:var(--ink2); background:var(--card); cursor:pointer; user-select:none;}
+  .frag-chip.on{border-color:var(--accent); color:var(--accent-ink); background:var(--accent-soft, rgba(178,58,42,.08)); font-weight:600;}
+  .shout-line{font-family:'PF-MSZ','PF-LXGW',"Kaiti SC",serif; font-size:16px; letter-spacing:1px; color:var(--ink); margin:4px 0;}
   button.crop-btn{display:flex; align-items:center; gap:8px; text-align:left;}
   button.crop-btn img.crop-img, button.crop-btn .crop-ph{width:30px; height:30px; font-size:13px;}
   .empty-note{display:flex; flex-direction:column; align-items:center; gap:7px; text-align:center; color:var(--ink2); font-size:12.5px; padding:2px 0;}
@@ -716,6 +722,40 @@ const CONFIG = {
      到访率 +arrivalAdd（arrivalChance 唯一出口）、在住进账 ×(1+rateAdd)（shoutRateMult 并入 incomeRate）；
      状态只存 last/until 两个时间戳，防连点守卫在 shoutNow */
   shout: { cooldownMin: 30, durMin: 10, arrivalAdd: 0.35, rateAdd: 0.15 },
+  /* 吆喝口号（亲手操控层试点，主人 2026-11-18 拍板）：三段碎片各选一段拼口号，喊出后 durMin 分钟窗口内
+     命中客群经 guestWeightToday 到访权重 ×weightMult（唯一乘口）；碎片池与客群映射全在此、渲染与判定共用一口。
+     双轨：不拼口号点吆喝＝现行行为一字不变（高峰三常数/冷却/加成口径全不动），两轨共用同一冷却；
+     拼什么都不惩罚，最差是没命中加成。groups 覆盖全部 36 种旅客（贵客段按亲缘归组）。 */
+  shoutCombo: {
+    weightMult: 1.8,
+    groupNames: { wen:'读书人', shang:'买卖人', jiang:'江湖客', bai:'百业行旅' },
+    groups: {
+      wen:   ['scholar','examiner','painter','musician','singer','storyteller','chess','zhuangyuan','junzhu','wangye'],
+      shang: ['merchant','teamerchant','saltmerchant','herbmerchant','richman','richest','foreign'],
+      jiang: ['escort','escortboss','hero','hunter','blacksmith','falconer'],
+      bai:   ['monk','peddler','porter','farmer','doctor','fortune','tailor','constable','weaver','beekeeper','hermit','magistrate','inspector']
+    },
+    frags: [
+      [ { id:'open_all',   text:'南来的，北往的', groups:['wen','shang','jiang','bai'] },
+        { id:'open_wen',   text:'读书赶考的',     groups:['wen'] },
+        { id:'open_jiang', text:'走镖押运的',     groups:['jiang'] },
+        { id:'open_shang', text:'做买卖的',       groups:['shang'] } ],
+      [ { id:'sell_soup',  text:'热汤热水管够', groups:['bai','jiang'] },
+        { id:'sell_quiet', text:'雅间清净不扰', groups:['wen'] },
+        { id:'sell_meat',  text:'大碗酒肉管饱', groups:['jiang','bai'] },
+        { id:'sell_tea',   text:'后院新茶刚到', groups:['shang','wen'] } ],
+      [ { id:'prom_sleep', text:'住下睡个好觉',   groups:['wen','bai'] },
+        { id:'prom_full',  text:'吃饱喝足再赶路', groups:['jiang','bai'] },
+        { id:'prom_fair',  text:'价钱公道不宰客', groups:['shang','bai'] } ]
+    ],
+    fragLabels: ['开场', '卖点', '承诺']
+  },
+  /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
+     换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
+     goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
+  introCard: { ver: 'pilot-shout', lines: [
+    { name:'会吆喝', how:'自己拼口号，招来对路的客人', goto:'home:shoutCard' }
+  ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
      +bonusPerUnit/份、上限 bonusCap（并入 incomeRate 的加成括号，与厨房/伙计同层） */
@@ -1070,7 +1110,8 @@ function defaultState(){
     urgent: null,
     entrust: null,
     dish: null,
-    shout: { last: 0, until: 0 },
+    shout: { last: 0, until: 0, combo: null, comboUntil: 0 },
+    seenIntro: '',
     garden: { plots: [null, null, null, null], stock: 0 },
     guideStep: 0,
     guideDone: false,
@@ -1101,6 +1142,18 @@ function sanitizeAdPending(raw){
     if(!out.cid) return null;
   }
   return out;
+}
+/* 吆喝口号拼法清洗：必须是 3 段数组、每段 id 在对应段碎片池内（空位许 null）；任一段非法整组丢弃回 null，老档无字段默认 null */
+function sanitizeShoutCombo(raw){
+  if(!Array.isArray(raw) || raw.length !== CONFIG.shoutCombo.frags.length) return null;
+  const out = [];
+  for(let i = 0; i < CONFIG.shoutCombo.frags.length; i++){
+    const id = raw[i];
+    if(id === null || id === undefined){ out.push(null); continue; }
+    if(!CONFIG.shoutCombo.frags[i].some(f => f.id === id)) return null;
+    out.push(id);
+  }
+  return out.every(x => x === null) ? null : out;
 }
 function normalize(raw){
   const d = defaultState();
@@ -1185,8 +1238,11 @@ function normalize(raw){
     ? { day: raw.dish.day, id: raw.dish.id }
     : null;
   s.shout = (raw.shout && typeof raw.shout === 'object')
-    ? { last: Math.max(0, Math.floor(+raw.shout.last || 0)), until: Math.max(0, Math.floor(+raw.shout.until || 0)) }
-    : { last: 0, until: 0 };
+    ? { last: Math.max(0, Math.floor(+raw.shout.last || 0)), until: Math.max(0, Math.floor(+raw.shout.until || 0)),
+        combo: sanitizeShoutCombo(raw.shout.combo), comboUntil: Math.max(0, Math.floor(+raw.shout.comboUntil || 0)) }
+    : { last: 0, until: 0, combo: null, comboUntil: 0 };
+  /* 本版新内容卡已看版本（四件套③）：非字符串一律回空＝未看过，老档安全 */
+  s.seenIntro = (typeof raw.seenIntro === 'string') ? raw.seenIntro : '';
   s.garden = { plots: [], stock: 0 };
   if(raw.garden && typeof raw.garden === 'object'){
     s.garden.stock = clampInt(raw.garden.stock, 0, 9999, 0);
@@ -1673,7 +1729,55 @@ function weatherOf(ds){
 function weatherRateMult(){ return weatherOf().rateMult || 1; }
 function guestWeightToday(t){
   const w = weatherOf();
-  return t.weight * ((w.fav && w.fav.indexOf(t.id) >= 0) ? (w.favMult || 1) : 1);
+  let base = t.weight * ((w.fav && w.fav.indexOf(t.id) >= 0) ? (w.favMult || 1) : 1);
+  /* 吆喝口号窗口内，命中客群再乘口号倍率（与天气 fav 同层叠乘，仍是抽客权重唯一出口） */
+  if(shoutComboActive() && shoutComboHits(t.id)) base *= CONFIG.shoutCombo.weightMult;
+  return base;
+}
+/* ================= 吆喝口号（亲手操控层试点） =================
+   shoutFrag 为碎片唯一定位；命中客群＝三段碎片 groups 的并集，经 shoutComboGroups 唯一派生，
+   渲染（招哪类客明示）与权重判定（guestWeightToday）共用这一口，不许分叉 */
+function shoutFrag(slot, id){
+  const pool = CONFIG.shoutCombo.frags[slot];
+  return pool ? (pool.find(f => f.id === id) || null) : null;
+}
+function shoutComboFull(){
+  return !!(S && S.shout && Array.isArray(S.shout.combo) && S.shout.combo.every((id, i) => !!shoutFrag(i, id)));
+}
+function shoutComboText(){
+  if(!shoutComboFull()) return '';
+  return S.shout.combo.map((id, i) => shoutFrag(i, id).text).join('——');
+}
+function shoutComboGroups(){
+  if(!S || !S.shout || !Array.isArray(S.shout.combo)) return [];
+  const out = [];
+  S.shout.combo.forEach((id, i) => {
+    const f = id && shoutFrag(i, id);
+    if(f) for(const g of f.groups) if(out.indexOf(g) < 0) out.push(g);
+  });
+  return out;
+}
+function shoutComboGroupNames(){
+  return shoutComboGroups().map(g => CONFIG.shoutCombo.groupNames[g] || g);
+}
+function shoutComboHits(typeId){
+  return shoutComboGroups().some(g => (CONFIG.shoutCombo.groups[g] || []).indexOf(typeId) >= 0);
+}
+function shoutComboActive(){
+  return !!(S && S.shout && shoutComboFull() && Date.now() < (S.shout.comboUntil || 0));
+}
+/* 选碎片（再点已选的取消该段）：只改拼法不动冷却/高峰，落盘后重渲染吆喝卡 */
+function pickShoutFrag(slot, id){
+  if(!S || !S.name) return false;
+  if(!shoutFrag(slot, id)) return false;
+  const cur = (S.shout && Array.isArray(S.shout.combo)) ? S.shout.combo.slice() : [null, null, null];
+  cur[slot] = (cur[slot] === id) ? null : id;
+  S.shout.combo = cur.every(x => x === null) ? null : cur;
+  save();
+  shoutSig = '';
+  renderShout();
+  sfxPlay('tap');
+  return true;
 }
 /* ================= 今日招牌（竞品调研 P2-lite） =================
    dishOf() 为当日招牌唯一定位（S.dish.day 与今日对齐才算数，跨日自动失效）；
@@ -2476,13 +2580,22 @@ function shoutNow(){
   const now = Date.now();
   if(shoutActive()){ showToast('客流高峰还没散，再等等'); return false; }
   if(now - (S.shout.last || 0) < CONFIG.shout.cooldownMin * 60000){ showToast('刚喊过，嗓子还哑着，过会儿再吆喝'); return false; }
-  S.shout = { last: now, until: now + CONFIG.shout.durMin * 60000 };
-  pushLog('掌柜在门口吆喝了一嗓子，过路的客人闻声而来');
+  const comboTxt = shoutComboText();
+  S.shout = { last: now, until: now + CONFIG.shout.durMin * 60000,
+    combo: (S.shout && S.shout.combo) || null,
+    /* 拼好口号喊出：口号窗口与高峰同窗（durMin 分钟），命中客群权重经 guestWeightToday 生效；
+       没拼/没拼满＝comboUntil 清零，走现行托管轨，行为一字不变 */
+    comboUntil: comboTxt ? now + CONFIG.shout.durMin * 60000 : 0 };
+  pushLog(comboTxt
+    ? '掌柜扯着嗓子喊出新口号：「' + comboTxt + '」——' + shoutComboGroupNames().join('、') + '闻声而来'
+    : '掌柜在门口吆喝了一嗓子，过路的客人闻声而来');
   save();
   renderShout();
   updateDynamic();
   renderLog();
-  showToast('吆喝开了！接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰');
+  showToast(comboTxt
+    ? '吆喝开了！口号招的是' + shoutComboGroupNames().join('、') + '，这阵子来得格外多'
+    : '吆喝开了！接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰');
   sfxPlay('tap');
   tourHook('shout');
   return true;
@@ -2901,6 +3014,7 @@ function refreshOnSwitch(){
   updateDynamic();
   renderMorning(); renderQuests(); renderEvents(); renderCommissions();
   renderMilestones(); renderCodex(); renderStaff(); renderUpgrades(); renderAdsBox();
+  renderIntroCard();
 }
 function switchTab(tab){
   uiScroll[scrollKey(uiTab)] = window.scrollY || 0;
@@ -2961,6 +3075,7 @@ function renderMain(){
         '<div class="cell"><div class="k">入 住</div><div class="v" id="occVal">0/0</div></div>' +
         '<button class="exit-cell" id="exitBtnHome" onclick="uiExitGame()">退出游戏</button>' +
       '</div>' +
+      '<div class="card" id="introCard" style="display:none"><h3>本 版 新 内 容</h3><div id="introBody"></div></div>' +
       '<div class="card" id="morningCard"><h3>晨 间 小 结</h3><div id="morningBody"></div>' +
         '<div class="btnrow"><button class="small" onclick="dismissMorning()">收好小结</button></div></div>' +
       '<div class="card" id="offlineCard">' +
@@ -3314,6 +3429,12 @@ function renderToday(){
     '每日礼包剩余：<b>' + t.giftLeft + '</b>/' + t.giftLimit + ' 次</div></div>' +
     (t.giftLeft > 0 ? '<button class="small accent" onclick="claimDailyGift()">领取礼包</button>'
       : '<span class="quest-todo">已领完</span>') + '</div>';
+  /* 广告礼包固定行（主人 2026-11-18 抓「找不到广告在哪」）：明示这是看广告的礼包、剩余与礼包卡同源
+     （同走 todaySummary 的 giftLeft/giftLimit），点击直达事务页礼包卡；只加行与跳转，不动数值与领取逻辑 */
+  html += '<div class="up-row" id="adGiftRow"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+    '广告礼包：看广告领 <b>' + giftRewardToday() + '</b> 铜钱，今日剩余 <b>' + t.giftLeft + '</b>/' + t.giftLimit + ' 次</div></div>' +
+    (t.giftLeft > 0 ? '<button class="small ghost" onclick="gotoCard(\'affair\',\'adsCard\')">去领取</button>'
+      : '<span class="quest-todo">已领完</span>') + '</div>';
   if(t.signin.open){
     html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
       (t.signin.claimedToday
@@ -3364,6 +3485,41 @@ function renderToday(){
     }
   }
   box.innerHTML = html;
+}
+/* ================= 开始页「本版新内容」卡（交付四件套③基础设施） =================
+   形态红线：开始页常驻卡、点击才展开，绝不走 modal 通道、绝不进门自动弹；
+   看过即消＝展开动作即把 CONFIG.introCard.ver 写入 S.seenIntro 落盘，下次进店整卡不渲染；
+   换版（ver 变更）后与 seenIntro 不等，卡重新出现——每版只打扰一次。卡只介绍、不做门禁 */
+let introOpen = false;
+function renderIntroCard(){
+  const card = document.getElementById('introCard');
+  if(!card || !S) return;
+  const ic = CONFIG.introCard;
+  /* 已看且本会话未展开过才整卡不渲染；展开当下 seenIntro 刚写入，本会话内须继续亮着展开态给玩家点去处 */
+  if(!ic || !ic.ver || (S.seenIntro === ic.ver && !introOpen)){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const box = document.getElementById('introBody');
+  if(!box) return;
+  if(!introOpen){
+    box.innerHTML = '<div class="small-note">这一版上新了：<b>' + ic.lines.map(l => esc(l.name)).join('、') + '</b>。点开看看是什么、在哪、怎么玩。</div>' +
+      '<div class="btnrow"><button class="small accent" onclick="expandIntroCard()">展开看看</button></div>';
+  }else{
+    box.innerHTML = ic.lines.map((l, i) =>
+      '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);"><b>' + esc(l.name) + '</b>——' + esc(l.how) + '</div></div>' +
+      '<button class="small ghost" onclick="introGoto(' + i + ')">去看看</button></div>').join('') +
+      '<div class="small-note">看过啦——这张卡下次进店就不再出现，新版本上新时才会再来。</div>';
+  }
+}
+function expandIntroCard(){
+  introOpen = true;
+  if(S && CONFIG.introCard && CONFIG.introCard.ver){ S.seenIntro = CONFIG.introCard.ver; save(); }
+  renderIntroCard();
+}
+function introGoto(i){
+  const l = CONFIG.introCard && CONFIG.introCard.lines[i];
+  if(!l) return;
+  const parts = String(l.goto || 'home:').split(':');
+  gotoCard(parts[0] || 'home', parts[1] || '');
 }
 /* 掌柜日课分组（今日清单卡内）：进度条＋逐项领取＋全清宝箱；数据全走 quests 状态与 CONFIG，不另造口径 */
 let questSig = '';
@@ -3497,18 +3653,38 @@ function refreshUpgradeDisabled(){
     if(b && c !== null) b.disabled = S.coins < c;
   }
 }
-/* 吆喝卡（经营页）：三态——可喊 / 高峰中 / 冷却中，签名防每 tick 重绘 */
+/* 吆喝卡（经营页）：三态——可喊 / 高峰中 / 冷却中，签名防每 tick 重绘。
+   口号牌（亲手轨）：三段碎片芯片（span 非 button，引导目标选择器只认吆喝按钮）＋口号原文与命中客群明示；
+   没拼满照常显示托管轨按钮，行为与旧版一字不变 */
 let shoutSig = '';
 function renderShout(){
   const box = document.getElementById('shoutBody');
   if(!box || !S) return;
   const now = Date.now();
   const active = shoutActive();
+  const comboOn = shoutComboActive();
   const cdLeft = Math.max(0, CONFIG.shout.cooldownMin * 60000 - (now - (S.shout.last || 0)));
-  const sig = [active ? Math.ceil((S.shout.until - now) / 1000) : 0, Math.ceil(cdLeft / 1000), S.shout.last].join('|');
+  const picks = (S.shout && Array.isArray(S.shout.combo)) ? S.shout.combo.join(',') : '';
+  const sig = [active ? Math.ceil((S.shout.until - now) / 1000) : 0, Math.ceil(cdLeft / 1000), S.shout.last,
+    picks, comboOn ? Math.ceil((S.shout.comboUntil - now) / 1000) : 0].join('|');
   if(sig === shoutSig) return;
   shoutSig = sig;
   let html = '<div class="small-note">在门口吆喝一嗓子，接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰：客人来得勤、在住进账 +' + Math.round(CONFIG.shout.rateAdd * 100) + '%；每 ' + CONFIG.shout.cooldownMin + ' 分钟能喊一次。</div>';
+  /* 口号牌：喊了什么、招哪类客，全明示在牌面上 */
+  const comboTxt = shoutComboText();
+  html += '<div class="small-note" style="margin-top:6px;">—— 拼 口 号 ——</div>';
+  if(comboTxt){
+    html += '<div class="shout-line">「' + esc(comboTxt) + '」</div>' +
+      '<div class="small-note">这口号招的是：<b>' + shoutComboGroupNames().join('、') + '</b>。喊出后 ' + CONFIG.shout.durMin + ' 分钟内，他们到访的份量 ×' + CONFIG.shoutCombo.weightMult + '。</div>';
+  }else{
+    html += '<div class="small-note">还没拼出口号：下面三段各点一句，拼成你的吆喝词——拼中哪类客，哪类客就来得多；不拼也能照常吆喝。</div>';
+  }
+  CONFIG.shoutCombo.frags.forEach((pool, slot) => {
+    html += '<div class="frag-row"><span class="frag-lab">' + CONFIG.shoutCombo.fragLabels[slot] + '</span>' +
+      pool.map(f => '<span class="frag-chip' + (S.shout && Array.isArray(S.shout.combo) && S.shout.combo[slot] === f.id ? ' on' : '') +
+        '" onclick="pickShoutFrag(' + slot + ',\'' + f.id + '\')">' + esc(f.text) + '</span>').join('') + '</div>';
+  });
+  if(comboOn) html += '<div class="small-note">口号生效中 · 余 ' + fmtLeft(S.shout.comboUntil - now) + '，' + shoutComboGroupNames().join('、') + '来得格外多。</div>';
   if(active) html += '<div class="btnrow"><button class="small" disabled>客流高峰中 · 余 ' + fmtLeft(S.shout.until - now) + '</button></div>';
   else if(cdLeft > 0) html += '<div class="btnrow"><button class="small" disabled>嗓子还哑着 · ' + fmtLeft(cdLeft) + ' 后可再喊</button></div>';
   else html += '<div class="btnrow"><button class="small accent" onclick="shoutNow()">吆喝一嗓子</button></div>';
@@ -3931,7 +4107,7 @@ const TOUR_STEPS = [
     body:'老掌柜把刚才这会儿快进成离线十分钟：旅客投宿又离店，账已攒在这张卡上。点卡上的「领取」亲手收下；平时关掉游戏也照 55% 攒，封顶 12 小时。领之前还能整笔「托付商队」，' + CONFIG.entrust.hours + ' 小时后多拿四成。明早先看晨间小结：昨夜账目和今日天气都在那儿，天气会悄悄改今天的客路。' },
   { id:'shout', action:'shout', page:'home', target:() => document.querySelector('#shoutBody button:not([disabled])') || document.getElementById('shoutCard'),
     title:'吆喝揽客：门口喊一嗓子',
-    body:'点高亮的「吆喝一嗓子」：接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰，客人来得勤、进账也涨；每 ' + CONFIG.shout.cooldownMin + ' 分钟能喊一次，想热闹就喊。' },
+    body:'点高亮的「吆喝一嗓子」：接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰，客人来得勤、进账也涨；每 ' + CONFIG.shout.cooldownMin + ' 分钟能喊一次，想热闹就喊。还有个可选的新玩法：喊之前先在吆喝卡上把三段碎片各点一句、拼成你的口号再喊——拼中哪类客，哪类客这阵子就来得多；不拼，照常喊也行。' },
   { id:'upgrade', page:'build', sub:['build','fac'], target:() => document.getElementById('upRoomBtn') || document.getElementById('upgradesCard'),
     title:'有钱先扩建，再提品质',
     body:'扩建多接客，品质抬房价；往下还有厨房和马厩，各有加成，按钮上就是价钱。' },
@@ -4208,6 +4384,7 @@ function startApp(){
   ensureQuests();   /* 当日日课补生成（新档/老档/换槽共用同一入口） */
   settleEntrust();   /* 离线托付若已到期，进店先结回 */
   renderMain();
+  renderIntroCard();   /* 本版新内容卡：seenIntro 与当前 ver 不等才渲染，看过即消 */
   recoverAdPending();   /* 广告欠账补发：重开/换槽/导入后先清 PENDING 欠账（幂等，重复进入不重发） */
   if(tickTimer) clearInterval(tickTimer);
   tickTimer = setInterval(tick, CONFIG.tickMs);
@@ -4265,6 +4442,9 @@ window.YZ = {
   dishOf: dishOf, dishDef: dishDef, dishMultFor: dishMultFor, setDish: setDish,
   wishCheck: wishCheck, wishReward: wishReward, fulfillWish: fulfillWish,
   shoutActive: shoutActive, shoutNow: shoutNow,
+  pickShoutFrag: pickShoutFrag, shoutComboActive: shoutComboActive, shoutComboGroups: shoutComboGroups,
+  shoutComboText: shoutComboText, shoutComboHits: shoutComboHits, shoutComboFull: shoutComboFull,
+  renderIntroCard: renderIntroCard, expandIntroCard: expandIntroCard, introGoto: introGoto,
   cropDef: cropDef, plantCrop: plantCrop, harvestPlot: harvestPlot, gardenStockMult: gardenStockMult,
   renderShout: renderShout, renderDish: renderDish, renderGarden: renderGarden, renderRooms: renderRooms,
   ensureUrgent: ensureUrgent, urgentOffer: urgentOffer, startUrgent: startUrgent,
