@@ -632,8 +632,26 @@ const CONFIG = {
     { id:'j_letter', name:'送信边关', hours:4,  coins:480,  fame:6,  line:'边关的信送到了，回信只有四个字：平安，勿念。' },
     { id:'j_tea',    name:'运茶马道', hours:10, coins:1100, fame:12, line:'茶马道走通了，满载的茶香一路飘回了驿站。' }
   ],
-  /* 广告点位与日限 */
-  adsLimit: { gift:2, instant:3 },
+  /* 广告点位与日限（v1.4.3 广告扩展批：新 8 点位全走既有广告框架——vatask 正链＋PENDING 落盘
+     ＋AD-1 在途守卫＋ledger/既有结算出口，限次统一进本表；adsDailyCap 为全店日总闸，含旧三点位
+     在内统一计数（adsTotalToday 唯一出处），各点位日限是「每样最多」、总闸是「一天总共最多」；
+     新点位一律就地入口、不进今日清单、不加红点催看） */
+  adsLimit: { gift:2, instant:3, upgrade:2, seed:1, trial:1, invite:1, hasten:2, reshout:2, reroll:1, urgent2:1 },
+  adsDailyCap: 10,
+  /* Promise 永不落定对账（2026-11-18 总台横扫·宗门真壳实证）：completeRewardVideo 的 Promise
+     在真壳里可能永不落定——原生侧已发放活动次数、页面却永卡在途。修法只认平台账本差量：
+     拉起前经 getActivityTaskState 记 availableChanceCount 基线（adBegin 盖进 PENDING 快照 base），
+     回前台/获焦/再点/重进时 reconcileAdPending 查账——次数涨了＝原生已确认→走 adApply 既有
+     settle 出口发放（token 互斥防与迟到 Promise 双发）；连查 maxChecks 次没涨按未完整观看清条目、
+     不发奖并释放守卫。graceMs 内（广告正常播放中）一律不对账、不结论，AD-1 在途口径不放松；
+     reconGapMs 为两次计数核查的最小间隔，防连点误清。账本查询只在离散触发点单次调用，非轮询 */
+  adRecon: { graceMs: 30000, reconGapMs: 8000, maxChecks: 3 },
+  /* 广告扩展批参数（评估稿定版口径）：升级抵扣＝incomeRate()×upgradeMinutes 分钟当量、单次封顶
+     当档价的 upgradeCapRatio（铜钱全价永远可走，抵扣只是替代支付、主线不设广告墙）；
+     体验上房券＝下一客计价品质 +trialQualityAdd 档（快照挂旅客实例、不落永久档）；
+     稀有种种子库存封顶 seedCap；催熟须已长满 hastenMinRatio 才许用；inviteTypes 为可请商贾组 */
+  adExtras: { upgradeMinutes: 30, upgradeCapRatio: 0.5, trialQualityAdd: 2, seedCap: 5,
+    hastenMinRatio: 0.5, inviteTypes: ['merchant', 'teamerchant', 'saltmerchant', 'herbmerchant'] },
   giftReward: 150,
   adSimMs: 900,
   /* 每日事件张数 */
@@ -753,8 +771,11 @@ const CONFIG = {
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'pilot-shout', lines: [
-    { name:'会吆喝', how:'自己拼口号，招来对路的客人', goto:'home:shoutCard' }
+  introCard: { ver: 'ads-expand', lines: [
+    { name:'广告抵扣升级', how:'升级时看广告抵一半价钱（每日 2 次），铜钱全价照样能升', goto:'build:upgradesCard' },
+    { name:'体验上房 · 请商贾', how:'客房区看广告：下一位客人按高两档房价结账，还能派小二请一位商贾立刻上门', goto:'build:roomsCard' },
+    { name:'稀有种子 · 催熟', how:'菜园看广告得胭脂萝卜种子（稀罕菜），长过半的田也能看广告催熟', goto:'build:gardenCard' },
+    { name:'再喊 · 换卡 · 加急', how:'吆喝冷却能看广告再喊一嗓子；不合意的抉择能换一张；加急单接下后能再唤第二张', goto:'affair:commissionsCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -762,7 +783,11 @@ const CONFIG = {
   crops: [
     { id:'greens',  name:'青菜', hours:2,  yield:2,  blurb:'长得快，后厨常备' },
     { id:'pumpkin', name:'南瓜', hours:6,  yield:5,  blurb:'个头大，顶大半日用量' },
-    { id:'lotus',   name:'莲藕', hours:12, yield:10, blurb:'睡前种下，明早正好起塘' }
+    { id:'lotus',   name:'莲藕', hours:12, yield:10, blurb:'睡前种下，明早正好起塘' },
+    /* 稀有种（广告扩展批②，硬门甜头专属）：种子只许看广告得（日 1、库存封顶 adExtras.seedCap、
+       不过期无每日必看压力），种下走既有 plantCrop/harvestPlot 全流程、收获入食材 stock 同口；
+       常规三作物全免费，菜园完整玩法不依赖它。图位 IMG['crop_rouge'] 未到位时走首字牌回退 */
+    { id:'rouge',   name:'胭脂萝卜', hours:4, yield:4,  rare:true, blurb:'胭脂色的稀罕物，种子金贵' }
   ],
   garden: { plots: 4, dailyUse: 4, bonusPerUnit: 0.01, bonusCap: 0.25 },
   /* 连环故事伪链（v1.4 经济加厚批 B1）：种子卡走随机池，抉择后同链下一幕于次日必出
@@ -1108,11 +1133,14 @@ function defaultState(){
     loginAct: { days: [], claimed: [] },
     chainProg: {},
     urgent: null,
+    urgent2: null,
+    trialDay: '',
+    inviteQueue: false,
     entrust: null,
     dish: null,
     shout: { last: 0, until: 0, combo: null, comboUntil: 0 },
     seenIntro: '',
-    garden: { plots: [null, null, null, null], stock: 0 },
+    garden: { plots: [null, null, null, null], stock: 0, seeds: 0 },
     guideStep: 0,
     guideDone: false,
     guideRewarded: false,
@@ -1123,11 +1151,19 @@ function defaultState(){
 function sanitizeAdPending(raw){
   if(!raw || typeof raw !== 'object') return null;
   const p = raw.placement;
-  if(p !== 'offline_double' && p !== 'daily_gift' && p !== 'commission_instant') return null;
+  const PLACEMENTS = ['offline_double', 'daily_gift', 'commission_instant',
+    'upgrade_discount', 'rare_seed', 'room_trial', 'invite_guest',
+    'garden_hasten', 'shout_reshout', 'event_reroll', 'urgent_second'];
+  if(PLACEMENTS.indexOf(p) < 0) return null;
   const out = { placement: p,
     token: (typeof raw.token === 'string' && raw.token) ? raw.token : 'legacy',
     at: Math.max(0, Math.floor(+raw.at || 0)),
     day: (typeof raw.day === 'string') ? raw.day : '' };
+  /* 对账字段（永不落定横扫）：base＝拉起时账本 availableChanceCount 基线（null＝未记到/旧版欠账），
+     recon＝已计数「没涨」核查次数，reconAt＝上次计数核查时刻；非法一律回默认 */
+  out.base = (typeof raw.base === 'number' && isFinite(raw.base) && raw.base >= 0) ? Math.floor(raw.base) : null;
+  out.recon = clampInt(raw.recon, 0, 99, 0);
+  out.reconAt = Math.max(0, Math.floor(+raw.reconAt || 0));
   if(p === 'offline_double'){
     out.amt = Math.floor(+raw.amt || 0);
     if(out.amt < 1) return null;
@@ -1140,6 +1176,26 @@ function sanitizeAdPending(raw){
   if(p === 'commission_instant'){
     out.cid = (typeof raw.cid === 'string') ? raw.cid : '';
     if(!out.cid) return null;
+  }
+  if(p === 'upgrade_discount'){
+    /* 抵扣快照：kind 须为四条升级线之一、cost/discount 为正整数且抵扣不超总价，非法整单丢弃 */
+    if(['room', 'quality', 'kitchen', 'stable'].indexOf(raw.kind) < 0) return null;
+    out.kind = raw.kind;
+    out.cost = Math.floor(+raw.cost || 0);
+    out.discount = Math.floor(+raw.discount || 0);
+    if(out.cost < 1 || out.discount < 1 || out.discount > out.cost) return null;
+  }
+  if(p === 'garden_hasten'){
+    out.plot = Math.floor(+raw.plot || 0);
+    if(out.plot < 0 || out.plot >= CONFIG.garden.plots) return null;
+    if(!CONFIG.crops.some(c => c.id === raw.crop)) return null;
+    out.crop = raw.crop;
+    out.start = Math.max(0, Math.floor(+raw.start || 0));
+    if(out.start < 1) return null;
+  }
+  if(p === 'event_reroll'){
+    out.evId = (typeof raw.evId === 'string') ? raw.evId : '';
+    if(!out.evId || !CONFIG.events.some(e => e.id === out.evId)) return null;
   }
   return out;
 }
@@ -1171,7 +1227,9 @@ function normalize(raw){
     s.staff[k] = { lv: clampInt(s.staff[k] && s.staff[k].lv, 1, t.maxLv, 1) };
   }
   s.guests = Array.isArray(raw.guests) ? raw.guests.filter(g => g && g.type && g.name).map(g =>
-    Object.assign({}, g, { wish: (g.wish && CONFIG.wish.kinds.some(k => k.id === g.wish.kind)) ? { kind: g.wish.kind } : null })) : [];
+    Object.assign({}, g, { wish: (g.wish && CONFIG.wish.kinds.some(k => k.id === g.wish.kind)) ? { kind: g.wish.kind } : null,
+      /* 体验上房计价快照（广告扩展批③）：只认 1..maxQuality 的整数档，非法归 0＝按自家品质计价 */
+      trialQ: clampInt(g.trialQ, 0, CONFIG.maxQuality, 0) })) : [];
   s.guestsSeen = (raw.guestsSeen && typeof raw.guestsSeen === 'object') ? raw.guestsSeen : {};
   s.miles = (raw.miles && typeof raw.miles === 'object') ? raw.miles : {};
   s.commissions = Array.isArray(raw.commissions) ? raw.commissions.filter(c => c && c.tierId && !c.claimed) : [];
@@ -1229,6 +1287,13 @@ function normalize(raw){
       && CONFIG.commissionTiers.some(t => t.id === raw.urgent.tierId) && +raw.urgent.expiresAt > 0)
     ? { day: raw.urgent.day, tierId: raw.urgent.tierId, expiresAt: Math.floor(+raw.urgent.expiresAt), taken: raw.urgent.taken === true }
     : null;
+  /* 广告扩展批加法字段：第二张加急单（与 urgent 同形状清洗）/ 体验券日戳 / 邀请排队旗，非法一律回默认 */
+  s.urgent2 = (raw.urgent2 && typeof raw.urgent2 === 'object' && typeof raw.urgent2.day === 'string'
+      && CONFIG.commissionTiers.some(t => t.id === raw.urgent2.tierId) && +raw.urgent2.expiresAt > 0)
+    ? { day: raw.urgent2.day, tierId: raw.urgent2.tierId, expiresAt: Math.floor(+raw.urgent2.expiresAt), taken: raw.urgent2.taken === true }
+    : null;
+  s.trialDay = (typeof raw.trialDay === 'string') ? raw.trialDay : '';
+  s.inviteQueue = raw.inviteQueue === true;
   s.entrust = (raw.entrust && typeof raw.entrust === 'object' && Math.floor(+raw.entrust.amt || 0) > 0 && +raw.entrust.end > 0)
     ? { amt: Math.floor(+raw.entrust.amt), end: Math.floor(+raw.entrust.end) }
     : null;
@@ -1243,9 +1308,10 @@ function normalize(raw){
     : { last: 0, until: 0, combo: null, comboUntil: 0 };
   /* 本版新内容卡已看版本（四件套③）：非字符串一律回空＝未看过，老档安全 */
   s.seenIntro = (typeof raw.seenIntro === 'string') ? raw.seenIntro : '';
-  s.garden = { plots: [], stock: 0 };
+  s.garden = { plots: [], stock: 0, seeds: 0 };
   if(raw.garden && typeof raw.garden === 'object'){
     s.garden.stock = clampInt(raw.garden.stock, 0, 9999, 0);
+    s.garden.seeds = clampInt(raw.garden.seeds, 0, CONFIG.adExtras.seedCap, 0);   /* 稀有种种子库存（广告扩展批②） */
     const rp = Array.isArray(raw.garden.plots) ? raw.garden.plots : [];
     for(let i = 0; i < CONFIG.garden.plots; i++){
       const p = rp[i];
@@ -1277,10 +1343,13 @@ function normalize(raw){
   s.v = CONFIG.version;
   return s;
 }
+let saveFailToasts = 0;   /* P7：存档写入失败可见化——一次会话只弹一次，防刷屏 */
 function save(){
   if(!S) return;
   S.lastSeen = Date.now();
-  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){ /* 存储异常不阻塞游戏 */ }
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){ /* 存储异常不阻塞游戏，但首次失败必须让玩家看见 */
+    if(saveFailToasts === 0){ saveFailToasts = 1; if(typeof showToast === 'function') showToast('存档写入失败，本次进度可能无法保存'); }
+  }
 }
 function load(){
   try{
@@ -1318,11 +1387,13 @@ function exportCode(){
   if(!S) return '';
   return btoa(unescape(encodeURIComponent(JSON.stringify(S))));
 }
+let lastImportBackupOk = true;   /* P7：导入前备份的真实结果，调用方文案按此如实宣称 */
 function importCode(code){
   try{
     const obj = JSON.parse(decodeURIComponent(escape(atob(String(code || '').trim()))));
     if(!obj || typeof obj !== 'object' || !obj.name) return false;
-    try{ localStorage.setItem(BACKUP_KEY, JSON.stringify(S)); }catch(e){}
+    lastImportBackupOk = true;
+    try{ localStorage.setItem(BACKUP_KEY, JSON.stringify(S)); }catch(e){ lastImportBackupOk = false; }
     S = normalize(obj);
     save();
     return true;
@@ -1818,9 +1889,11 @@ function staffIncomeMult(){
   return m;
 }
 function roomPrice(){ return CONFIG.roomPriceBase * CONFIG.qualityMult[S.rooms.quality]; }
+/* 逐客计价唯一出口：体验上房券快照（g.trialQ）在时按快照档计价，否则按自家品质——roomPrice 仍是全店口径 */
+function guestRoomPrice(g){ return CONFIG.roomPriceBase * CONFIG.qualityMult[(g && g.trialQ) || S.rooms.quality]; }
 function incomeRate(){  /* 每分钟铜钱：在住旅客逐间计价（招牌菜对味 ×dishMultFor）×(1+厨房加成+伙计收入加成+菜园食材加成)×天气修正×吆喝高峰修正；名厨日（日历修正）厨房加成翻倍 */
   let r = 0;
-  for(const g of S.guests) r += roomPrice() * (g.priceMult || 1) * dishMultFor(g.type);
+  for(const g of S.guests) r += guestRoomPrice(g) * (g.priceMult || 1) * dishMultFor(g.type);
   const kitchenMult = S.kitchenLv * CONFIG.kitchenMultPerLv * (calMod().kitchenDouble ? 2 : 1);
   return r * (1 + kitchenMult + staffIncomeMult() + gardenStockMult()) * weatherRateMult() * shoutRateMult();
 }
@@ -1949,9 +2022,11 @@ function pickWeighted(pool){
   for(const t of pool){ r -= t.weight; if(r <= 0) return t; }
   return pool[pool.length - 1];
 }
-function arriveGuest(){
+function arriveGuest(opts){
   if(S.guests.length >= S.rooms.count) return false;
-  const pool = guestPool();
+  let pool = guestPool();
+  /* 邀请商人（广告扩展批④）：opts.types 给定时只在该客群子集里抽，其余到访口径全同自然到访 */
+  if(opts && Array.isArray(opts.types)) pool = pool.filter(t => opts.types.indexOf(t.id) >= 0);
   if(!pool.length) return false;
   /* 抽客权重经 guestWeightToday（天气偏好客群当日权重抬升），pickWeighted 仍是唯一抽取口 */
   const t = pickWeighted(pool.map(x => Object.assign({}, x, { weight: guestWeightToday(x) })));
@@ -1959,8 +2034,16 @@ function arriveGuest(){
     type: t.id, label: t.label, name: randName(),
     priceMult: t.priceMult,
     stayLeft: randInt(CONFIG.stayMinTicks, CONFIG.stayMaxTicks),
-    wish: null
+    wish: null,
+    trialQ: 0
   };
+  /* 体验上房券（广告扩展批③）：券在有效日时，下一位入住即盖计价快照并耗券——品质只抬这一客的
+     计价（guestRoomPrice 读快照），不落永久品质档；券的日戳与今日不对齐即已过期、永不触发 */
+  if(S.trialDay && S.trialDay === dayStr()){
+    g.trialQ = Math.min(S.rooms.quality + CONFIG.adExtras.trialQualityAdd, CONFIG.maxQuality);
+    S.trialDay = '';
+    pushLog('这位客人用上了体验上房券，按「' + CONFIG.qualityNames[g.trialQ] + '」的价结账');
+  }
   /* 旅客心愿（P3-lite）：入住按概率挂心愿，带心愿至少住满 minStayTicks 程留遂愿时间 */
   if(Math.random() < CONFIG.wish.chance){
     const k = CONFIG.wish.kinds[randInt(0, CONFIG.wish.kinds.length - 1)];
@@ -1968,7 +2051,8 @@ function arriveGuest(){
     g.stayLeft = Math.max(g.stayLeft, CONFIG.wish.minStayTicks);
   }
   S.guests.push(g);
-  S.guestsSeen[t.id] = true;
+  /* 邀请来的客不点亮图鉴首遇（评估口径：防看广告刷图鉴），其余计数/结算与自然客无异 */
+  if(!(opts && opts.invited)) S.guestsSeen[t.id] = true;
   S.totalGuests++;
   S.dayStats.guests++;
   questBump('guests', 1);
@@ -2240,6 +2324,7 @@ function rollDayIfNeeded(){
   }
   S.ads = {};
   S.urgent = null;   /* 加急单跨日作废，新一日由 ensureUrgent 重新刷 */
+  S.urgent2 = null;   /* 广告再唤的第二张加急单同口径跨日作废（体验券按 trialDay 日戳比对、天然跨日失效，不在此清） */
   S.eventsToday = pickEventsForDay();
   S.eventsDone = 0;
   ensureQuests();   /* 日课随日界滚动：questsNext 转正＋生成新的明日预告 */
@@ -2274,6 +2359,10 @@ function tick(){
         pushLog('旅客 ' + g.name + ' 结账离店');
       }
     }
+  }
+  /* 邀请排队（广告扩展批④）：请客时满房落的队，有客退房腾出空房即迎进来 */
+  if(S.inviteQueue && S.guests.length < S.rooms.count){
+    if(inviteArrive()){ S.inviteQueue = false; changed = true; }
   }
   S.acc += incomeRate() * (CONFIG.tickMs / 60000);
   const whole = Math.floor(S.acc);
@@ -2605,8 +2694,11 @@ function plantCrop(i, cropId){
   const c = cropDef(cropId);
   if(!c || !S || !S.garden) return false;
   if(i < 0 || i >= S.garden.plots.length || S.garden.plots[i]){ showToast('这块田还没空出来'); return false; }
+  /* 稀有种：种子是唯一门票，种下消耗 1 颗（无种子点不动、函数内再兜底） */
+  if(c.rare && (S.garden.seeds || 0) < 1){ showToast('没有' + c.name + '种子，看广告得一颗再种'); return false; }
   const now = Date.now();
   S.garden.plots[i] = { crop: c.id, start: now, end: now + c.hours * 3600 * 1000 };
+  if(c.rare) S.garden.seeds--;
   pushLog('后院田里种下了' + c.name + '，约 ' + c.hours + ' 小时可收');
   save();
   renderGarden();
@@ -2667,6 +2759,12 @@ function shellVatask(){
      typeof window.ColorboxAI.vatask.completeRewardVideo === 'function') return window.ColorboxAI.vatask;
   return null;
 }
+/* 壳在场判定（横扫残项·vatask 缺失守卫）：window.ColorboxAI 存在＝身处平台壳内；
+   壳在而 vatask 缺失＝激励广告未配置/未生效，此时绝不许落非壳模拟分支发奖（那是假装成功），
+   必须诚实失败——走 onFail 清 PENDING＋话术明示无奖励，与技能「失败禁止补发」同口径 */
+function shellPresent(){
+  return typeof window !== 'undefined' && !!window.ColorboxAI;
+}
 let adInFlight = false;   /* 技能约束：同一页面同一时间只允许一个激励视频流程 */
 function showRewardAd(placement, onReward, onFail){
   const vt = shellVatask();
@@ -2695,6 +2793,11 @@ function showRewardAd(placement, onReward, onFail){
       if(!settle()) return;
       fail('广告拉起失败，请稍后再试');
     });
+  }else if(shellPresent()){
+    /* 壳在而 vatask 缺失：激励广告未配置——诚实失败，不模拟、不发奖（横扫残项守卫） */
+    if(onFail) onFail();
+    showToast('激励广告还没配置好，这次没有奖励');
+    return;
   }else{
     if(adInFlight) return;   /* AD-1：模拟分支同守并发口径，在途不起第二个流程 */
     adInFlight = true;
@@ -2707,6 +2810,26 @@ function adClearPending(p){
   if(S && p && S.adPending && S.adPending.token === p.token){ S.adPending = null; save(); }
 }
 function adsUsed(kind){ return Math.floor(+S.ads[kind] || 0); }
+/* 全店日广告总账（总闸唯一出处）：S.ads 各点位当日计数求和，含旧三点位（gift/instant/offlineDouble） */
+function adsTotalToday(){
+  if(!S || !S.ads) return 0;
+  let n = 0;
+  for(const k of Object.keys(S.ads)) n += Math.floor(+S.ads[k] || 0);
+  return n;
+}
+/* 广告入口统一闸（十一个点位共用）：先补清旧欠账（欠账优先、不受总闸拦——那是已看完的账）；
+   在途未定论不起新流程（AD-1）；当日总支数达 adsDailyCap 后新广告一律拦下、各点位日限另行自查 */
+function adEntryReady(){
+  if(S.adPending) recoverAdPending();
+  if(S.adPending){
+    /* 壳内且条目已陈旧＝对账已在后台触发，话术说清「正在核对」；其余仍是在途未定论 */
+    const stale = Date.now() - (S.adPending.at || 0) >= CONFIG.adRecon.graceMs;
+    showToast(stale && shellVatask() ? '上一支广告正在核对中，稍候再点一次' : '上一支广告还没定论，请稍候');
+    return false;
+  }
+  if(adsTotalToday() >= CONFIG.adsDailyCap){ showToast('今日广告已看满 ' + CONFIG.adsDailyCap + ' 支，明日再来'); return false; }
+  return true;
+}
 /* ---- PENDING 防丢（v1.3.1，P0 口径）----
    点广告那一刻先把欠账标记（点位＋快照＋全局唯一 token）落盘 save()，之后才调广告；
    正常回调与「回调丢失后重开补发」共用 adApply 落账出口：先清标记再落账，
@@ -2714,7 +2837,11 @@ function adsUsed(kind){ return Math.floor(+S.ads[kind] || 0); }
    新广告入口先 recoverAdPending() 补清旧欠账再放行。
    AD-1（2026-11-18 自检 P0）：recover 只补「无在途流程」的真欠账——adInFlight 为真时
    PENDING 是当前流程自己的标记，恢复一律拒绝、入口一律不起新流程不覆盖标记；
-   否则拉起等待期连点会把在途奖励当欠账即时发掉、还顺手释放守卫链式白嫖。 */
+   否则拉起等待期连点会把在途奖励当欠账即时发掉、还顺手释放守卫链式白嫖。
+   永不落定横扫（2026-11-18 晚，总台·宗门真壳实证）：真壳里 Promise 可能永不落定——
+   AD-1 守卫随之同会话恒真、旧 recover 永不触发、凭标记直发的跨会话补发又无任何平台证据。
+   现口径：壳内 recover 一律改道 reconcileAdPending 只认账本差量（见其注释），凭标记直发
+   只保留在无账本可查的非壳模拟通道；同会话靠回前台/获焦/再点触发对账自愈，不必整页重开。 */
 let adSeq = 0;
 function adBegin(placement, snap){
   const p = Object.assign({
@@ -2722,8 +2849,17 @@ function adBegin(placement, snap){
     token: Date.now() + '_' + placement + '_' + (++adSeq) + '_' + Math.floor(Math.random() * 1000000),
     at: Date.now(), day: dayStr()
   }, snap || {});
+  p.base = null; p.recon = 0; p.reconAt = 0;   /* 对账字段（永不落定横扫）：基线稍后异步盖入 */
   S.adPending = p;
   save();   /* 标记先落盘，回调丢失（杀进程/壳崩溃）也丢不了这笔账 */
+  /* 账本基线：拉起前查一次平台活动账本，把 availableChanceCount 盖进快照——日后 Promise 若
+     永不落定，reconcile 只认「当前次数 > 本基线」这一平台证据发放，绝不凭 PENDING 标记直发；
+     基线查询失败/非壳环境即留 null（reconcile 时以当前值补记基线、本次不结论） */
+  adStateCount().then(function(cnt){
+    if(cnt !== null && S && S.adPending && S.adPending.token === p.token && p.base === null){
+      p.base = cnt; S.adPending = p; save();
+    }
+  });
   return p;
 }
 function adApply(p, recovered){
@@ -2748,12 +2884,137 @@ function adApply(p, recovered){
       cc.end = Date.now();
       pushLog((recovered ? '上次广告奖励已补发：' : '') + '商队已提前归来，可领取报酬');
     }
+  }else if(p.placement === 'upgrade_discount'){
+    /* 广告抵扣升级：只认快照——价格与点广告时不一致（已升过/已满级/跨日恢复时状态已变）即整单
+       作废不买（广告照常计次：玩家确实看完了）；一致才以折后价走 ledger 扣款＋既有升级落点 */
+    S.ads.upgrade = adsUsed('upgrade') + 1;
+    const costNow = upgradeCost(p.kind);
+    if(costNow !== null && costNow === Math.floor(p.cost)){
+      const due = costNow - Math.floor(p.discount);
+      if(ledger('upgrade_ad', -due, 0, (recovered ? '上次广告奖励已补发：' : '') + UP_LABELS[p.kind] + '（广告抵 ' + Math.floor(p.discount) + ' 文），实付 ' + due + ' 铜钱')){
+        if(p.kind === 'room') S.rooms.count++;
+        else if(p.kind === 'quality') S.rooms.quality++;
+        else if(p.kind === 'kitchen') S.kitchenLv++;
+        else if(p.kind === 'stable') S.stableLv++;
+        questBump('upgrades', 1);
+      }
+    }
+  }else if(p.placement === 'rare_seed'){
+    S.ads.seed = adsUsed('seed') + 1;
+    S.garden.seeds = Math.min(CONFIG.adExtras.seedCap, (S.garden.seeds || 0) + 1);
+    pushLog((recovered ? '上次广告奖励已补发：' : '') + '得了一颗胭脂萝卜种子（库存 ' + S.garden.seeds + '/' + CONFIG.adExtras.seedCap + '），去菜园种下');
+  }else if(p.placement === 'room_trial'){
+    S.ads.trial = adsUsed('trial') + 1;
+    S.trialDay = dayStr();   /* 当日券：日戳即有效期，跨日自动作废 */
+    pushLog((recovered ? '上次广告奖励已补发：' : '') + '备好体验上房券：下一位入住的客人按高 ' + CONFIG.adExtras.trialQualityAdd + ' 档品质结账（今日内有效）');
+  }else if(p.placement === 'invite_guest'){
+    S.ads.invite = adsUsed('invite') + 1;
+    if(!inviteArrive()){
+      S.inviteQueue = true;   /* 满房排队：退房腾空即到（tick 迎客） */
+      pushLog((recovered ? '上次广告奖励已补发：' : '') + '小二已去请商贾，客房满了——有客退房就迎进来');
+    }
+  }else if(p.placement === 'garden_hasten'){
+    S.ads.hasten = adsUsed('hasten') + 1;
+    const pl = S.garden.plots[p.plot];
+    /* 只认快照那块田那一茬：田已收/已换茬则整单作废，不误催新茬 */
+    if(pl && pl.crop === p.crop && pl.start === Math.floor(p.start) && Date.now() < pl.end){
+      pl.end = Date.now();
+      pushLog((recovered ? '上次广告奖励已补发：' : '') + '田里的' + (cropDef(pl.crop) ? cropDef(pl.crop).name : '作物') + '催熟了，去菜园收吧');
+    }
+  }else if(p.placement === 'shout_reshout'){
+    /* 只重置冷却再走 shoutNow 唯一出口，不复制高峰逻辑；高峰中/喊失败不计次 */
+    S.shout.last = 0;
+    if(shoutNow()) S.ads.reshout = adsUsed('reshout') + 1;
+  }else if(p.placement === 'event_reroll'){
+    S.ads.reroll = adsUsed('reroll') + 1;
+    const ev = currentEvent();
+    /* 只换快照那张且仍未处理：已处理/已跨日/链卡一律不动（链卡在入口已禁、此处再兜底） */
+    if(ev && ev.id === p.evId && !chainDefOf(ev)){
+      const pool = eventPool().filter(e => !e.chain && S.eventsToday.indexOf(e.id) < 0);
+      if(pool.length){
+        const ne = pool[Math.floor(Math.random() * pool.length)];
+        S.eventsToday[S.eventsDone] = ne.id;
+        pushLog((recovered ? '上次广告奖励已补发：' : '') + '把抉择「' + ev.title + '」换成了「' + ne.title + '」');
+      }
+    }
+  }else if(p.placement === 'urgent_second'){
+    S.ads.urgent2 = adsUsed('urgent2') + 1;
+    if(packActive('commission') && !(S.urgent2 && S.urgent2.day === dayStr())){
+      const tiers = CONFIG.commissionTiers;
+      const t = tiers[Math.floor(Math.random() * tiers.length)];
+      S.urgent2 = { day: dayStr(), tierId: t.id, expiresAt: Date.now() + CONFIG.urgent.minutes * 60000, taken: false };
+      pushLog((recovered ? '上次广告奖励已补发：' : '') + '又唤来一张加急单，' + CONFIG.urgent.minutes + ' 分钟内接下、报酬翻倍');
+    }
   }
   save();
   return true;
 }
+/* 平台活动账本当前次数（availableChanceCount）：查不到/非 200/字段缺失一律 null＝无证据。
+   只在离散触发点单次调用（拉起盖基线、对账核查），严禁轮询（技能原文约束） */
+function adStateCount(){
+  const vt = shellVatask();
+  if(!vt || typeof vt.getActivityTaskState !== 'function') return Promise.resolve(null);
+  let q;
+  try{ q = vt.getActivityTaskState(); }catch(e){ return Promise.resolve(null); }
+  if(!q || typeof q.then !== 'function') return Promise.resolve(null);
+  return q.then(function(res){
+    if(res && res.code === 200 && res.data && typeof res.data.availableChanceCount === 'number' && isFinite(res.data.availableChanceCount)) return Math.floor(res.data.availableChanceCount);
+    return null;
+  }, function(){ return null; });
+}
+let adReconBusy = false;
+/* 永不落定对账（总台横扫修法，与 AD-1 的关系：只认账本差量、绝不凭标记直发）：
+   触发＝回前台/获焦/再点广告钮（经 adEntryReady→recoverAdPending 改道）/重进（boot→recoverAdPending）。
+   - 真在途（adInFlight 且未满 graceMs）：广告还在播，不查账、不结论，AD-1 口径原样；
+   - 查账失败（null）：无证据，不结论、不计数，条目保留；
+   - 无基线（base=null，基线查询曾失败或旧版欠账）：以当前次数补记基线，本次不结论；
+   - 次数 > 基线：原生已确认发放（Promise 只是回程丢了）→ 释放守卫后走 adApply 既有 settle
+     出口恰一次发放；迟到的原 Promise 此后再落定，其回调里的 adApply 会因 token 已清被拒，防双发；
+   - 次数没涨：计数核查（须已过 graceMs 且距上次计数 ≥ reconGapMs），满 maxChecks 次按未完整
+     观看清条目、不发奖、释放守卫——同会话不再永久堵死。 */
+function reconcileAdPending(){
+  if(!S || !S.adPending || adReconBusy) return Promise.resolve(false);
+  const vt = shellVatask();
+  if(!vt || typeof vt.getActivityTaskState !== 'function') return Promise.resolve(false);
+  const p = S.adPending;
+  if(adInFlight && Date.now() - (p.at || 0) < CONFIG.adRecon.graceMs) return Promise.resolve(false);
+  adReconBusy = true;
+  return adStateCount().then(function(cnt){
+    adReconBusy = false;
+    if(!S || !S.adPending || S.adPending.token !== p.token) return false;   /* 期间迟到 Promise 已先定论 */
+    if(cnt === null) return false;
+    if(p.base === null || p.base === undefined){ p.base = cnt; save(); return false; }
+    if(cnt > p.base){
+      adInFlight = false;
+      if(!adApply(p, true)) return false;
+      renderOffline(); renderAdsBox(); renderCommissions(); renderToday(); updateDynamic(); renderLog();
+      showToast('上次广告奖励已补发');
+      return true;
+    }
+    const now = Date.now();
+    if(now - (p.at || 0) >= CONFIG.adRecon.graceMs && now - (p.reconAt || 0) >= CONFIG.adRecon.reconGapMs){
+      p.recon = (p.recon || 0) + 1; p.reconAt = now;
+      if(p.recon >= CONFIG.adRecon.maxChecks){
+        S.adPending = null; adInFlight = false; save();
+        renderOffline(); renderAdsBox(); renderCommissions(); renderToday(); updateDynamic(); renderLog();
+        showToast('上次广告没查到到账记录，这次没有奖励');
+        return true;
+      }
+      save();
+    }
+    return false;
+  }, function(){ adReconBusy = false; return false; });
+}
 function recoverAdPending(){
   if(!S || !S.adPending) return false;
+  if(shellVatask()){
+    /* 壳内（有账本可查）：一律改道对账——只认账本差量，不再凭 PENDING 标记无条件直发；
+       对账异步进行，本次调用先返回未解决，入口按条目仍在拦下、玩家下一次点击即放行 */
+    void reconcileAdPending();
+    return false;
+  }
+  /* 非壳（试玩/网页模拟通道，无平台账本可查）：沿用标记补发旧口径——模拟 Promise 恒会落定，
+     此处只兜底进程被杀/重载丢回调的欠账；AD-1 在途守卫不变 */
   if(adInFlight) return false;   /* AD-1：有激励流程在途时，PENDING 是它自己的标记、不是欠账——拉起等待期连点绝不许当欠账补发（曾可零观看链式领满当日额度） */
   if(!adApply(S.adPending, true)) return false;
   adInFlight = false;   /* 欠账已被消费＝旧流程就此定论，释放并发守卫放行新流程（欠账优先口径） */
@@ -2763,8 +3024,7 @@ function recoverAdPending(){
 }
 function claimOfflineDouble(){
   if(!S || S.offlinePending < 1) return;
-  if(S.adPending) recoverAdPending();
-  if(S.adPending){ showToast('上一支广告还没定论，请稍候'); return; }   /* AD-1：在途未定论不起新流程、不覆盖在途标记 */
+  if(!adEntryReady()) return;   /* 统一闸：欠账优先补清＋AD-1 在途守卫＋日总闸 */
   if(S.ads.offlineDouble) { showToast('本次离线收益已翻倍过'); return; }
   if(S.offlinePending < 1) return;
   const p = adBegin('offline_double', { amt: Math.floor(S.offlinePending) });
@@ -2777,8 +3037,7 @@ function claimOfflineDouble(){
   }, function(){ adClearPending(p); });
 }
 function claimDailyGift(){
-  if(S.adPending) recoverAdPending();
-  if(S.adPending){ showToast('上一支广告还没定论，请稍候'); return false; }   /* AD-1：在途未定论不起新流程、不覆盖在途标记 */
+  if(!adEntryReady()) return false;   /* 统一闸：欠账优先补清＋AD-1 在途守卫＋日总闸 */
   const lim = giftLimitToday(), amt = giftRewardToday();
   if(adsUsed('gift') >= lim){ showToast('今日礼包已领满（' + lim + ' 次）'); return false; }
   const p = adBegin('daily_gift', { n: adsUsed('gift') + 1, amt: amt });
@@ -2791,8 +3050,7 @@ function claimDailyGift(){
   return true;
 }
 function instantCommission(id){
-  if(S.adPending) recoverAdPending();
-  if(S.adPending){ showToast('上一支广告还没定论，请稍候'); return false; }   /* AD-1：在途未定论不起新流程、不覆盖在途标记 */
+  if(!adEntryReady()) return false;   /* 统一闸：欠账优先补清＋AD-1 在途守卫＋日总闸 */
   const c = S.commissions.find(x => x.id === id);
   if(!c || c.claimed) return false;
   if(commissionReady(c)){ showToast('商队已归来，可直接领取报酬'); return false; }
@@ -2804,6 +3062,183 @@ function instantCommission(id){
       showToast('商队已提前归来，可领取报酬');
     }
   }, function(){ adClearPending(p); });
+  return true;
+}
+
+/* ================= 广告扩展批新点位入口（v1.4.3） =================
+   八入口同一式样：自查本点位条件 → adEntryReady 统一闸（欠账/在途/总闸） → adBegin 快照落盘
+   → showRewardAd 正链 → adApply 唯一落账口；明确失败走 adClearPending 清标记、不补发。
+   入口全部就地挂在功能本体旁，不进今日清单、不加红点。 */
+/* 升级抵扣额唯一出处：incomeRate()×upgradeMinutes 分钟当量、单次封顶当档价 upgradeCapRatio */
+function upgradeDiscount(kind){
+  const cost = upgradeCost(kind);
+  if(cost === null) return null;
+  const discount = Math.min(Math.floor(incomeRate() * CONFIG.adExtras.upgradeMinutes), Math.floor(cost * CONFIG.adExtras.upgradeCapRatio));
+  return { cost: cost, discount: discount };
+}
+function buyUpgradeAd(kind){
+  if(!S || !S.name) return false;
+  const dc = upgradeDiscount(kind);
+  if(!dc){ showToast('已至上限（或等级未到）'); return false; }
+  if(dc.discount < 1){ showToast('眼下进账太慢，广告抵扣还攒不出额度，先多接几位客'); return false; }
+  if(S.coins < dc.cost - dc.discount){ showToast('抵扣后还差 ' + (dc.cost - dc.discount - S.coins) + ' 文，铜钱不够'); return false; }
+  if(adsUsed('upgrade') >= CONFIG.adsLimit.upgrade){ showToast('今日广告抵扣已用满（' + CONFIG.adsLimit.upgrade + ' 次）'); return false; }
+  if(!adEntryReady()) return false;
+  const lvBefore = [S.rooms.count, S.rooms.quality, S.kitchenLv, S.stableLv].join('/');
+  const p = adBegin('upgrade_discount', { kind: kind, cost: dc.cost, discount: dc.discount });
+  showRewardAd('upgrade_discount', function(){
+    if(adApply(p, false)){
+      renderUpgrades(); renderRooms(); renderMilestones(); updateDynamic(); renderLog();
+      const lvAfter = [S.rooms.count, S.rooms.quality, S.kitchenLv, S.stableLv].join('/');
+      showToast(lvAfter !== lvBefore ? UP_LABELS[kind] + '完成（广告抵 ' + dc.discount + ' 文）' : '抵扣未生效（价格已变动或铜钱不足），次数已计');
+      if(lvAfter !== lvBefore) sfxPlay('upgrade');
+    }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+function adGetSeed(){
+  if(!S || !S.garden) return false;
+  if((S.garden.seeds || 0) >= CONFIG.adExtras.seedCap){ showToast('胭脂萝卜种子满仓了（' + CONFIG.adExtras.seedCap + ' 颗），先种下几颗'); return false; }
+  if(adsUsed('seed') >= CONFIG.adsLimit.seed){ showToast('今日种子已领过，明日再来'); return false; }
+  if(!adEntryReady()) return false;
+  const p = adBegin('rare_seed', {});
+  showRewardAd('rare_seed', function(){
+    if(adApply(p, false)){
+      gardenSig = ''; renderGarden(); renderLog();
+      showToast('胭脂萝卜种子 +1（库存 ' + S.garden.seeds + '），挑块空田种下');
+    }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+function adRoomTrial(){
+  if(!S || !S.name) return false;
+  if(S.trialDay === dayStr()){ showToast('体验上房券已备好，等下一位客人入住'); return false; }
+  if(S.rooms.quality >= CONFIG.maxQuality){ showToast('已是天字号上房，没得再体验了'); return false; }
+  if(adsUsed('trial') >= CONFIG.adsLimit.trial){ showToast('今日体验券已领过，明日再来'); return false; }
+  if(!adEntryReady()) return false;
+  const p = adBegin('room_trial', {});
+  showRewardAd('room_trial', function(){
+    if(adApply(p, false)){
+      renderWelcome(); renderLog();
+      showToast('体验券备好了：下一位客人按「' + CONFIG.qualityNames[Math.min(S.rooms.quality + CONFIG.adExtras.trialQualityAdd, CONFIG.maxQuality)] + '」结账');
+    }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+/* 邀请商人唯一落点：限定客群子集走 arriveGuest 既有到访口（权重/心愿/结算全同自然客） */
+function inviteArrive(){
+  return arriveGuest({ types: CONFIG.adExtras.inviteTypes, invited: true });
+}
+function adInviteMerchant(){
+  if(!S || !S.name) return false;
+  if(S.inviteQueue){ showToast('请的商贾已在路上，客房一空出来就到'); return false; }
+  if(!guestPool().some(t => CONFIG.adExtras.inviteTypes.indexOf(t.id) >= 0)){
+    showToast('驿站声望还低，商贾暂时请不动（升到 2 级再试）'); return false;
+  }
+  if(adsUsed('invite') >= CONFIG.adsLimit.invite){ showToast('今日已请过客了，明日再来'); return false; }
+  if(!adEntryReady()) return false;
+  const p = adBegin('invite_guest', {});
+  showRewardAd('invite_guest', function(){
+    if(adApply(p, false)){
+      renderRooms(); renderWelcome(); updateDynamic(); renderLog();
+      showToast(S.inviteQueue ? '客房正满，商贾在门外排队，退房就进' : '商贾已经进店入住了');
+    }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+function adHastenPlot(i){
+  if(!S || !S.garden) return false;
+  const pl = S.garden.plots[i];
+  if(!pl){ showToast('这块田空着呢'); return false; }
+  const now = Date.now();
+  if(now >= pl.end){ showToast('已经熟了，直接收吧'); return false; }
+  if((now - pl.start) < (pl.end - pl.start) * CONFIG.adExtras.hastenMinRatio){
+    showToast('才长了一小半，催熟太浪费，等长过半再来'); return false;
+  }
+  if(adsUsed('hasten') >= CONFIG.adsLimit.hasten){ showToast('今日催熟已用满（' + CONFIG.adsLimit.hasten + ' 次）'); return false; }
+  if(!adEntryReady()) return false;
+  const p = adBegin('garden_hasten', { plot: i, crop: pl.crop, start: pl.start });
+  showRewardAd('garden_hasten', function(){
+    if(adApply(p, false)){
+      gardenSig = ''; renderGarden(); renderLog();
+      showToast('催熟了！去菜园把这块田收了');
+    }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+function adReshout(){
+  if(!S || !S.name) return false;
+  if(shoutActive()){ showToast('客流高峰还没散，不用再喊'); return false; }
+  if(Date.now() - (S.shout.last || 0) >= CONFIG.shout.cooldownMin * 60000){
+    showToast('嗓子已经好了，直接点「吆喝一嗓子」就行'); return false;
+  }
+  if(adsUsed('reshout') >= CONFIG.adsLimit.reshout){ showToast('今日广告再喊已用满（' + CONFIG.adsLimit.reshout + ' 次）'); return false; }
+  if(!adEntryReady()) return false;
+  const p = adBegin('shout_reshout', {});
+  showRewardAd('shout_reshout', function(){
+    if(adApply(p, false)){ shoutSig = ''; renderShout(); updateDynamic(); renderLog(); }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+function adRerollEvent(){
+  if(!S || !S.name) return false;
+  const ev = currentEvent();
+  if(!ev){ showToast('今日抉择已处理完'); return false; }
+  if(chainDefOf(ev)){ showToast('连环故事的抉择换不了，得接着演'); return false; }
+  if(!eventPool().some(e => !e.chain && S.eventsToday.indexOf(e.id) < 0)){
+    showToast('今天没有别的抉择可换了'); return false;
+  }
+  if(adsUsed('reroll') >= CONFIG.adsLimit.reroll){ showToast('今日换卡已用过，明日再来'); return false; }
+  if(!adEntryReady()) return false;
+  const p = adBegin('event_reroll', { evId: ev.id });
+  showRewardAd('event_reroll', function(){
+    if(adApply(p, false)){
+      renderEvents(); renderLog();
+      showToast('换了一张新抉择');
+    }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+function adUrgentSecond(){
+  if(!S || !S.name) return false;
+  if(!packActive('commission')){ showToast('商队委托将于 2026-11-19 开放'); return false; }
+  if(!(S.urgent && S.urgent.day === dayStr() && S.urgent.taken)){
+    showToast('先把今日第一张加急单接下，再唤第二张'); return false;
+  }
+  if(S.urgent2 && S.urgent2.day === dayStr() && !S.urgent2.taken && Date.now() < S.urgent2.expiresAt){
+    showToast('第二张加急单已在桌上，先接它'); return false;
+  }
+  if(adsUsed('urgent2') >= CONFIG.adsLimit.urgent2){ showToast('今日第二张加急单已唤过，明日再来'); return false; }
+  if(!adEntryReady()) return false;
+  const p = adBegin('urgent_second', {});
+  showRewardAd('urgent_second', function(){
+    if(adApply(p, false)){
+      renderCommissions(); renderLog();
+      showToast('第二张加急单到了，' + CONFIG.urgent.minutes + ' 分钟内接下');
+    }
+  }, function(){ adClearPending(p); });
+  return true;
+}
+/* 接第二张加急单：与 startUrgent 同构，操作 urgent2 槽、实例同走委托状态机与 commissionPayout 出口 */
+function startUrgent2(){
+  const u = (S.urgent2 && S.urgent2.day === dayStr() && !S.urgent2.taken && Date.now() < S.urgent2.expiresAt) ? S.urgent2 : null;
+  if(!u){ showToast('第二张加急单已过期或已接下'); return false; }
+  if(activeCommissionCount() >= CONFIG.commissionMaxActive){ showToast('同时进行的委托已满'); return false; }
+  const tier = tierDef(u.tierId);
+  if(!tier) return false;
+  u.taken = true;
+  const now = Date.now();
+  S.commissions.push({
+    id: 'cm' + now + '_' + Math.floor(Math.random() * 100000),
+    tierId: tier.id, hours: tier.hours,
+    start: now, end: now + tier.hours * 3600 * 1000,
+    claimed: false, urgent: true
+  });
+  pushLog('接下第二张加急单（' + tier.hours + ' 小时商队，报酬翻倍）');
+  save();
+  renderCommissions();
+  renderLog();
+  showToast('第二张加急单已接下，归来报酬翻倍');
   return true;
 }
 
@@ -3014,7 +3449,7 @@ function refreshOnSwitch(){
   updateDynamic();
   renderMorning(); renderQuests(); renderEvents(); renderCommissions();
   renderMilestones(); renderCodex(); renderStaff(); renderUpgrades(); renderAdsBox();
-  renderIntroCard();
+  renderIntroCard(); renderWelcome();
 }
 function switchTab(tab){
   uiScroll[scrollKey(uiTab)] = window.scrollY || 0;
@@ -3098,7 +3533,8 @@ function renderMain(){
       '</div>' +
       '<div id="sub-build-fac">' +
         '<div class="card" id="roomsCard"><h3>客 房</h3><div class="rooms" id="roomsGrid"></div>' +
-          '<div class="rate-line">当前房价 <b id="priceVal">0</b> 文/间 · 在住进账约 <b id="rateVal">0</b> 铜钱/分钟（含厨房与伙计加成）</div></div>' +
+          '<div class="rate-line">当前房价 <b id="priceVal">0</b> 文/间 · 在住进账约 <b id="rateVal">0</b> 铜钱/分钟（含厨房与伙计加成）</div>' +
+          '<div id="welcomeBox"></div></div>' +
         '<div class="card" id="upgradesCard"><h3>修 缮 与 设 施</h3><div id="upgradesBox"></div></div>' +
       '</div>' +
       '<div id="sub-build-staff" style="display:none">' +
@@ -3174,7 +3610,7 @@ function renderMain(){
   document.getElementById('innNameView').textContent = S.name;
   document.body.classList.add('has-tabbar');
   todaySig = ''; offlineSig = ''; questSig = '';
-  renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderEvents(); renderUpgrades();
+  renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderWelcome(); renderEvents(); renderUpgrades();
   renderShout(); renderDish(); renderGarden();
   renderStaff(); renderCommissions(); renderMilestones(); renderCodex();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
@@ -3559,6 +3995,35 @@ function renderQuests(){
       : '<span class="quest-todo">已领 ' + S.quests.claimed.length + '/' + S.quests.ids.length + '</span>') + '</div>';
   box.innerHTML = html;
 }
+/* 客房区迎客行（广告扩展批③④）：体验上房券与请商贾两个就地入口，签名守卫防 tick 重绘吞点击 */
+let welcomeSig = '';
+function renderWelcome(){
+  const box = document.getElementById('welcomeBox');
+  if(!box || !S) return;
+  const trialOn = S.trialDay === dayStr();
+  const canInvite = guestPool().some(t => CONFIG.adExtras.inviteTypes.indexOf(t.id) >= 0);
+  const sig = [trialOn ? 1 : 0, S.inviteQueue ? 1 : 0, canInvite ? 1 : 0, S.rooms.quality,
+    adsUsed('trial'), adsUsed('invite')].join('|');
+  if(sig === welcomeSig) return;
+  welcomeSig = sig;
+  let html = '';
+  if(trialOn){
+    html += '<div class="small-note">体验上房券已备好：下一位入住的客人按「' +
+      CONFIG.qualityNames[Math.min(S.rooms.quality + CONFIG.adExtras.trialQualityAdd, CONFIG.maxQuality)] + '」品质结账（今日内有效）。</div>';
+  }else if(S.rooms.quality < CONFIG.maxQuality){
+    html += '<div class="btnrow"><button class="small" onclick="adRoomTrial()"' +
+      (adsUsed('trial') >= CONFIG.adsLimit.trial ? ' disabled' : '') +
+      '>看广告 · 体验上房（下一客按高 ' + CONFIG.adExtras.trialQualityAdd + ' 档结账 · 今日 ' + adsUsed('trial') + '/' + CONFIG.adsLimit.trial + '）</button></div>';
+  }
+  if(S.inviteQueue){
+    html += '<div class="small-note">请的商贾已在路上：客房一空出来就迎进来。</div>';
+  }else if(canInvite){
+    html += '<div class="btnrow"><button class="small" onclick="adInviteMerchant()"' +
+      (adsUsed('invite') >= CONFIG.adsLimit.invite ? ' disabled' : '') +
+      '>看广告 · 派小二请一位商贾上门（今日 ' + adsUsed('invite') + '/' + CONFIG.adsLimit.invite + '）</button></div>';
+  }
+  box.innerHTML = html;
+}
 function renderRooms(){
   const grid = document.getElementById('roomsGrid');
   if(!grid) return;
@@ -3570,6 +4035,7 @@ function renderRooms(){
         '<div class="gname">' + esc(g.name) + '</div>' +
         '<div class="gtype">' + esc(g.label) + '</div>' +
         '<div class="gstay">余 ' + Math.max(1, g.stayLeft) + ' 程</div>' +
+        (g.trialQ ? '<div class="gline">体验上房 · 按「' + esc(CONFIG.qualityNames[g.trialQ] || '') + '」结账</div>' : '') +
         (guestLineByType(g.type, g.name) ? '<div class="gline">「' + esc(guestLineByType(g.type, g.name)) + '」</div>' : '') +
         (g.wish ? (function(){ const k = wishKindDef(g.wish.kind), chk = wishCheck(g), rw = wishReward(g);
           return '<div class="gwish">心愿：' + esc(k ? k.text : '') + '<br>' +
@@ -3621,16 +4087,25 @@ function renderEvents(){
     (chn ? ' <span class="claim-chip">连环故事 · 第 ' + chainActNo(ev) + '/' + chn.acts.length + ' 幕</span>' : '') + '</div>' +
     '<div class="d">' + esc(ev.text) + (ev.pool === 'banquet' ? '（宴会厅事件）' : '') + '</div></div></div>' +
     '<div class="btnrow">' + ev.choices.map((c, i) =>
-      '<button class="small"' + (choiceAffordable(c) ? '' : ' disabled') + ' onclick="doEventChoice(' + i + ')">' + esc(c.label) + '</button>').join('') + '</div>';
+      '<button class="small"' + (choiceAffordable(c) ? '' : ' disabled') + ' onclick="doEventChoice(' + i + ')">' + esc(c.label) + '</button>').join('') + '</div>' +
+    /* 抉择重抽（扩展批⑦）：链卡不露此钮（护 chainProg 进度），换来的也只许是非链卡 */
+    ((chn || adsUsed('reroll') >= CONFIG.adsLimit.reroll) ? ''
+      : '<div class="btnrow"><button class="small ghost" onclick="adRerollEvent()">看广告换一张（今日 ' + adsUsed('reroll') + '/' + CONFIG.adsLimit.reroll + '）</button></div>');
 }
 function upCardHtml(kind, title, desc, btnId, imgKey){
   const cost = upgradeCost(kind);
+  const dc = (cost !== null) ? upgradeDiscount(kind) : null;
   return '<div class="up-card">' +
     ((imgKey && IMG[imgKey]) ? '<img class="up-thumb" src="' + IMG[imgKey] + '" alt="">' : '') +
     '<div class="t">' + title + '</div>' +
     '<div class="d">' + desc + '</div>' +
     (cost === null ? '<button disabled>已满/未解锁</button>'
-      : '<button id="' + btnId + '" onclick="buyUpgrade(\'' + kind + '\')">' + cost + ' 文</button>') + '</div>';
+      : '<button id="' + btnId + '" onclick="buyUpgrade(\'' + kind + '\')">' + cost + ' 文</button>') +
+    /* 广告抵扣（替代支付）：铜钱全价钮恒在，抵扣钮只是第二种付款方式；额度/实付全明示 */
+    ((dc && dc.discount >= 1 && adsUsed('upgrade') < CONFIG.adsLimit.upgrade)
+      ? '<button class="small ghost" onclick="buyUpgradeAd(\'' + kind + '\')"' +
+        (S.coins < dc.cost - dc.discount ? ' disabled' : '') +
+        '>看广告抵 ' + dc.discount + ' 文（实付 ' + (dc.cost - dc.discount) + '）</button>' : '') + '</div>';
 }
 function renderUpgrades(){
   const box = document.getElementById('upgradesBox');
@@ -3666,7 +4141,7 @@ function renderShout(){
   const cdLeft = Math.max(0, CONFIG.shout.cooldownMin * 60000 - (now - (S.shout.last || 0)));
   const picks = (S.shout && Array.isArray(S.shout.combo)) ? S.shout.combo.join(',') : '';
   const sig = [active ? Math.ceil((S.shout.until - now) / 1000) : 0, Math.ceil(cdLeft / 1000), S.shout.last,
-    picks, comboOn ? Math.ceil((S.shout.comboUntil - now) / 1000) : 0].join('|');
+    picks, comboOn ? Math.ceil((S.shout.comboUntil - now) / 1000) : 0, adsUsed('reshout')].join('|');
   if(sig === shoutSig) return;
   shoutSig = sig;
   let html = '<div class="small-note">在门口吆喝一嗓子，接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰：客人来得勤、在住进账 +' + Math.round(CONFIG.shout.rateAdd * 100) + '%；每 ' + CONFIG.shout.cooldownMin + ' 分钟能喊一次。</div>';
@@ -3686,7 +4161,10 @@ function renderShout(){
   });
   if(comboOn) html += '<div class="small-note">口号生效中 · 余 ' + fmtLeft(S.shout.comboUntil - now) + '，' + shoutComboGroupNames().join('、') + '来得格外多。</div>';
   if(active) html += '<div class="btnrow"><button class="small" disabled>客流高峰中 · 余 ' + fmtLeft(S.shout.until - now) + '</button></div>';
-  else if(cdLeft > 0) html += '<div class="btnrow"><button class="small" disabled>嗓子还哑着 · ' + fmtLeft(cdLeft) + ' 后可再喊</button></div>';
+  else if(cdLeft > 0) html += '<div class="btnrow"><button class="small" disabled>嗓子还哑着 · ' + fmtLeft(cdLeft) + ' 后可再喊</button>' +
+    /* 广告再喊（扩展批⑥）：只在冷却中露，免费恢复照旧、广告买的是一次立即重喊 */
+    (adsUsed('reshout') < CONFIG.adsLimit.reshout
+      ? '<button class="small" onclick="adReshout()">看广告再喊一嗓子（今日 ' + adsUsed('reshout') + '/' + CONFIG.adsLimit.reshout + '）</button>' : '') + '</div>';
   else html += '<div class="btnrow"><button class="small accent" onclick="shoutNow()">吆喝一嗓子</button></div>';
   box.innerHTML = html;
 }
@@ -3730,20 +4208,31 @@ function renderGarden(){
   const box = document.getElementById('gardenBox');
   if(!box || !S || !S.garden) return;
   const now = Date.now();
-  const sig = [S.garden.stock, S.garden.plots.map(p => p ? p.crop + ':' + (now >= p.end ? 'R' : Math.ceil((p.end - now) / 60000)) : '-').join(',')].join('|');
+  const sig = [S.garden.stock, S.garden.seeds || 0, adsUsed('seed'), adsUsed('hasten'), S.garden.plots.map(p => p ? p.crop + ':' + (now >= p.end ? 'R' : Math.ceil((p.end - now) / 60000)) : '-').join(',')].join('|');
   if(sig === gardenSig) return;
   gardenSig = sig;
   let html = gardenSceneHtml() + '<div class="small-note">食材存量 <b>' + S.garden.stock + '</b> 份：后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；存量每份给总收入 +' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '%（当前 +' + Math.round(gardenStockMult() * 100) + '%，上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%）。睡前种上长时的，明早回来正好收。</div>';
+  /* 稀有种得种行（广告扩展批②）：种子只此一源——看广告得，库存/今日次数全明示，满仓收起 */
+  html += '<div class="btnrow">' + ((S.garden.seeds || 0) >= CONFIG.adExtras.seedCap
+    ? '<span class="small-note">胭脂萝卜种子满仓（' + CONFIG.adExtras.seedCap + ' 颗），先种下几颗再来领。</span>'
+    : '<button class="small" onclick="adGetSeed()"' + (adsUsed('seed') >= CONFIG.adsLimit.seed ? ' disabled' : '') +
+      '>看广告得胭脂萝卜种子（库存 ' + (S.garden.seeds || 0) + '/' + CONFIG.adExtras.seedCap + ' · 今日 ' + adsUsed('seed') + '/' + CONFIG.adsLimit.seed + '）</button>') + '</div>';
   html += '<div class="cardgrid">' + S.garden.plots.map((p, i) => {
     if(!p) return '<div class="up-card"><div class="t">田 ' + (i + 1) + ' · 空着</div><div class="d">挑一样种下（种下离线也照长）：</div>' +
-      CONFIG.crops.map(c => '<button class="small crop-btn" onclick="plantCrop(' + i + ', \'' + c.id + '\')">' + cropImgHtml(c) + '<span>' + esc(c.name) + ' · ' + c.hours + ' 小时收 ' + c.yield + ' 份</span></button>').join('') + '</div>';
+      CONFIG.crops.map(c => c.rare
+        ? '<button class="small crop-btn" onclick="plantCrop(' + i + ', \'' + c.id + '\')"' + ((S.garden.seeds || 0) < 1 ? ' disabled' : '') + '>' + cropImgHtml(c) + '<span>' + esc(c.name) + ' · ' + c.hours + ' 小时收 ' + c.yield + ' 份（种子 ×' + (S.garden.seeds || 0) + '）</span></button>'
+        : '<button class="small crop-btn" onclick="plantCrop(' + i + ', \'' + c.id + '\')">' + cropImgHtml(c) + '<span>' + esc(c.name) + ' · ' + c.hours + ' 小时收 ' + c.yield + ' 份</span></button>').join('') + '</div>';
     const c = cropDef(p.crop);
     const ready = now >= p.end;
     const pct = ready ? 100 : Math.max(0, Math.min(100, Math.floor((now - p.start) / Math.max(1, p.end - p.start) * 100)));
     return '<div class="up-card"><div class="crop-line">' + (c ? cropImgHtml(c) : '') + '<div class="t grow">田 ' + (i + 1) + ' · ' + esc(c ? c.name : '作物') + '</div></div>' +
       '<div class="plot-bar"><i style="width:' + pct + '%"></i></div>' +
       '<div class="d">' + (ready ? '熟了！收下得 ' + (c ? c.yield : 0) + ' 份食材' : '长着呢，余 ' + fmtLeft(p.end - now)) + '</div>' +
-      (ready ? '<button class="small accent" onclick="harvestPlot(' + i + ')">收获</button>' : '<button disabled>未熟</button>') + '</div>';
+      (ready ? '<button class="small accent" onclick="harvestPlot(' + i + ')">收获</button>'
+        : '<button disabled>未熟</button>' +
+          /* 催熟钮（广告扩展批⑤）：长过半才露，救急不印钞——产量不变、换的只是时间 */
+          (((now - p.start) >= (p.end - p.start) * CONFIG.adExtras.hastenMinRatio && adsUsed('hasten') < CONFIG.adsLimit.hasten)
+            ? '<button class="small" onclick="adHastenPlot(' + i + ')">看广告催熟</button>' : '')) + '</div>';
   }).join('') + '</div>';
   box.innerHTML = html;
 }
@@ -3804,6 +4293,21 @@ function renderCommissions(){
     html += '<div class="small-note">今日加急单已接下（在下方委托里，报酬翻倍）。</div>';
   }else if(uo){
     html += '<div class="small-note">今日加急单已过期作废，明日再来。</div>';
+  }
+  /* 第二张加急单（广告扩展批⑧）：第一张接下后才许看广告再唤，唤出的单与第一张同形态同结算 */
+  const u2 = (S.urgent2 && S.urgent2.day === dayStr()) ? S.urgent2 : null;
+  if(u2 && !u2.taken && Date.now() < u2.expiresAt){
+    const u2t = tierDef(u2.tierId);
+    const u2rw = u2t ? commissionReward(u2t) : { coins: 0, fame: 0 };
+    html += '<div class="up-row"><div class="info"><div class="t">加 急 单 · 第 二 张 · ' + (u2t ? u2t.hours : '') + ' 小时商队</div>' +
+      '<div class="d">报酬翻倍 ' + (u2rw.coins * CONFIG.urgent.mult) + ' 铜钱 / 声望 ' + u2rw.fame + ' · 接单倒计时 <span class="cm-left" data-end="' + u2.expiresAt + '">' + fmtLeft(u2.expiresAt - Date.now()) + '</span></div></div>' +
+      '<button class="small" onclick="startUrgent2()">接单</button></div>';
+  }else if(u2 && u2.taken){
+    html += '<div class="small-note">今日第二张加急单已接下（在下方委托里，报酬翻倍）。</div>';
+  }else if(u2){
+    html += '<div class="small-note">今日第二张加急单已过期作废，明日再来。</div>';
+  }else if(uo && uo.taken && adsUsed('urgent2') < CONFIG.adsLimit.urgent2){
+    html += '<div class="btnrow"><button class="small" onclick="adUrgentSecond()">看广告再唤一张加急单（报酬翻倍）</button></div>';
   }
   if(S.entrust) html += '<div class="small-note">离线托付在途（本金 ' + S.entrust.amt + ' 铜钱），占用一个委托在途位。</div>';
   if(!S.commissions.length) html += '<div class="empty-note" style="margin-top:8px;">' + emptyImgHtml('caravan') + '<span>暂无进行中的委托，挑一支商队派出去走一趟。</span></div>';
@@ -3890,7 +4394,8 @@ function renderAdsBox(){
   const box = document.getElementById('adsBox');
   if(!box) return;
   box.innerHTML = headImgHtml('gift') + '<div class="small-note">看广告领取铜钱礼包，今日已领 ' + adsUsed('gift') + '/' + giftLimitToday() + ' 次，每次 +' + giftRewardToday() + ' 铜钱。' +
-    (calMod().giftTimes ? '（周末市集：今日礼包加量）' : '') + '</div>' +
+    (calMod().giftTimes ? '（周末市集：今日礼包加量）' : '') +
+    '全店今日已看广告 ' + adsTotalToday() + '/' + CONFIG.adsDailyCap + ' 支（总闸，各点位另有各自日限）。</div>' +
     '<div class="btnrow"><button class="small accent" onclick="claimDailyGift()"' + (adsUsed('gift') >= giftLimitToday() ? ' disabled' : '') + '>领取每日礼包</button></div>';
 }
 function renderSettings(){
@@ -3959,7 +4464,7 @@ function renderSaveBox(){
     '<div class="btnrow"><button class="small ghost" id="delBtn" onclick="uiDelete()">删档重开（两步确认）</button></div>';
   box.innerHTML = html;
 }
-function uiSaveSlot(i){ if(saveSlot(i)){ renderSaveBox(); showToast('已存入档位 ' + i); } }
+function uiSaveSlot(i){ if(saveSlot(i)){ renderSaveBox(); showToast('已存入档位 ' + i); } else showToast('存入档位 ' + i + ' 失败：本机存储不可用，进度未写入'); }
 function uiLoadSlot(i){
   if(loadSlot(i)){ if(tickTimer){} startApp(); showToast('已读取档位 ' + i); }
   else showToast('该档位为空');
@@ -3972,7 +4477,7 @@ function uiExport(){
 }
 function uiImport(){
   const ta = document.getElementById('codeArea');
-  if(importCode(ta.value)){ startApp(); showToast('导入成功（原档已自动备份）'); }
+  if(importCode(ta.value)){ startApp(); showToast(lastImportBackupOk ? '导入成功（原档已自动备份）' : '导入成功，但原档备份未成功，恢复点为更早的备份'); }
   else showToast('长码无效，导入失败');
 }
 async function uiCloudExport(btn){
@@ -3992,7 +4497,7 @@ async function uiCloudImport(btn){
   const inp = document.getElementById('cloudCodeIn');
   if(btn) btn.disabled = true;
   const r = await cloudImport(inp ? inp.value : '');
-  if(r.ok){ startApp(); showToast('云端存档已取回（原档已自动备份）'); }
+  if(r.ok){ startApp(); showToast(lastImportBackupOk ? '云端存档已取回（原档已自动备份）' : '云端存档已取回，但原档备份未成功，恢复点为更早的备份'); }
   else showToast(r.msg);
   if(btn && document.getElementById('cloudCodeIn')) btn.disabled = false;
 }
@@ -4045,6 +4550,7 @@ function updateDynamic(){
   renderShout();
   renderDish();
   renderGarden();
+  renderWelcome();
   updateTabDots();
   /* 事件选项置灰随铜钱实时对齐：可负担签名变化才重绘事件卡（买得起的零变化、不扰阅读） */
   if(document.getElementById('eventsBox')){
@@ -4098,7 +4604,7 @@ const TOUR_STEPS = [
     body:'招牌是老字号传下来的，不合意就点「换一块招牌」换一块；点高亮的「开张大吉」，今夜就挂牌。' },
   { id:'guests', page:'build', sub:['build','fac'], target:() => document.getElementById('roomsGrid'),
     title:'旅客自己会来，房钱自动进账',
-    body:'旅客自动推门入住，住满就不再进客；房钱按分钟慢慢攒，人在不在都算。' },
+    body:'旅客自动推门入住，住满就不再进客；房钱按分钟慢慢攒，人在不在都算。客房区还有两个看广告的小花样：体验上房——下一位客人按高两档的价结账；派小二请商贾——请一位买卖人立刻上门。' },
   { id:'wish', page:'build', sub:['build','fac'], target:() => document.getElementById('roomsGrid'),
     title:'旅客心愿：就挂在房卡下面',
     body:'有些旅客住下时带着心愿——想吃对味的招牌、想清静、赶时间、想听曲。心愿写在他房卡下面：能遂就点「遂愿」，小费、声望、好感一并谢你；眼下遂不了，卡上也写着差什么。' },
@@ -4107,10 +4613,10 @@ const TOUR_STEPS = [
     body:'老掌柜把刚才这会儿快进成离线十分钟：旅客投宿又离店，账已攒在这张卡上。点卡上的「领取」亲手收下；平时关掉游戏也照 55% 攒，封顶 12 小时。领之前还能整笔「托付商队」，' + CONFIG.entrust.hours + ' 小时后多拿四成。明早先看晨间小结：昨夜账目和今日天气都在那儿，天气会悄悄改今天的客路。' },
   { id:'shout', action:'shout', page:'home', target:() => document.querySelector('#shoutBody button:not([disabled])') || document.getElementById('shoutCard'),
     title:'吆喝揽客：门口喊一嗓子',
-    body:'点高亮的「吆喝一嗓子」：接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰，客人来得勤、进账也涨；每 ' + CONFIG.shout.cooldownMin + ' 分钟能喊一次，想热闹就喊。还有个可选的新玩法：喊之前先在吆喝卡上把三段碎片各点一句、拼成你的口号再喊——拼中哪类客，哪类客这阵子就来得多；不拼，照常喊也行。' },
+    body:'点高亮的「吆喝一嗓子」：接下来 ' + CONFIG.shout.durMin + ' 分钟客流高峰，客人来得勤、进账也涨；每 ' + CONFIG.shout.cooldownMin + ' 分钟能喊一次，想热闹就喊。还有个可选的新玩法：喊之前先在吆喝卡上把三段碎片各点一句、拼成你的口号再喊——拼中哪类客，哪类客这阵子就来得多；不拼，照常喊也行。冷却中实在想再喊，看广告也能立刻再喊一嗓子。' },
   { id:'upgrade', page:'build', sub:['build','fac'], target:() => document.getElementById('upRoomBtn') || document.getElementById('upgradesCard'),
     title:'有钱先扩建，再提品质',
-    body:'扩建多接客，品质抬房价；往下还有厨房和马厩，各有加成，按钮上就是价钱。' },
+    body:'扩建多接客，品质抬房价；往下还有厨房和马厩，各有加成，按钮上就是价钱。钱不够时，升级钮旁还能看广告抵一半价钱（每天 2 次），铜钱全价照样能升。' },
   { id:'staff', page:'build', sub:['build','staff'], target:() => document.querySelector('#staffBox .staff-card') || document.getElementById('staffCard'),
     title:'伙计：雇来帮你多赚钱',
     body:'掌柜、小二、厨子、马夫各管一条加成，雇佣和升级都在这一区办。' },
@@ -4119,16 +4625,16 @@ const TOUR_STEPS = [
     body:'点任意一道菜的「定为今日招牌」：对味的旅客房钱多付两成起。每天可换、换了不罚；新菜随厨房升级解锁。' },
   { id:'garden', action:'garden', page:'build', sub:['build','garden'], target:() => document.querySelector('#gardenBox .up-card button:not([disabled])') || document.getElementById('gardenCard'),
     title:'后院菜园：睡前种、明早收',
-    body:'点任意一块空田种下作物（' + CONFIG.crops.map(c => c.name + ' ' + c.hours + ' 小时').join('、') + '）。收成囤进后厨，每份给全店进账添 ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '%；后厨每天用 ' + CONFIG.garden.dailyUse + ' 份。' },
+    body:'点任意一块空田种下作物（' + CONFIG.crops.filter(c => !c.rare).map(c => c.name + ' ' + c.hours + ' 小时').join('、') + '）。收成囤进后厨，每份给全店进账添 ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '%；后厨每天用 ' + CONFIG.garden.dailyUse + ' 份。还有稀罕的胭脂萝卜，种子看广告得；长过半的田，也能看广告催熟。' },
   { id:'eventIntro', page:'affair', target:() => document.getElementById('eventsBox'),
     title:'每日抉择：一天四张，先讲规矩',
-    body:'旅客的小麻烦、小机缘，一天四张，任选一个处置——影响铜钱、声望和好感。有些抉择还是连环故事：今天选了、明日接着演，进度记在本页。下一张由你亲手选。' },
+    body:'旅客的小麻烦、小机缘，一天四张，任选一个处置——影响铜钱、声望和好感。有些抉择还是连环故事：今天选了、明日接着演，进度记在本页。下一张由你亲手选。哪张不合意，每天能看广告换一张（连环故事的卡换不了）。' },
   { id:'eventDo', action:'event', page:'affair', target:() => document.getElementById('eventsBox'),
     title:'亲手处理一张抉择',
     body:'点下面任意一个选项，选完自动继续；铜钱不够的选项点不动。' },
   { id:'commission', page:'affair', target:() => document.getElementById('commissionsCard'),
     title:'商队委托：派人出门挣大钱',
-    body:'委托就在这一页：派伙计押货出门，回来领大钱；未开门时卡上写着开放日子。每天还有一张加急单——半小时内接下、报酬翻倍，过期作废。' },
+    body:'委托就在这一页：派伙计押货出门，回来领大钱；未开门时卡上写着开放日子。每天还有一张加急单——半小时内接下、报酬翻倍，过期作废；第一张接下后，还能看广告再唤第二张。' },
   { id:'miles', page:'collect', sub:['collect','miles'], target:() => document.querySelector('#milesBox .up-row') || document.getElementById('milesCard'),
     title:'里程碑：照着目标领赏',
     body:'接待、扩建、图鉴都有里程碑，达标回来点「领取」；最上面四条开张贴士，走完引导也留着复看。' },
@@ -4419,7 +4925,11 @@ function boot(){
   }
   setTimeout(() => { try{ tourAutoStart(); }catch(e){} }, 600);
 }
-document.addEventListener('visibilitychange', () => { if(document.hidden) save(); });
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden) save();
+  else if(S && S.adPending) recoverAdPending();   /* 回前台触发对账（永不落定横扫）：壳内改道 reconcile、只认账本差量，内部有陈旧门与忙闩防重复查 */
+});
+window.addEventListener('focus', () => { if(S && S.adPending) recoverAdPending(); });   /* 获焦同触发对账（触发点均为离散事件、非轮询） */
 window.addEventListener('beforeunload', save);
 boot();
 
@@ -4450,9 +4960,16 @@ window.YZ = {
   ensureUrgent: ensureUrgent, urgentOffer: urgentOffer, startUrgent: startUrgent,
   commissionPayout: commissionPayout, chainStatusHtml: chainStatusHtml, renderCommissions: renderCommissions,
   showRewardAd: showRewardAd, recoverAdPending: recoverAdPending,
+  reconcileAdPending: reconcileAdPending, adStateCount: adStateCount,
+  buyUpgradeAd: buyUpgradeAd, upgradeDiscount: upgradeDiscount, guestRoomPrice: guestRoomPrice,
+  adGetSeed: adGetSeed, adRoomTrial: adRoomTrial, adInviteMerchant: adInviteMerchant, inviteArrive: inviteArrive,
+  adHastenPlot: adHastenPlot, adReshout: adReshout, adRerollEvent: adRerollEvent,
+  adUrgentSecond: adUrgentSecond, startUrgent2: startUrgent2, adsTotalToday: adsTotalToday,
+  renderWelcome: renderWelcome,
   showSoon: showSoon, hideSoon: hideSoon, SOON_SPOTS: SOON_SPOTS,
   adPending: function(){ return S ? S.adPending : null; },
   saveSlot: saveSlot, loadSlot: loadSlot, slotInfo: slotInfo,
+  saveFailToasts: function(){ return saveFailToasts; }, importBackupOk: function(){ return lastImportBackupOk; },
   exportCode: exportCode, importCode: importCode, restoreBackup: restoreBackup, hasBackup: hasBackup,
   vaultConfigured: vaultConfigured, cloudExport: cloudExport, cloudImport: cloudImport,
   vaultPut: vaultPut, vaultGet: vaultGet,
@@ -4508,7 +5025,7 @@ window.YZ = {
     var parts = [S.rooms.count, S.rooms.quality, S.kitchenLv, roomPrice(), d ? d.id : ''];
     for(var i = 0; i < S.rooms.count; i++){
       var g = S.guests[i];
-      parts.push(g ? (g.type + '#' + g.name + '#' + (g.priceMult || 1) + '#' + (g.wish ? g.wish.kind : '')) : '');
+      parts.push(g ? (g.type + '#' + g.name + '#' + (g.priceMult || 1) + '#' + (g.trialQ || 0) + '#' + (g.wish ? g.wish.kind : '')) : '');
     }
     return parts.join('|');
   }
