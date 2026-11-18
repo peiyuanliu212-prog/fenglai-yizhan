@@ -183,6 +183,16 @@
   .resbar b.coin{color:var(--accent-ink);}
   .head-img{display:block; width:100%; aspect-ratio:16/8; object-fit:cover; border-radius:8px; border:1px solid var(--line); margin-bottom:10px; background:var(--card);}
   .head-img.gray{filter:grayscale(1); opacity:.55;}
+  /* 菜园图位（v1.4.1）：场景横图与卡头图同 16/8 固定比例容器，图未到位时纸面题字占位、尺寸恒定不晃；
+     作物小图固定 40px 方位，缺图回退首字牌（同伙计头像 letter 回退口径），补图后零改版式 */
+  .garden-scene{margin-bottom:10px;}
+  .garden-scene .ph{display:flex; align-items:center; justify-content:center; width:100%; aspect-ratio:16/8; border-radius:8px; border:1px dashed var(--line); background:var(--card); color:var(--ink2); font-size:13px; letter-spacing:4px;}
+  img.crop-img{width:40px; height:40px; object-fit:cover; border-radius:6px; border:1px solid var(--line); background:var(--card); flex:none;}
+  .crop-ph{display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:6px; border:1px dashed var(--line); background:var(--card); color:var(--ink2); font-size:15px; flex:none;}
+  .crop-line{display:flex; align-items:center; gap:8px;}
+  .crop-line .grow{flex:1;}
+  button.crop-btn{display:flex; align-items:center; gap:8px; text-align:left;}
+  button.crop-btn img.crop-img, button.crop-btn .crop-ph{width:30px; height:30px; font-size:13px;}
   .empty-note{display:flex; flex-direction:column; align-items:center; gap:7px; text-align:center; color:var(--ink2); font-size:12.5px; padding:2px 0;}
   .empty-note img.empty-img{width:64%; aspect-ratio:16/8; object-fit:cover; border-radius:8px; filter:grayscale(1); opacity:.5; border:1px solid var(--line); background:var(--card);}
   .staff-card img.staff-ava-img{width:46px; height:46px; object-fit:cover; border-radius:50%; border:1.5px solid var(--accent); margin-bottom:6px; background:var(--card);}
@@ -2862,12 +2872,25 @@ let uiSub = { build:'fac', collect:'codex' };
 /* 每页（含小栏目）独立滚动位置记忆：只存内存，不入存档 */
 let uiScroll = {};
 function scrollKey(tab){ return tab + ':' + (uiSub[tab] || ''); }
+/* 切页强制全量刷新（v1.4.1 同步修缮）：切页是离散动作、不是滚动——整页按当前状态重渲染：
+   签名守卫（today/offline/quest/shout/dish/garden Sig）一律清零重走、客房/动态走 pfPerf 强制全量口，
+   清单计数与各页钱包/资源条只读同一状态源 S，不许再靠 tick 事后追赶出现两页数字打架。
+   存档页表单（renderSaveBox/renderSettings）不重建，防玩家已粘贴的短码/已写的反馈被切页冲掉。 */
+function refreshOnSwitch(){
+  if(!S || !S.name) return;
+  todaySig = ''; offlineSig = ''; questSig = ''; shoutSig = ''; dishSig = ''; gardenSig = '';
+  if(window.__pfForceFull) window.__pfForceFull(); else { renderRooms(); renderLog(); }
+  updateDynamic();
+  renderMorning(); renderQuests(); renderEvents(); renderCommissions();
+  renderMilestones(); renderCodex(); renderStaff(); renderUpgrades(); renderAdsBox();
+}
 function switchTab(tab){
   uiScroll[scrollKey(uiTab)] = window.scrollY || 0;
   uiTab = tab;
   document.querySelectorAll('.tabpage').forEach(p => p.classList.toggle('on', p.id === 'page-' + tab));
   document.querySelectorAll('#tabbar .tab').forEach(b => b.classList.toggle('on', b.getAttribute('data-tab') === tab));
   applySubs();
+  refreshOnSwitch();
   updateTabDots();
   window.scrollTo(0, uiScroll[scrollKey(tab)] || 0);
   sfxPlay('page');
@@ -2877,6 +2900,7 @@ function switchSub(group, sub){
   uiScroll[scrollKey(group)] = window.scrollY || 0;
   uiSub[group] = sub;
   applySubs();
+  refreshOnSwitch();
   window.scrollTo(0, uiScroll[scrollKey(group)] || 0);
 }
 function applySubs(){
@@ -3221,8 +3245,14 @@ function renderToday(){
   html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
     '今日天气：<b>' + esc(t.weather.label) + '</b>，' + esc(t.weather.desc) + '（全天进账 ×' + t.weather.rateMult + '）</div></div></div>';
   html +=
-    row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'home', 'offlineCard', t.offline >= 1 ? '去领取' : '去看看') +
-    row('今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张', 'affair', 'eventsCard', '去处理') +
+    row('待领离线收益：' + (t.offline >= 1 ? '<b>' + t.offline + ' 铜钱</b>' : '无'), 'home', 'offlineCard', t.offline >= 1 ? '去领取' : '去看看');
+  /* 抉择行语义（v1.4.1 同步修缮）：有剩余才亮「去处理」跳转钮；清零改「已处理」置灰字，
+     对齐下方礼包行「已领完」口径——0 了不许还挂可点按钮假装没同步 */
+  html += '<div class="up-row"><div class="info"><div class="d" style="font-size:13px; color:var(--ink);">' +
+    '今日抉择剩余：<b>' + t.eventsLeft + '</b>/' + t.eventsTotal + ' 张</div></div>' +
+    (t.eventsLeft > 0 ? '<button class="small ghost" onclick="gotoCard(\'affair\',\'eventsCard\')">去处理</button>'
+      : '<span class="quest-todo">已处理</span>') + '</div>';
+  html +=
     row('商队委托：进行中 <b>' + t.commissionsActive + '</b> 支' + (t.commissionsReady ? '，其中 <b>' + t.commissionsReady + '</b> 支已归来可领' : ''), 'affair', 'commissionsCard', '去查看');
   /* 每日礼包行内直领（九问审计 Q4 动线优化：与事务页礼包按钮共用 claimDailyGift 同一出口，
      免去「切页→找卡→再点」两步；领完显示已领完） */
@@ -3452,6 +3482,18 @@ function renderDish(){
   }).join('') + '</div>';
   box.innerHTML = html;
 }
+/* 菜园图位（v1.4.1 加图批）：场景图 IMG.garden＋作物图 IMG['crop_'+作物id]，文字一律 DOM 不烘字；
+   图未到位时回退固定尺寸占位（场景题字牌/作物首字牌），补图走 tools/embed_garden_images.py 零改版式 */
+function gardenSceneHtml(){
+  return '<div class="garden-scene">' + (IMG.garden
+    ? '<img class="head-img" style="margin-bottom:0;" src="' + IMG.garden + '" alt="">'
+    : '<div class="ph">后 院 菜 畦</div>') + '</div>';
+}
+function cropImgHtml(c){
+  const k = 'crop_' + c.id;
+  return IMG[k] ? '<img class="crop-img" src="' + IMG[k] + '" alt="">'
+    : '<span class="crop-ph">' + esc(c.name.charAt(0)) + '</span>';
+}
 /* 菜园卡（建设页）：存量加成明牌＋逐田三态（空/长/熟），生长进度按时间戳折算 */
 let gardenSig = '';
 function renderGarden(){
@@ -3461,14 +3503,14 @@ function renderGarden(){
   const sig = [S.garden.stock, S.garden.plots.map(p => p ? p.crop + ':' + (now >= p.end ? 'R' : Math.ceil((p.end - now) / 60000)) : '-').join(',')].join('|');
   if(sig === gardenSig) return;
   gardenSig = sig;
-  let html = '<div class="small-note">食材存量 <b>' + S.garden.stock + '</b> 份：后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；存量每份给总收入 +' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '%（当前 +' + Math.round(gardenStockMult() * 100) + '%，上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%）。睡前种上长时的，明早回来正好收。</div>';
+  let html = gardenSceneHtml() + '<div class="small-note">食材存量 <b>' + S.garden.stock + '</b> 份：后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；存量每份给总收入 +' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '%（当前 +' + Math.round(gardenStockMult() * 100) + '%，上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%）。睡前种上长时的，明早回来正好收。</div>';
   html += '<div class="cardgrid">' + S.garden.plots.map((p, i) => {
     if(!p) return '<div class="up-card"><div class="t">田 ' + (i + 1) + ' · 空着</div><div class="d">挑一样种下（种下离线也照长）：</div>' +
-      CONFIG.crops.map(c => '<button class="small" onclick="plantCrop(' + i + ', \'' + c.id + '\')">' + esc(c.name) + ' · ' + c.hours + ' 小时收 ' + c.yield + ' 份</button>').join('') + '</div>';
+      CONFIG.crops.map(c => '<button class="small crop-btn" onclick="plantCrop(' + i + ', \'' + c.id + '\')">' + cropImgHtml(c) + '<span>' + esc(c.name) + ' · ' + c.hours + ' 小时收 ' + c.yield + ' 份</span></button>').join('') + '</div>';
     const c = cropDef(p.crop);
     const ready = now >= p.end;
     const pct = ready ? 100 : Math.max(0, Math.min(100, Math.floor((now - p.start) / Math.max(1, p.end - p.start) * 100)));
-    return '<div class="up-card"><div class="t">田 ' + (i + 1) + ' · ' + esc(c ? c.name : '作物') + '</div>' +
+    return '<div class="up-card"><div class="crop-line">' + (c ? cropImgHtml(c) : '') + '<div class="t grow">田 ' + (i + 1) + ' · ' + esc(c ? c.name : '作物') + '</div></div>' +
       '<div class="plot-bar"><i style="width:' + pct + '%"></i></div>' +
       '<div class="d">' + (ready ? '熟了！收下得 ' + (c ? c.yield : 0) + ' 份食材' : '长着呢，余 ' + fmtLeft(p.end - now)) + '</div>' +
       (ready ? '<button class="small accent" onclick="harvestPlot(' + i + ')">收获</button>' : '<button disabled>未熟</button>') + '</div>';
@@ -4248,6 +4290,9 @@ window.YZ = {
     if(roomsDirty){ roomsDirty = false; sig = null; window.renderRooms(); }
     if(logDirty){ logDirty = false; fullLog(); }
   }
+  /* 切页强制全量口（v1.4.1 同步修缮）：切页不是滚动，滚动守卫不许拦——
+     绕过签名/滚动判定直接走原始全量渲染，并清签名与脏标防随后 tick 重复重建 */
+  window.__pfForceFull = function(){ sig = null; roomsDirty = false; logDirty = false; fullRooms(); fullLog(); };
   window.renderRooms = function(){
     var grid = document.getElementById('roomsGrid');
     if(!grid || !S || !S.name){ fullRooms(); return; }
