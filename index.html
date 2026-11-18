@@ -129,6 +129,19 @@
   .ev-img{display:block; width:100%; aspect-ratio:16/8; object-fit:cover; border-radius:8px; border:1px solid var(--line); margin-bottom:8px; background:var(--card);}
   .up-row img.up-thumb{width:56px; height:44px; object-fit:cover; border-radius:6px; border:1px solid var(--line); flex:none; background:var(--card);}
   .tourRing{position:fixed; z-index:300; border:2px solid var(--accent); border-radius:12px; box-shadow:0 0 0 9999px rgba(43,38,32,.48); pointer-events:none; animation:tourPulse 1.6s ease-in-out infinite;}
+  .coachRing{position:fixed; z-index:300; border:2px solid var(--accent); border-radius:12px; box-shadow:0 0 0 9999px rgba(43,38,32,.48); pointer-events:none; animation:tourPulse 1.6s ease-in-out infinite;}
+  #coachBubble{position:fixed; z-index:310; left:50%; transform:translateX(-50%); width:100%; max-width:480px; bottom:0; max-height:36vh; max-height:36dvh; overflow-y:auto; background:var(--card); color:var(--ink); border-top:2px solid var(--accent); border-radius:16px 16px 0 0; padding:12px 16px calc(12px + var(--sab)); box-shadow:0 -8px 28px rgba(43,38,32,.35); pointer-events:none;}
+  #coachBubble button{pointer-events:auto;}
+  #coachBubble .tmeta{color:var(--ink2); font-size:12px; letter-spacing:1px;}
+  #coachBubble .ttitle{font-size:15px; font-weight:700; margin:3px 0;}
+  #coachBubble .tbody{font-size:13px; color:var(--ink2); line-height:1.6;}
+  #coachBubble .trow{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  #coachBubble .tbtns{display:flex; gap:8px; align-items:center; margin-top:9px;}
+  body.has-tabbar #coachBubble{bottom:calc(var(--tabbar-h) + var(--sab));}
+  .play-react{background:rgba(120,90,40,.08); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:8px 0; font-size:13px; line-height:1.6;}
+  .play-opts .opt-tags{display:block; font-size:11px; opacity:.75;}
+  .feed-n{display:inline-block; min-width:52px; text-align:center; font-weight:700;}
+  .room-acts{margin-top:6px;}
   @keyframes tourPulse{0%,100%{outline:0 solid rgba(169,50,38,0)}50%{outline:6px solid rgba(169,50,38,.18)}}
   #tourBubble{position:fixed; z-index:310; left:50%; transform:translateX(-50%); width:100%; max-width:480px; bottom:0; max-height:36vh; max-height:36dvh; overflow-y:auto; background:var(--card); color:var(--ink); border-top:2px solid var(--accent); border-radius:16px 16px 0 0; padding:12px 16px calc(12px + var(--sab)); box-shadow:0 -8px 28px rgba(43,38,32,.35); pointer-events:none;}
   #tourBubble button{pointer-events:auto;}
@@ -738,7 +751,10 @@ const CONFIG = {
       { id:'dish',  text:'想吃一口对味的今日招牌' },
       { id:'quiet', text:'想要个清净，睡个整觉', needQuality: 2 },
       { id:'hurry', text:'赶时间，想吃口热乎的早些上路', needKitchen: 1 },
-      { id:'music', text:'想听人唱曲说书，解解乏', types:['musician','singer','storyteller'] }
+      { id:'music', text:'想听人唱曲说书，解解乏', types:['musician','singer','storyteller'] },
+      /* 专属心愿（v1.4.5 深谈交好产出）：talkOnly 不入自然入住随机池（wishPoolKinds 唯一过滤口），
+         只由交情达「投缘」触发挂上；遂愿判定/奖励与普通心愿同口（wishCheck/wishReward） */
+      { id:'keepsake', text:'想留一件信物在店里，认店如认家', talkOnly:true }
     ] },
   /* 吆喝揽客（竞品调研 P11）：经营页主动按钮，冷却 cooldownMin 分钟，触发 durMin 分钟客流高峰：
      到访率 +arrivalAdd（arrivalChance 唯一出口）、在住进账 ×(1+rateAdd)（shoutRateMult 并入 incomeRate）；
@@ -772,14 +788,157 @@ const CONFIG = {
     ],
     fragLabels: ['开场', '卖点', '承诺']
   },
+  /* 客群六组（v1.4.5 亲手操控层共用派生）：深谈话题偏好/沏茶口味/陈设契合共用这一张表，
+     guestGroupOf 为唯一派生口，覆盖全部 36 种旅客（与 shoutCombo 四组分工不同：此处按交情维度分组）。
+     命名避让：CONFIG.guestGroups 已被图鉴分组数组占用，故本表名 playGroups */
+  playGroups: {
+    wen:   { label:'文士',     types:['scholar','examiner','painter','musician','singer','storyteller','chess'] },
+    shang: { label:'商贾',     types:['merchant','teamerchant','saltmerchant','herbmerchant','richman','richest','foreign'] },
+    jiang: { label:'江湖客',   types:['escort','escortboss','hero','hunter','blacksmith','falconer'] },
+    bai:   { label:'百业行旅', types:['peddler','porter','farmer','tailor','constable','weaver','beekeeper'] },
+    fang:  { label:'方外清修', types:['monk','hermit','doctor','fortune'] },
+    gui:   { label:'官面贵客', types:['zhuangyuan','junzhu','wangye','inspector','magistrate'] }
+  },
+  /* 深谈交好（亲手操控层⑥）：三段选话题（寒暄/深聊/收尾），talkScore 为命中数唯一判定；
+     交情 bond 按旅客类型记账（S.bonds）——旅客实例只住 3–8 程、按实例攒不起来，图鉴本就按类型认人；
+     阶段阈值 stages，面熟埋连环种子、投缘给专属心愿、知交给驻店邀约资格（S.residentInvite，B2-1 消费）。
+     聊错零惩罚：不扣铜钱/声望/好感；大命中（命中≥2）给小费彩头＝房价×客价×tipMult，走 ledger */
+  talk: {
+    bondCap: 6, perTypeDaily: 2, tipMult: 1,
+    stages: [ { min:0, name:'生客' }, { min:2, name:'面熟' }, { min:4, name:'投缘' }, { min:6, name:'知交' } ],
+    greets: [
+      { id:'bow',    text:'拱手问安，先递上一杯热茶' },
+      { id:'hearty', text:'朗声招呼，问一句一路辛苦' },
+      { id:'quiet',  text:'不多打扰，轻声问住得可好' }
+    ],
+    groupGreet: { wen:'bow', shang:'hearty', jiang:'hearty', bai:'hearty', fang:'quiet', gui:'bow' },
+    topics: [
+      { id:'poetry', label:'诗书文章' }, { id:'news', label:'时事见闻' },
+      { id:'business', label:'生意经' }, { id:'jianghu', label:'江湖见闻' },
+      { id:'road', label:'行路辛苦' }, { id:'hometown', label:'家乡风物' },
+      { id:'food', label:'吃食住行' }, { id:'quiet', label:'清净养生' }
+    ],
+    groupFav: { wen:['poetry','news'], shang:['business','news'], jiang:['jianghu','road'],
+                bai:['hometown','food'], fang:['quiet','hometown'], gui:['news','poetry'] },
+    hints: {
+      wen:  ['案头摊着书卷，袖里还插着一支笔', '说话爱引典故，也爱打听新鲜事'],
+      shang:['算盘不离手，开口先问行情', '腰间钱袋沉甸甸，爱听哪里有赚头'],
+      jiang:['刀鞘磨得发亮，靴上还沾着黄土', '酒壶空了大半，眼神总往门口瞟'],
+      bai:  ['担子搁在脚边，鞋底磨穿了半层', '一说起家乡，眼睛就发亮'],
+      fang: ['手里捻着念珠，坐得端正不喧哗', '行囊清简，只一钵一杖'],
+      gui:  ['衣料考究，随从在门外候着', '谈吐自带分量，爱听京城动向']
+    },
+    ends: [
+      { id:'wish',     text:'记下他的心愿，许诺尽力办到' },
+      { id:'farewell', text:'备一壶送行茶，送他到门口' },
+      { id:'tea',      text:'留一壶热茶，改日再叙' }
+    ]
+  },
+  /* 掌勺做饭（亲手操控层①）：dish 心愿客亲手轨，三槽选料＋火候，cookCheck 唯一判定
+     （口味词命中数＋火候＋禁忌）；口味档按今日招牌菜谱分（profiles 的 dishId 与 CONFIG.dishes 对齐、
+     客群归属经菜谱 targets 派生 cookProfileOf，不另造客群表）。对味＝心愿小费×2＋声望2＋好感3；
+     将就＝wishReward 原值；翻车＝扣料钱 roomPrice()×feeMult（上限写死）、心愿保留、可重做一次（封顶将就） */
+  cook: {
+    feeMult: 0.5,
+    profiles: {
+      d_bing:{ keys:['实在','管饱'], fire:'mid' },  d_gao:{ keys:['清甜','细软'], fire:'low' },
+      d_rou:{ keys:['油大','下饭'], fire:'high' },  d_su:{ keys:['清淡','养身'], fire:'low' },
+      d_yu:{ keys:['鲜','原味'], fire:'mid' },      d_tang:{ keys:['润口','甜羹'], fire:'low' },
+      d_yan:{ keys:['山珍','排场'], fire:'mid' },   d_dou:{ keys:['至味','清淡'], fire:'low' }
+    },
+    mains: [
+      { id:'pork', name:'猪蹄膀', tags:['油大','下饭'] }, { id:'fish', name:'河鲜', tags:['鲜','原味'] },
+      { id:'tofu', name:'云水豆腐', tags:['至味','清淡'] }, { id:'shanzhen', name:'山珍菌菇', tags:['山珍','鲜'] },
+      { id:'grain', name:'米糕面点', tags:['管饱','实在'] }, { id:'veg', name:'时蔬', tags:['清淡','养身'] }
+    ],
+    sides: [
+      { id:'congjiang', name:'葱姜', tags:['下饭'] }, { id:'guihua', name:'桂花', tags:['清甜','细软'] },
+      { id:'lianzi', name:'莲子', tags:['润口','甜羹'] }, { id:'jungu', name:'菌菇', tags:['山珍'] },
+      { id:'yaocai', name:'药材', tags:['养身'] }
+    ],
+    sauces: [
+      { id:'jiangshao', name:'酱烧汁', tags:['下饭','油大'] }, { id:'qingyan', name:'清盐', tags:['原味','清淡'] },
+      { id:'tiangeng', name:'甜羹汁', tags:['甜羹','清甜'] }, { id:'xiangla', name:'香辣油', tags:['油大'] }
+    ],
+    fires: [ { id:'low', label:'文火' }, { id:'mid', label:'中火' }, { id:'high', label:'猛火' } ],
+    taboos: [ { slot:'sauce', id:'tiangeng', fire:'high' }, { slot:'main', id:'veg', fire:'high' } ],
+    gardenMains: ['veg','shanzhen']   /* 自家产主料：菜园有食材时对味额外好感＋耗食材 1 份 */
+  },
+  /* 沏茶待客（亲手操控层②）：选茶/水温/浸泡三判断，teaCheck 唯一判定；只奖不罚。
+     profile.teas 为偏好序——正解＝序中第一个已解锁（minKitchen≤厨房等级）的茶，解锁不足不锁死正解；
+     知味 3/3＝茶钱 房价×客价×tipMult＋好感3；合口 2/3 好感2；不对路好感1（托管茶叙保底同量级） */
+  tea: {
+    dailyMax: 2, tipMult: 2,
+    teas: [
+      { id:'cu', name:'粗茶', minKitchen:0 }, { id:'lv', name:'绿茶', minKitchen:1 },
+      { id:'hong', name:'红茶', minKitchen:2 }, { id:'hua', name:'花茶', minKitchen:3 },
+      { id:'bai', name:'老白茶', minKitchen:5 }, { id:'yao', name:'药茶', minKitchen:7 }
+    ],
+    temps:  [ { id:'gun', label:'滚沸' }, { id:'wen', label:'温润' }, { id:'liang', label:'微凉' } ],
+    steeps: [ { id:'nong', label:'浓沏久浸' }, { id:'zhong', label:'适中' }, { id:'qing', label:'轻啜即出' } ],
+    profile: {
+      wen:  { teas:['lv','hua','cu'],   temp:'wen', steep:'qing' },
+      shang:{ teas:['hong','lv','cu'],  temp:'gun', steep:'zhong' },
+      jiang:{ teas:['cu','hong'],       temp:'gun', steep:'nong' },
+      bai:  { teas:['cu','hua'],        temp:'wen', steep:'zhong' },
+      fang: { teas:['bai','lv','cu'],   temp:'wen', steep:'qing' },
+      gui:  { teas:['hua','bai','lv'],  temp:'wen', steep:'zhong' }
+    },
+    clues: {
+      wen:'「水太烫，香就跑了；泡得久，又苦——茶如文章，火候最难。」',
+      shang:'「做买卖讲究利索：茶要滚烫才提神，浓淡适中最好。」',
+      jiang:'「大碗茶才解乏！水要滚、茶要浓，泡透了才够味。」',
+      bai:'「咱不讲究排场，茶温温的、顺口就好，别太烫嘴。」',
+      fang:'「茶如修行：水温和些、泡得淡些，心就静了。」',
+      gui:'「府上待客的茶，水温火候都不能过了，也不能欠，适中方显体面。」'
+    }
+  },
+  /* 喂马备程（亲手操控层④）：委托出发前三料配满 portions 份，feedGrade 按与理想配比的
+     |偏差| 和定档（理想配比按档位时长桶，马夫台词只给原则不给数）；倍率只在 commissionPayout 内
+     按实例 feed.grade 注入——无 feed 字段的托管单走原公式逐值不变。加急单不挂备料（托管原样） */
+  feed: {
+    portions: 10,
+    feeds: [ { id:'dou', name:'黑豆' }, { id:'cao', name:'干草' }, { id:'fu', name:'麸皮' } ],
+    ideal: [ { maxHours:2, mix:[2,6,2] }, { maxHours:6, mix:[4,4,2] }, { maxHours:99999, mix:[6,2,2] } ],
+    grades: [
+      { id:'fine', maxDist:2, mult:1.15, label:'精配' },
+      { id:'ok', maxDist:5, mult:1.0, label:'合配' },
+      { id:'rough', maxDist:99999, mult:0.9, label:'凑合' }
+    ],
+    hints: [
+      { maxHours:2, text:'马夫交代：近路轻装省力气，草料为主，豆料垫个底就够。' },
+      { maxHours:6, text:'马夫交代：半日脚程，豆草各半，马才有劲又不积食。' },
+      { maxHours:99999, text:'马夫交代：远路最费力气，豆料得压足，草料垫底防饿。' }
+    ]
+  },
+  /* 布置客房（亲手操控层⑤）：按房号 3 槽（壁饰/案头/床品）摆陈设；库存 S.decor.owned 为计数型
+     （置入消耗 1、撤下返还）——按 11/22 收藏副线预期设计，本批货源＝内置基础清单：
+     starter 初始到货，seen＝图鉴点亮数、miles＝里程碑领取数达标自动到货（decorGrantCheck 唯一发放口）。
+     效果只走 guestWeightToday：任一房摆有合某客群的陈设，该组到访权重 ×weightMult；不新开乘区 */
+  decor: {
+    weightMult: 1.25,
+    cats: [ { id:'wall', label:'壁饰' }, { id:'desk', label:'案头' }, { id:'bed', label:'床品' } ],
+    items: [
+      { id:'dc_cloth', name:'粗布幔', cat:'wall', fav:['bai'], unlock:{ kind:'starter' } },
+      { id:'dc_landscape', name:'山水画卷', cat:'wall', fav:['wen'], unlock:{ kind:'seen', n:8 } },
+      { id:'dc_tiger', name:'猛虎图', cat:'wall', fav:['jiang'], unlock:{ kind:'miles', n:3 } },
+      { id:'dc_pottery', name:'粗陶茶具', cat:'desk', fav:['bai','fang'], unlock:{ kind:'starter' } },
+      { id:'dc_scholar', name:'文房四宝', cat:'desk', fav:['wen'], unlock:{ kind:'seen', n:14 } },
+      { id:'dc_abacus', name:'算盘账册', cat:'desk', fav:['shang'], unlock:{ kind:'miles', n:5 } },
+      { id:'dc_blanket', name:'粗布被褥', cat:'bed', fav:['bai'], unlock:{ kind:'starter' } },
+      { id:'dc_felt', name:'羊毛毡毯', cat:'bed', fav:['jiang'], unlock:{ kind:'seen', n:18 } },
+      { id:'dc_veil', name:'素纱帐', cat:'bed', fav:['gui','fang'], unlock:{ kind:'miles', n:8 } }
+    ]
+  },
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'ads-expand', lines: [
-    { name:'广告抵扣升级', how:'升级时看广告抵一半价钱（每日 2 次），铜钱全价照样能升', goto:'build:upgradesCard' },
-    { name:'体验上房 · 请商贾', how:'客房区看广告：下一位客人按高两档房价结账，还能派小二请一位商贾立刻上门', goto:'build:roomsCard' },
-    { name:'稀有种子 · 催熟', how:'菜园看广告得胭脂萝卜种子（稀罕菜），长过半的田也能看广告催熟', goto:'build:gardenCard' },
-    { name:'再喊 · 换卡 · 加急', how:'吆喝冷却能看广告再喊一嗓子；不合意的抉择能换一张；加急单接下后能再唤第二张', goto:'affair:commissionsCard' }
+  introCard: { ver: 'hands-on', lines: [
+    { name:'深谈交好', how:'在住旅客房卡点「深谈」：三段话读人选话题，交情从生客叙到知交——投缘有专属心愿，知交能邀他日后驻店', goto:'build:roomsCard' },
+    { name:'掌勺做饭', how:'带「想吃对味招牌」心愿的客人能亲手掌勺：三槽选料配火候，对味小费翻倍，翻车只赔这单料钱', goto:'build:roomsCard' },
+    { name:'沏茶待客', how:'给在住客奉茶：选茶、定水温、控浸泡，沏对了有茶钱，沏错也不罚', goto:'build:roomsCard' },
+    { name:'喂马备程', how:'委托出发前亲手配十份料：配得精，归来报酬多一成半；配凑合，少一成', goto:'affair:commissionsCard' },
+    { name:'布置客房', how:'图鉴与里程碑攒下的陈设摆进客房：合哪类客人口味，就招哪类客来', goto:'build:roomsCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1151,6 +1310,15 @@ function defaultState(){
     shout: { last: 0, until: 0, combo: null, comboUntil: 0 },
     seenIntro: '',
     garden: { plots: [null, null, null, null], stock: 0, seeds: 0 },
+    /* v1.4.5 亲手操控层加法字段：flags 情境引导 first-flag / bonds 按类型交情 / talk 深谈账 /
+       residentInvite 驻店邀约资格（B2-1 消费）/ cook·tea 累计与日计数 / decor 陈设库存与按房摆设 */
+    flags: {},
+    bonds: {},
+    talk: { count: 0, day: '', counts: {}, seeds: [], wishDue: [] },
+    residentInvite: false,
+    cook: { done: 0, best: 0 },
+    tea: { served: 0, perfect: 0, day: '', count: 0 },
+    decor: { owned: {}, rooms: [], granted: {} },
     guideStep: 0,
     guideDone: false,
     guideRewarded: false,
@@ -1209,6 +1377,28 @@ function sanitizeAdPending(raw){
   }
   return out;
 }
+/* 陈设存档清洗（v1.4.5）：owned 只认清单内物品的正计数；rooms 每行按 [壁饰,案头,床品] 槽位
+   逐格验物品存在且类别对位，非法格归 null。库存表形状按 11/22 收藏副线预期（计数型）设计 */
+function decorItem(id){ return CONFIG.decor.items.find(x => x.id === id) || null; }
+function sanitizeDecor(raw){
+  const out = { owned: {}, rooms: [], granted: {} };
+  if(!raw || typeof raw !== 'object') return out;
+  if(raw.owned && typeof raw.owned === 'object') for(const it of CONFIG.decor.items){
+    const v = clampInt(raw.owned[it.id], 0, 99, 0);
+    if(v > 0) out.owned[it.id] = v;
+  }
+  if(raw.granted && typeof raw.granted === 'object') for(const it of CONFIG.decor.items)
+    if(raw.granted[it.id] === true) out.granted[it.id] = true;
+  if(Array.isArray(raw.rooms)) out.rooms = raw.rooms.slice(0, CONFIG.maxRooms).map(r => {
+    const row = [null, null, null];
+    if(Array.isArray(r)) CONFIG.decor.cats.forEach((c, ci) => {
+      const it = decorItem(r[ci]);
+      if(it && it.cat === c.id) row[ci] = it.id;
+    });
+    return row;
+  });
+  return out;
+}
 /* 吆喝口号拼法清洗：必须是 3 段数组、每段 id 在对应段碎片池内（空位许 null）；任一段非法整组丢弃回 null，老档无字段默认 null */
 function sanitizeShoutCombo(raw){
   if(!Array.isArray(raw) || raw.length !== CONFIG.shoutCombo.frags.length) return null;
@@ -1239,7 +1429,10 @@ function normalize(raw){
   s.guests = Array.isArray(raw.guests) ? raw.guests.filter(g => g && g.type && g.name).map(g =>
     Object.assign({}, g, { wish: (g.wish && CONFIG.wish.kinds.some(k => k.id === g.wish.kind)) ? { kind: g.wish.kind } : null,
       /* 体验上房计价快照（广告扩展批③）：只认 1..maxQuality 的整数档，非法归 0＝按自家品质计价 */
-      trialQ: clampInt(g.trialQ, 0, CONFIG.maxQuality, 0) })) : [];
+      trialQ: clampInt(g.trialQ, 0, CONFIG.maxQuality, 0),
+      /* 亲手操控层实例标记（v1.4.5）：深谈过/奉茶过只认 true；掌勺单据只记已试次数 0..2 */
+      talked: g.talked === true, tead: g.tead === true,
+      order: { tried: clampInt(g.order && g.order.tried, 0, 2, 0) } })) : [];
   s.guestsSeen = (raw.guestsSeen && typeof raw.guestsSeen === 'object') ? raw.guestsSeen : {};
   s.miles = (raw.miles && typeof raw.miles === 'object') ? raw.miles : {};
   s.commissions = Array.isArray(raw.commissions) ? raw.commissions.filter(c => c && c.tierId && !c.claimed) : [];
@@ -1318,6 +1511,32 @@ function normalize(raw){
     : { last: 0, until: 0, combo: null, comboUntil: 0 };
   /* 本版新内容卡已看版本（四件套③）：非字符串一律回空＝未看过，老档安全 */
   s.seenIntro = (typeof raw.seenIntro === 'string') ? raw.seenIntro : '';
+  /* v1.4.5 亲手操控层加法字段清洗：情境引导 flag 只认 tour* 的 true；交情只认合法旅客类型的 0..cap；
+     深谈日计数/种子/待挂心愿只认合法类型；陈设走 sanitizeDecor；形状非法一律回默认，老档零回溯 */
+  s.flags = {};
+  if(raw.flags && typeof raw.flags === 'object') for(const k of Object.keys(raw.flags))
+    if(k.indexOf('tour') === 0 && raw.flags[k] === true) s.flags[k] = true;
+  s.bonds = {};
+  if(raw.bonds && typeof raw.bonds === 'object') for(const t of CONFIG.guestTypes){
+    const v = clampInt(raw.bonds[t.id], 0, CONFIG.talk.bondCap, 0);
+    if(v > 0) s.bonds[t.id] = v;
+  }
+  const rt145 = (raw.talk && typeof raw.talk === 'object') ? raw.talk : {};
+  s.talk = { count: Math.max(0, Math.floor(+rt145.count || 0)),
+    day: (typeof rt145.day === 'string') ? rt145.day : '', counts: {}, seeds: [], wishDue: [] };
+  if(rt145.counts && typeof rt145.counts === 'object') for(const t of CONFIG.guestTypes){
+    const v = clampInt(rt145.counts[t.id], 0, CONFIG.talk.perTypeDaily, 0);
+    if(v > 0) s.talk.counts[t.id] = v;
+  }
+  if(Array.isArray(rt145.seeds)) s.talk.seeds = rt145.seeds.filter(id => CONFIG.guestTypes.some(t => t.id === id));
+  if(Array.isArray(rt145.wishDue)) s.talk.wishDue = rt145.wishDue.filter(id => CONFIG.guestTypes.some(t => t.id === id));
+  s.residentInvite = raw.residentInvite === true;
+  const rc145 = (raw.cook && typeof raw.cook === 'object') ? raw.cook : {};
+  s.cook = { done: Math.max(0, Math.floor(+rc145.done || 0)), best: Math.max(0, Math.floor(+rc145.best || 0)) };
+  const rte145 = (raw.tea && typeof raw.tea === 'object') ? raw.tea : {};
+  s.tea = { served: Math.max(0, Math.floor(+rte145.served || 0)), perfect: Math.max(0, Math.floor(+rte145.perfect || 0)),
+    day: (typeof rte145.day === 'string') ? rte145.day : '', count: clampInt(rte145.count, 0, CONFIG.tea.dailyMax, 0) };
+  s.decor = sanitizeDecor(raw.decor);
   s.garden = { plots: [], stock: 0, seeds: 0 };
   if(raw.garden && typeof raw.garden === 'object'){
     s.garden.stock = clampInt(raw.garden.stock, 0, 9999, 0);
@@ -1813,6 +2032,9 @@ function guestWeightToday(t){
   let base = t.weight * ((w.fav && w.fav.indexOf(t.id) >= 0) ? (w.favMult || 1) : 1);
   /* 吆喝口号窗口内，命中客群再乘口号倍率（与天气 fav 同层叠乘，仍是抽客权重唯一出口） */
   if(shoutComboActive() && shoutComboHits(t.id)) base *= CONFIG.shoutCombo.weightMult;
+  /* 布置客房：任一房摆有合该客群的陈设，该组到访权重再乘陈设倍率（同层叠乘，仍是唯一出口） */
+  const dgrp = guestGroupOf(t.id);
+  if(dgrp && decorPlacedGroups()[dgrp]) base *= CONFIG.decor.weightMult;
   return base;
 }
 /* ================= 吆喝口号（亲手操控层试点） =================
@@ -2054,9 +2276,17 @@ function arriveGuest(opts){
     S.trialDay = '';
     pushLog('这位客人用上了体验上房券，按「' + CONFIG.qualityNames[g.trialQ] + '」的价结账');
   }
-  /* 旅客心愿（P3-lite）：入住按概率挂心愿，带心愿至少住满 minStayTicks 程留遂愿时间 */
-  if(Math.random() < CONFIG.wish.chance){
-    const k = CONFIG.wish.kinds[randInt(0, CONFIG.wish.kinds.length - 1)];
+  /* 旅客心愿（P3-lite）：入住按概率挂心愿，带心愿至少住满 minStayTicks 程留遂愿时间；
+     随机池走 wishPoolKinds（专属心愿 talkOnly 不入池）。深谈投缘记下的 wishDue 优先：
+     该类型下次入住必挂专属心愿（keepsake），挂上即销账 */
+  const dueIdx = (S.talk && Array.isArray(S.talk.wishDue)) ? S.talk.wishDue.indexOf(t.id) : -1;
+  if(dueIdx >= 0){
+    S.talk.wishDue.splice(dueIdx, 1);
+    g.wish = { kind:'keepsake' };
+    g.stayLeft = Math.max(g.stayLeft, CONFIG.wish.minStayTicks);
+  }else if(Math.random() < CONFIG.wish.chance){
+    const pool = wishPoolKinds();
+    const k = pool[randInt(0, pool.length - 1)];
     g.wish = { kind: k.id };
     g.stayLeft = Math.max(g.stayLeft, CONFIG.wish.minStayTicks);
   }
@@ -2359,7 +2589,7 @@ function tick(){
     if(arriveGuest()) changed = true;
   }
   for(const g of S.guests.slice()){
-    g.stayLeft--;
+    if(g !== playGuestRef) g.stayLeft--;   /* 亲手面板打开期间冻结当事客离店计时（旅客只住数程，不冻没法深谈/掌勺/奉茶） */
     if(g.stayLeft <= 0){
       S.guests.splice(S.guests.indexOf(g), 1);
       changed = true;
@@ -2467,7 +2697,7 @@ function doEventChoice(idx){
 }
 
 /* ================= 商队委托 ================= */
-function startCommission(tierId){
+function startCommission(tierId, feed){
   if(!packActive('commission')){ showToast('商队委托将于 2026-11-19 开放'); return false; }
   const tier = tierDef(tierId);
   if(!tier) return false;
@@ -2478,7 +2708,8 @@ function startCommission(tierId){
     id: 'cm' + now + '_' + Math.floor(Math.random() * 100000),
     tierId: tier.id, hours: tier.hours,
     start: now, end: now + tier.hours * 3600 * 1000,
-    claimed: false
+    claimed: false,
+    feed: feed || null   /* 喂马备程（v1.4.5）：亲手配料单带 feed{mix,grade}；托管单恒 null，结算逐值不变 */
   });
   pushLog(tier.name ? '接下远行委托「' + tier.name + '」（' + tier.hours + ' 小时）' : '接下商队委托（' + tier.hours + ' 小时）');
   save();
@@ -2505,7 +2736,7 @@ function claimCommission(id){
   renderMilestones();
   updateDynamic();
   renderLog();
-  showToast('委托报酬到账 +' + rw.coins + ' 铜钱' + (rw.fame ? ' / 声望 +' + rw.fame : ''));
+  showToast('委托报酬到账 +' + rw.coins + ' 铜钱' + (rw.fame ? ' / 声望 +' + rw.fame : '') + (c.feed ? '（亲手备料 · ' + feedGradeLabel(c.feed.grade) + '）' : ''));
   return true;
 }
 
@@ -2516,6 +2747,7 @@ function commissionPayout(c){
   if(!t) return null;
   const rw = commissionReward(t);
   if(c.urgent) rw.coins = rw.coins * CONFIG.urgent.mult;   /* 加急单报酬翻倍：结算唯一出口 */
+  if(c.feed) rw.coins = Math.round(rw.coins * feedMultOf(c.feed.grade));   /* 喂马备程：配料档倍率只在此唯一出口注入；无 feed 的托管单原公式逐值不变 */
   return rw;
 }
 function ensureUrgent(){
@@ -2647,6 +2879,9 @@ function wishCheck(g){
       ? { ok: true, hint: '' }
       : { ok: false, hint: '等乐师、歌姬或说书人住店时可遂愿' };
   }
+  if(k.id === 'keepsake'){
+    return { ok: true, hint: '' };   /* 专属心愿（深谈投缘产出）：信物留店即可遂愿，无附加条件 */
+  }
   return { ok: false, hint: '' };
 }
 function wishReward(g){
@@ -2672,6 +2907,635 @@ function fulfillWish(i){
   showToast('心愿遂了 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor);
   sfxPlay('reward');
   return true;
+}
+
+/* ================= 亲手操控层（v1.4.5 全量批）共享基建 =================
+   面板共用 #playMask/#playBox；面板打开期间 playGuestRef 指向当事旅客，tick 跳过其离店递减
+   （旅客只住 3–8 程，不冻结则深谈/掌勺/奉茶根本点不完）。关闭面板＝放弃本次，不消耗任何次数。
+   情境引导 coach：S.flags.tour* first-flag，主引导结束且目标在当前页可见时才指对真实控件；
+   玩家点开对应面板即自动落旗（真实操作即学会），点「知道了」也落旗 */
+function guestGroupOf(typeId){
+  for(const k of Object.keys(CONFIG.playGroups))
+    if(CONFIG.playGroups[k].types.indexOf(typeId) >= 0) return k;
+  return null;
+}
+function wishPoolKinds(){ return CONFIG.wish.kinds.filter(k => !k.talkOnly); }
+function shuffleArr(arr){
+  const a = arr.slice();
+  for(let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+let playGuestRef = null;
+let playSession = null;
+function openPlay(html, guest){
+  const m = document.getElementById('playMask'), b = document.getElementById('playBox');
+  if(!m || !b) return false;
+  b.innerHTML = html;
+  m.style.display = '';
+  playGuestRef = guest || null;
+  return true;
+}
+function closePlay(){
+  const m = document.getElementById('playMask');
+  if(m) m.style.display = 'none';
+  playGuestRef = null;
+  playSession = null;
+}
+function playHead(g, title){
+  return '<div class="up-row"><div class="info"><div class="t">' + esc(title) + '</div>' +
+    '<div class="d">' + esc(g.label) + ' ' + esc(g.name) + (guestLineByType(g.type, g.name) ? '：「' + esc(guestLineByType(g.type, g.name)) + '」' : '') + '</div></div></div>';
+}
+const COACH_DEFS = [
+  { flag:'tourTalk', tab:'build', sub:'fac', target:() => document.querySelector('.talk-act-btn'),
+    title:'深谈交好：和客人聊出交情',
+    body:'点房卡上的「深谈」：三段话——寒暄、深聊、收尾——都按客人的身份和神色选。聊对了交情进阶：面熟结下故事种子、投缘有专属心愿、知交能邀他日后驻店。聊错了也不罚，最多不得分。' },
+  { flag:'tourCook', tab:'build', sub:'fac', target:() => document.querySelector('.cook-act-btn'),
+    title:'掌勺做饭：亲手给客人做一道',
+    body:'带「想吃对味招牌」心愿的客人，房卡上多了「掌勺」：看他点菜话里的口味词，三槽选料再定火候。对味小费翻倍；翻车只赔这单料钱，还能重做一次。不想动手，点「遂愿」照旧。' },
+  { flag:'tourTea', tab:'build', sub:'fac', target:() => document.querySelector('.tea-act-btn'),
+    title:'沏茶待客：给他奉一壶茶',
+    body:'点房卡上的「奉茶」：按客人的话头选茶、定水温、控浸泡。沏成「知味」有茶钱，只奖不罚；每天能奉两位客人。' },
+  { flag:'tourDecor', tab:'build', sub:'fac', target:() => document.querySelector('#decorBox .decor-slot'),
+    title:'布置客房：陈设招客',
+    body:'客房卡下面能给每间房摆三件陈设（壁饰/案头/床品）：摆了合哪类客人口味的陈设，哪类客就来得多。陈设从图鉴点亮和里程碑领取里攒，摆进房里占库存、撤下返还。' },
+  { flag:'tourFeed', tab:'affair', sub:null, target:() => document.querySelector('.feed-act-btn'),
+    title:'喂马备程：出发前亲手配料',
+    body:'委托卡上多了「亲手备料出发」：黑豆、干草、麸皮配满十份——听马夫的话按路途远近配。配得精，归来报酬多一成半；配凑合，少一成。不配料点「出发」照旧。' }
+];
+let coachCur = null, coachTimer = null;
+function setCoachFlag(flag){
+  if(S && S.flags && !S.flags[flag]){ S.flags[flag] = true; save(); }
+  if(coachCur && coachCur.flag === flag) coachHide();
+}
+function coachHide(){
+  const r = document.getElementById('coachRing'), b = document.getElementById('coachBubble');
+  if(r) r.style.display = 'none';
+  if(b) b.style.display = 'none';
+  if(coachTimer){ clearInterval(coachTimer); coachTimer = null; }
+  coachCur = null;
+}
+function coachDone(){ if(coachCur) setCoachFlag(coachCur.flag); coachHide(); }
+function coachPlace(){
+  if(!coachCur) return;
+  const ring = document.getElementById('coachRing');
+  if(!ring) return;
+  const el = coachCur.target();
+  if(!el){ coachHide(); return; }
+  const r = el.getBoundingClientRect();
+  if(r.width === 0 || r.height < 6){ ring.style.display = 'none'; return; }
+  ring.style.display = '';
+  ring.style.left = (r.left - 5) + 'px';
+  ring.style.top = (r.top - 5) + 'px';
+  ring.style.width = (r.width + 10) + 'px';
+  ring.style.height = (r.height + 10) + 'px';
+}
+function maybeCoach(){
+  if(coachCur || !S || !S.name || !S.guideDone || tourActive) return;
+  const pm = document.getElementById('playMask');
+  if(pm && pm.style.display !== 'none') return;
+  for(const d of COACH_DEFS){
+    if(S.flags[d.flag]) continue;
+    if(uiTab !== d.tab) continue;
+    if(d.sub && uiSub[d.tab] !== d.sub) continue;
+    const el = d.target();
+    if(!el) continue;
+    coachCur = d;
+    const bub = document.getElementById('coachBubble');
+    if(!bub){ coachCur = null; return; }
+    bub.innerHTML =
+      '<div class="trow"><span class="tmeta">🧭 新玩法 · 老掌柜提点</span></div>' +
+      '<div class="ttitle">' + d.title + '</div>' +
+      '<div class="tbody">' + d.body + '</div>' +
+      '<div class="tbtns"><button class="small accent" onclick="coachDone()">知道了</button></div>';
+    bub.style.display = '';
+    try{ el.scrollIntoView({ block:'center', behavior:'auto' }); }catch(e){}
+    coachPlace();
+    if(coachTimer) clearInterval(coachTimer);
+    coachTimer = setInterval(() => {
+      if(!coachCur){ clearInterval(coachTimer); coachTimer = null; return; }
+      if(uiTab !== coachCur.tab || (coachCur.sub && uiSub[coachCur.tab] !== coachCur.sub)){ coachHide(); return; }
+      coachPlace();
+    }, 700);
+    return;
+  }
+}
+
+/* ================= 深谈交好（亲手操控层⑥） =================
+   三段：寒暄（客群礼数）→深聊（话题须中客群偏好）→收尾（按客况：有心愿许诺/将离店送行/久住留茶）；
+   talkScore 命中数为唯一判定：≥2 大命中 bond+2＋小费彩头；＝1 命中 +1；＝0 错位 +0，零惩罚。
+   bond 按类型记账（S.bonds）；每位在住客 1 次、每类型每日 perTypeDaily 次（S.talk 日戳懒重置） */
+function talkBondOf(type){ return clampInt(S && S.bonds && S.bonds[type], 0, CONFIG.talk.bondCap, 0); }
+function talkStageOf(type){
+  const b = talkBondOf(type);
+  let st = CONFIG.talk.stages[0];
+  for(const s of CONFIG.talk.stages) if(b >= s.min) st = s;
+  return st;
+}
+function talkCountToday(type){
+  if(!S || !S.talk || S.talk.day !== dayStr()) return 0;
+  return S.talk.counts[type] || 0;
+}
+function talkEndKey(g){
+  if(g.wish) return 'wish';
+  if((g.stayLeft || 0) <= 4) return 'farewell';
+  return 'tea';
+}
+function openTalk(i){
+  const g = S && S.guests[i];
+  if(!g) return false;
+  if(g.talked){ showToast('今日已与这位客人深谈过了'); return false; }
+  if(talkCountToday(g.type) >= CONFIG.talk.perTypeDaily){ showToast('今日与这类客人已叙过两回，明日再叙'); return false; }
+  setCoachFlag('tourTalk');
+  const grp = guestGroupOf(g.type) || 'bai';
+  const favs = (CONFIG.talk.groupFav[grp] || []).slice();
+  const favTopic = favs[Math.floor(Math.random() * favs.length)];
+  const others = shuffleArr(CONFIG.talk.topics.map(t => t.id).filter(id => favs.indexOf(id) < 0)).slice(0, 2);
+  playSession = { kind:'talk', g: g, grp: grp, step: 0, picks: [], reaction: '',
+    key: { greet: CONFIG.talk.groupGreet[grp], topic: favTopic, end: talkEndKey(g) },
+    topicOpts: shuffleArr([favTopic].concat(others)) };
+  renderTalkStep();
+  return true;
+}
+function talkTopicLabel(id){ const t = CONFIG.talk.topics.find(x => x.id === id); return t ? t.label : id; }
+function renderTalkStep(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'talk') return;
+  const g = ses.g, grp = ses.grp;
+  const hints = CONFIG.talk.hints[grp] || [];
+  const hint = hints.length ? hints[(g.name.charCodeAt(0) + g.name.length) % hints.length] : '';
+  const stepNames = ['一 · 寒暄', '二 · 深聊', '三 · 收尾'];
+  let opts = '';
+  if(ses.step === 0){
+    opts = shuffleArr(CONFIG.talk.greets.slice()).map(o =>
+      '<button class="small" onclick="talkPick(\'' + o.id + '\')">' + esc(o.text) + '</button>').join('');
+  }else if(ses.step === 1){
+    opts = ses.topicOpts.map(id =>
+      '<button class="small" onclick="talkPick(\'' + id + '\')">聊聊 · ' + esc(talkTopicLabel(id)) + '</button>').join('');
+  }else{
+    opts = shuffleArr(CONFIG.talk.ends.slice()).map(o =>
+      '<button class="small" onclick="talkPick(\'' + o.id + '\')">' + esc(o.text) + '</button>').join('');
+  }
+  openPlay(
+    '<h3>深 谈 交 好</h3>' + playHead(g, g.label + ' ' + g.name + ' · 交情「' + talkStageOf(g.type).name + '」') +
+    '<div class="small-note">观其神色：' + esc(hint) + '。三段话都选对路，交情进阶；选错不罚，最多不得分。</div>' +
+    (ses.reaction ? '<div class="play-react">' + esc(ses.reaction) + '</div>' : '') +
+    '<div class="sect">' + stepNames[ses.step] + '（第 ' + (ses.step + 1) + '/3 段）</div>' +
+    '<div class="btnrow play-opts">' + opts + '</div>' +
+    '<div class="btnrow"><button class="small ghost" onclick="closePlay()">先不聊了</button></div>', g);
+}
+function talkReaction(ses, keyName, ok){
+  const g = ses.g;
+  if(ok) return ['他眼睛一亮，话匣子打开了。', '这话说到他心坎里，连连点头。', '他身子往前倾了倾，聊兴正浓。'][Math.floor(Math.random() * 3)];
+  if(keyName === 'greet'){
+    const right = CONFIG.talk.greets.find(x => x.id === ses.key.greet);
+    return '他微微一怔，礼数有些不合拍——这类客人更吃「' + (right ? right.text : '') + '」那一套。';
+  }
+  if(keyName === 'topic') return '这话头他不接，只笑笑——他眼里亮起来的，是「' + talkTopicLabel(ses.key.topic) + '」那类事。';
+  if(ses.key.end === 'wish') return '他欲言又止——袖里的心愿还没着落呢，先许个诺更暖心。';
+  if(ses.key.end === 'farewell') return '他行囊都收好了，是要赶路的人——送一程比留茶更合意。';
+  return '他还没要走的意思，茶倒是见底了——留一壶再叙更合意。';
+}
+function talkPick(id){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'talk') return;
+  const stepKeys = ['greet', 'topic', 'end'];
+  const keyName = stepKeys[ses.step];
+  const ok = id === ses.key[keyName];
+  ses.picks.push({ key: keyName, id: id, ok: ok });
+  if(ses.step >= 2){ finishTalk(); return; }
+  ses.reaction = talkReaction(ses, keyName, ok);
+  ses.step++;
+  renderTalkStep();
+}
+function finishTalk(){
+  const ses = playSession, g = ses.g;
+  const hits = ses.picks.filter(p => p.ok).length;
+  const gain = hits >= 2 ? 2 : (hits === 1 ? 1 : 0);
+  const before = talkBondOf(g.type);
+  const after = Math.min(CONFIG.talk.bondCap, before + gain);
+  S.bonds[g.type] = after;
+  g.talked = true;
+  if(S.talk.day !== dayStr()){ S.talk.day = dayStr(); S.talk.counts = {}; }
+  S.talk.counts[g.type] = (S.talk.counts[g.type] || 0) + 1;
+  S.talk.count = (S.talk.count || 0) + 1;
+  let tip = 0;
+  if(hits >= 2){
+    tip = Math.max(5, Math.round(guestRoomPrice(g) * (g.priceMult || 1) * CONFIG.talk.tipMult));
+    ledger('talk', tip, 0, '与 ' + g.label + ' ' + g.name + ' 深谈投契，临别赠礼 +' + tip + ' 铜钱');
+  }
+  const notes = [];
+  if(after >= 2 && before < 2 && S.talk.seeds.indexOf(g.type) < 0){
+    S.talk.seeds.push(g.type);
+    notes.push('交情到了「面熟」——与这类客人结下了故事的种子，日后许有一段连环故事（11月25日承接）。');
+  }
+  if(after >= 4 && before < 4){
+    if(!g.wish){
+      g.wish = { kind:'keepsake' };
+      g.stayLeft = Math.max(g.stayLeft, CONFIG.wish.minStayTicks);
+      notes.push('交情到了「投缘」——他留下了一个专属心愿，就在他房卡上。');
+    }else if(S.talk.wishDue.indexOf(g.type) < 0){
+      S.talk.wishDue.push(g.type);
+      notes.push('交情到了「投缘」——下次这类客人入住时，会带来一个专属心愿。');
+    }
+  }
+  if(after >= CONFIG.talk.bondCap && before < CONFIG.talk.bondCap && !S.residentInvite){
+    S.residentInvite = true;
+    notes.push('知交已成！驻店邀约资格已记下——贵客驻店 11月26日开放时承接。');
+  }
+  save();
+  renderRooms();
+  const tierName = hits >= 2 ? '深谈投契' : (hits === 1 ? '聊得投机' : '话不投机');
+  const stepNames = { greet:'寒暄', topic:'深聊', end:'收尾' };
+  openPlay(
+    '<h3>深 谈 · ' + tierName + '</h3>' + playHead(g, g.label + ' ' + g.name) +
+    '<div class="play-react">' + ses.picks.map(p => (p.ok ? '✓' : '✗') + ' ' + stepNames[p.key]).join(' · ') +
+      '——命中 ' + hits + '/3，交情 +' + (after - before) + '（「' + talkStageOf(g.type).name + '」 ' + after + '/' + CONFIG.talk.bondCap + '）' +
+      (tip ? '，临别赠礼 +' + tip + ' 铜钱已入账' : '') + '。</div>' +
+    notes.map(n => '<div class="small-note">' + esc(n) + '</div>').join('') +
+    (hits === 0 ? '<div class="small-note">话不投机也不打紧：没扣任何东西，明日换位同类客人再叙——认准他的身份与神色选话题。</div>' : '') +
+    '<div class="btnrow"><button class="small accent" onclick="closePlay()">收下这份交情</button></div>', null);
+}
+
+/* ================= 掌勺做饭（亲手操控层①） =================
+   dish 心愿客的亲手轨（与「遂愿」托管轨并列）：三槽选料＋火候，cookCheck 唯一判定——
+   得分＝口味词命中数＋火候对错（满 3 对味、2 将就、口味全偏或犯禁忌翻车）；重做（tried≥1）封顶将就。
+   对味＝心愿小费×2＋声望2＋好感3（自家产主料额外好感+1 并耗食材 1）；将就＝wishReward 原值；
+   翻车＝扣料钱 roomPrice()×feeMult（上限写死）、心愿保留。对味/将就结算即遂愿（摘心愿防重复） */
+function cookProfileOf(type){
+  const d = CONFIG.dishes.find(x => x.targets.indexOf(type) >= 0);
+  if(!d) return null;
+  const p = CONFIG.cook.profiles[d.id];
+  return p ? { dish: d, keys: p.keys, fire: p.fire } : null;
+}
+function cookCheck(g, picks){
+  const prof = cookProfileOf(g.type);
+  if(!prof || !picks) return null;
+  const defs = [CONFIG.cook.mains.find(x => x.id === picks.main),
+                CONFIG.cook.sides.find(x => x.id === picks.side),
+                CONFIG.cook.sauces.find(x => x.id === picks.sauce)].filter(Boolean);
+  if(defs.length < 3 || !picks.fire) return null;
+  const tagset = {};
+  defs.forEach(d => d.tags.forEach(t => { tagset[t] = true; }));
+  const missed = prof.keys.filter(k => !tagset[k]);
+  const hits = prof.keys.length - missed.length;
+  const fireOk = picks.fire === prof.fire;
+  const tabooDef = CONFIG.cook.taboos.find(t => (t.slot === 'main' ? picks.main : picks.sauce) === t.id && picks.fire === t.fire) || null;
+  let grade = 'ok';
+  if(tabooDef || hits === 0) grade = 'bad';
+  else if(hits + (fireOk ? 1 : 0) >= 3) grade = 'great';
+  if(g.order && g.order.tried >= 1 && grade === 'great') grade = 'ok';   /* 重做封顶将就，防刷对味 */
+  return { grade: grade, hits: hits, missed: missed, fireOk: fireOk, taboo: !!tabooDef, prof: prof };
+}
+function openCook(i){
+  const g = S && S.guests[i];
+  if(!g || !g.wish || g.wish.kind !== 'dish') return false;
+  if(g.order && g.order.tried >= 2){ showToast('这单已经掌勺两回了，剩下的心愿点「遂愿」吧'); return false; }
+  setCoachFlag('tourCook');
+  playSession = { kind:'cook', g: g, picks: { main:null, side:null, sauce:null, fire:null } };
+  renderCookPanel();
+  return true;
+}
+function cookPick(slot, id){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'cook') return;
+  ses.picks[slot] = id;
+  renderCookPanel();
+}
+function cookSlotRow(label, items, slot, cur){
+  return '<div class="sect">' + label + '</div><div class="btnrow play-opts">' +
+    items.map(it => '<button class="small' + (cur === it.id ? ' accent' : '') + '" onclick="cookPick(\'' + slot + '\',\'' + it.id + '\')">' +
+      esc(it.name) + '<span class="opt-tags">' + it.tags.join('·') + '</span></button>').join('') + '</div>';
+}
+function renderCookPanel(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'cook') return;
+  const g = ses.g, prof = cookProfileOf(g.type);
+  if(!prof){ closePlay(); return; }
+  const p = ses.picks;
+  const allPicked = p.main && p.side && p.sauce && p.fire;
+  openPlay(
+    '<h3>掌 勺 做 饭</h3>' + playHead(g, g.label + ' ' + g.name + ' 的点菜单') +
+    '<div class="small-note">他点菜话说得明白：「就想吃一口 <b>' + esc(prof.keys[0]) + '</b> 的，最好还 <b>' + esc(prof.keys[1]) + '</b>。」——他这一路人的口味，正合今日招牌谱里的「' + esc(prof.dish.name) + '」。料的性味都标在钮上，火候另选一档；有一样当心：甜羹汁忌猛火、时蔬忌猛火。</div>' +
+    cookSlotRow('主料', CONFIG.cook.mains, 'main', p.main) +
+    '<div class="btnrow play-opts"><button class="small" disabled>腌菜成品 · 后厨加工链 11月27日上线后入主料槽</button></div>' +
+    cookSlotRow('配料', CONFIG.cook.sides, 'side', p.side) +
+    cookSlotRow('调味', CONFIG.cook.sauces, 'sauce', p.sauce) +
+    '<div class="sect">火候</div><div class="btnrow play-opts">' +
+      CONFIG.cook.fires.map(f => '<button class="small' + (p.fire === f.id ? ' accent' : '') + '" onclick="cookPick(\'fire\',\'' + f.id + '\')">' + esc(f.label) + '</button>').join('') + '</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="cookServe()"' + (allPicked ? '' : ' disabled') + '>出锅上菜</button>' +
+    '<button class="small ghost" onclick="closePlay()">先不做了</button></div>', g);
+}
+function cookServe(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'cook') return;
+  const g = ses.g, chk = cookCheck(g, ses.picks);
+  if(!chk) return;
+  const rw = wishReward(g);
+  g.order = g.order || { tried: 0 };
+  g.order.tried++;
+  S.cook.done++;
+  const fireName = (CONFIG.cook.fires.find(f => f.id === ses.picks.fire) || {}).label || '';
+  const profFireName = (CONFIG.cook.fires.find(f => f.id === chk.prof.fire) || {}).label || '';
+  const review = [];
+  review.push(chk.hits === chk.prof.keys.length ? '口味词全对上了' : ('口味对上 ' + chk.hits + '/' + chk.prof.keys.length + (chk.missed.length ? '，差了「' + chk.missed.join('」「') + '」这一味——认准带这味的料' : '')));
+  review.push(chk.taboo ? '犯了火候禁忌，这锅直接糊了' : (chk.fireOk ? '火候（' + fireName + '）正好' : '火候用了' + fireName + '，他这口宜用' + profFireName));
+  let head = '', settle = '';
+  if(chk.grade === 'great'){
+    S.cook.best++;
+    let favor = 3, selfProd = false;
+    if(CONFIG.cook.gardenMains.indexOf(ses.picks.main) >= 0 && S.garden && S.garden.stock > 0){ S.garden.stock--; favor += 1; selfProd = true; }
+    ledger('cook', rw.coins * 2, 2, '亲手掌勺对了 ' + g.label + ' ' + g.name + ' 的口味：小费 +' + (rw.coins * 2) + ' 铜钱 / 声望 +2 / 好感 +' + favor, favor);
+    g.wish = null;
+    head = '对 味 ！';
+    settle = '小费 +' + (rw.coins * 2) + ' 铜钱（心愿小费翻倍）/ 声望 +2 / 好感 +' + favor + (selfProd ? '（用了自家菜园的料，好感额外 +1）' : '') + '，心愿已遂。';
+  }else if(chk.grade === 'ok'){
+    ledger('cook', rw.coins, rw.fame, '亲手掌勺给 ' + g.label + ' ' + g.name + ' 做了道将就的菜：小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor, rw.favor);
+    g.wish = null;
+    head = '将 就';
+    settle = '小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor + '（与点「遂愿」同值，白忙不亏），心愿已遂。';
+  }else{
+    const fee = Math.round(roomPrice() * CONFIG.cook.feeMult);
+    let paid = 0;
+    if(fee > 0){
+      if(ledger('cook', -fee, 0, '这单掌勺翻了车，赔料钱 ' + fee + ' 铜钱')) paid = fee;
+      else if(S.coins > 0){ const p2 = Math.min(S.coins, fee); if(ledger('cook', -p2, 0, '这单掌勺翻了车，赔料钱 ' + p2 + ' 铜钱')) paid = p2; }
+    }
+    head = '翻 车';
+    settle = '没给小费，赔了这单料钱 ' + paid + ' 铜钱（上限＝房价一半）；心愿还在' + (g.order.tried < 2 ? '，可以重做一次（重做最好只到将就）' : '') + '，也可以点「遂愿」走托管。';
+  }
+  save();
+  renderRooms();
+  openPlay(
+    '<h3>掌 勺 · ' + head + '</h3>' + playHead(g, g.label + ' ' + g.name) +
+    '<div class="play-react">客人评语：' + review.join('；') + '。</div>' +
+    '<div class="small-note">' + settle + '</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="closePlay()">知道了</button></div>', null);
+}
+
+/* ================= 沏茶待客（亲手操控层②） =================
+   三判断（茶/水温/浸泡），teaCheck 唯一判定；只奖不罚：知味 3/3 茶钱＋好感3、合口 2/3 好感2、
+   不对路好感1。每位在住客 1 次、每日 dailyMax 次（S.tea 日戳懒计数） */
+function teaUnlocked(t){ return S.kitchenLv >= (t.minKitchen || 0); }
+function teaCorrectTea(grp){
+  const order = (CONFIG.tea.profile[grp] || {}).teas || ['cu'];
+  for(const id of order){ const t = CONFIG.tea.teas.find(x => x.id === id); if(t && teaUnlocked(t)) return id; }
+  return 'cu';
+}
+function teaCountToday(){ return (S && S.tea && S.tea.day === dayStr()) ? S.tea.count : 0; }
+function teaCheck(g, picks){
+  const grp = guestGroupOf(g.type) || 'bai';
+  const prof = CONFIG.tea.profile[grp] || CONFIG.tea.profile.bai;
+  const key = { tea: teaCorrectTea(grp), temp: prof.temp, steep: prof.steep };
+  const hits = (picks.tea === key.tea ? 1 : 0) + (picks.temp === key.temp ? 1 : 0) + (picks.steep === key.steep ? 1 : 0);
+  return { hits: hits, key: key, grp: grp };
+}
+function openTea(i){
+  const g = S && S.guests[i];
+  if(!g) return false;
+  if(g.tead){ showToast('这位客人已经奉过茶了'); return false; }
+  if(teaCountToday() >= CONFIG.tea.dailyMax){ showToast('今日奉茶已满 ' + CONFIG.tea.dailyMax + ' 回，明日再奉'); return false; }
+  setCoachFlag('tourTea');
+  playSession = { kind:'tea', g: g, picks: { tea:null, temp:null, steep:null } };
+  renderTeaPanel();
+  return true;
+}
+function teaPick(slot, id){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'tea') return;
+  ses.picks[slot] = id;
+  renderTeaPanel();
+}
+function renderTeaPanel(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'tea') return;
+  const g = ses.g, grp = guestGroupOf(g.type) || 'bai', p = ses.picks;
+  const allPicked = p.tea && p.temp && p.steep;
+  openPlay(
+    '<h3>沏 茶 待 客</h3>' + playHead(g, g.label + ' ' + g.name + ' · 奉一壶茶') +
+    '<div class="small-note">他喝茶的讲究都写在话里：' + esc(CONFIG.tea.clues[grp] || '') + ' 沏错了也不罚，最多是他笑笑说下次再来。</div>' +
+    '<div class="sect">选茶（随厨房等级解锁）</div><div class="btnrow play-opts">' +
+      CONFIG.tea.teas.map(t => teaUnlocked(t)
+        ? '<button class="small' + (p.tea === t.id ? ' accent' : '') + '" onclick="teaPick(\'tea\',\'' + t.id + '\')">' + esc(t.name) + '</button>'
+        : '<button class="small" disabled>' + esc(t.name) + ' · 厨房 ' + t.minKitchen + ' 级解锁</button>').join('') + '</div>' +
+    '<div class="sect">水温</div><div class="btnrow play-opts">' +
+      CONFIG.tea.temps.map(t => '<button class="small' + (p.temp === t.id ? ' accent' : '') + '" onclick="teaPick(\'temp\',\'' + t.id + '\')">' + esc(t.label) + '</button>').join('') + '</div>' +
+    '<div class="sect">浸泡</div><div class="btnrow play-opts">' +
+      CONFIG.tea.steeps.map(t => '<button class="small' + (p.steep === t.id ? ' accent' : '') + '" onclick="teaPick(\'steep\',\'' + t.id + '\')">' + esc(t.label) + '</button>').join('') + '</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="teaServe()"' + (allPicked ? '' : ' disabled') + '>奉茶</button>' +
+    '<button class="small ghost" onclick="closePlay()">先不奉了</button></div>', g);
+}
+function teaServe(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'tea') return;
+  const g = ses.g, chk = teaCheck(g, ses.picks);
+  if(S.tea.day !== dayStr()){ S.tea.day = dayStr(); S.tea.count = 0; }
+  S.tea.count++;
+  S.tea.served++;
+  g.tead = true;
+  const teaName = id => { const t = CONFIG.tea.teas.find(x => x.id === id); return t ? t.name : id; };
+  const tempName = id => { const t = CONFIG.tea.temps.find(x => x.id === id); return t ? t.label : id; };
+  const steepName = id => { const t = CONFIG.tea.steeps.find(x => x.id === id); return t ? t.label : id; };
+  const review = [
+    (ses.picks.tea === chk.key.tea ? '茶选对了（' + teaName(chk.key.tea) + '）' : '茶偏了——他更认' + teaName(chk.key.tea)),
+    (ses.picks.temp === chk.key.temp ? '水温正好（' + tempName(chk.key.temp) + '）' : '水温偏了——他宜用' + tempName(chk.key.temp)),
+    (ses.picks.steep === chk.key.steep ? '浸泡正好（' + steepName(chk.key.steep) + '）' : '浸泡偏了——他宜' + steepName(chk.key.steep))
+  ];
+  let head = '', settle = '';
+  if(chk.hits >= 3){
+    S.tea.perfect++;
+    const tip = Math.max(5, Math.round(guestRoomPrice(g) * (g.priceMult || 1) * CONFIG.tea.tipMult));
+    ledger('tea', tip, 0, '给 ' + g.label + ' ' + g.name + ' 沏出知味茶：茶钱 +' + tip + ' 铜钱 / 好感 +3', 3);
+    head = '知 味 ！';
+    settle = '茶钱 +' + tip + ' 铜钱 / 好感 +3 已入账。';
+  }else if(chk.hits === 2){
+    ledger('tea', 0, 0, '给 ' + g.label + ' ' + g.name + ' 奉茶合口：好感 +2', 2);
+    head = '合 口';
+    settle = '好感 +2 已入账（无茶钱）。';
+  }else{
+    ledger('tea', 0, 0, '给 ' + g.label + ' ' + g.name + ' 奉茶不对路：好感 +1', 1);
+    head = '不 对 路';
+    settle = '他笑笑说下次火候到了再来——好感 +1，不扣任何东西。';
+  }
+  save();
+  renderRooms();
+  openPlay(
+    '<h3>沏 茶 · ' + head + '</h3>' + playHead(g, g.label + ' ' + g.name) +
+    '<div class="play-react">逐项点评：' + review.join('；') + '。（命中 ' + chk.hits + '/3）</div>' +
+    '<div class="small-note">' + settle + '</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="closePlay()">知道了</button></div>', null);
+}
+
+/* ================= 喂马备程（亲手操控层④） =================
+   委托出发前三料配满 portions 份：feedGradeOf 按与理想配比（按档位时长桶）的 |偏差| 和定档；
+   实例 feed{mix,grade} 随委托走，倍率只在 commissionPayout 注入。马夫台词只给原则、不给配比数 */
+function feedIdeal(tier){
+  for(const b of CONFIG.feed.ideal) if(tier.hours <= b.maxHours) return b.mix;
+  return CONFIG.feed.ideal[CONFIG.feed.ideal.length - 1].mix;
+}
+function feedHint(tier){
+  for(const b of CONFIG.feed.hints) if(tier.hours <= b.maxHours) return b.text;
+  return '';
+}
+function feedGradeOf(tier, mix){
+  const ideal = feedIdeal(tier);
+  const dist = mix.reduce((s, v, i) => s + Math.abs(v - ideal[i]), 0);
+  for(const gr of CONFIG.feed.grades) if(dist <= gr.maxDist) return { id: gr.id, mult: gr.mult, label: gr.label, dist: dist };
+  const last = CONFIG.feed.grades[CONFIG.feed.grades.length - 1];
+  return { id: last.id, mult: last.mult, label: last.label, dist: dist };
+}
+function feedGradeLabel(id){ const gr = CONFIG.feed.grades.find(x => x.id === id); return gr ? gr.label : ''; }
+function feedMultOf(id){ const gr = CONFIG.feed.grades.find(x => x.id === id); return gr ? gr.mult : 1; }
+function openFeed(tierId){
+  const tier = tierDef(tierId);
+  if(!tier) return false;
+  if(!packActive('commission')){ showToast('商队委托尚未开放'); return false; }
+  setCoachFlag('tourFeed');
+  playSession = { kind:'feed', tier: tier, mix: [4, 3, 3] };
+  renderFeedPanel();
+  return true;
+}
+function feedAdj(idx, delta){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'feed') return;
+  const total = ses.mix.reduce((s, v) => s + v, 0);
+  if(delta > 0 && total >= CONFIG.feed.portions) return;
+  if(delta < 0 && ses.mix[idx] <= 0) return;
+  ses.mix[idx] += delta;
+  renderFeedPanel();
+}
+function renderFeedPanel(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'feed') return;
+  const tier = ses.tier, total = ses.mix.reduce((s, v) => s + v, 0);
+  const rw = commissionReward(tier);
+  openPlay(
+    '<h3>喂 马 备 程</h3>' +
+    '<div class="up-row"><div class="info"><div class="t">' + (tier.name ? '远行委托「' + esc(tier.name) + '」' : '商队委托') + ' · ' + tier.hours + ' 小时</div>' +
+    '<div class="d">基准报酬 ' + rw.coins + ' 铜钱——配料档在归来结算时定：精配 ×1.15 / 合配 ×1.0 / 凑合 ×0.9。</div></div></div>' +
+    '<div class="small-note">' + esc(feedHint(tier)) + '</div>' +
+    CONFIG.feed.feeds.map((f, i) =>
+      '<div class="up-row"><div class="info"><div class="t">' + esc(f.name) + '</div></div>' +
+      '<button class="small" onclick="feedAdj(' + i + ',-1)">－</button>' +
+      '<span class="feed-n">' + ses.mix[i] + ' 份</span>' +
+      '<button class="small" onclick="feedAdj(' + i + ',1)">＋</button></div>').join('') +
+    '<div class="small-note">合计 ' + total + ' / ' + CONFIG.feed.portions + ' 份' + (total === CONFIG.feed.portions ? '，配满了。' : '，须配满才能出发。') + '</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="feedConfirm()"' + (total === CONFIG.feed.portions ? '' : ' disabled') + '>配好料，出发</button>' +
+    '<button class="small ghost" onclick="closePlay()">先不配了</button></div>', null);
+}
+function feedConfirm(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'feed') return;
+  if(ses.mix.reduce((s, v) => s + v, 0) !== CONFIG.feed.portions) return;   /* 未配满不许出发（钮面 disabled 之外的函数级守卫） */
+  const grade = feedGradeOf(ses.tier, ses.mix);
+  const ok = startCommission(ses.tier.id, { mix: ses.mix.slice(), grade: grade.id });
+  if(!ok) return;   /* 守卫（在途已满等）已由 startCommission 弹提示，面板保留让玩家改主意 */
+  closePlay();
+  showToast(grade.id === 'fine' ? '马夫拍腿：这料配得讲究，马儿有福了' :
+            grade.id === 'ok' ? '马夫点点头：中规中矩，放心走吧' : '马夫皱了皱眉，没说什么……');
+}
+
+/* ================= 布置客房（亲手操控层⑤） =================
+   库存 S.decor.owned 计数型（置入消耗/撤下返还）＝收藏副线的消耗出口（11/22 接同一张表）；
+   本批货源＝基础清单按 starter/图鉴点亮数/里程碑领取数到货，decorGrantCheck 唯一发放口（granted 防重发） */
+function decorRow(i){
+  if(!S.decor) return [null, null, null];
+  while(S.decor.rooms.length <= i) S.decor.rooms.push([null, null, null]);
+  return S.decor.rooms[i];
+}
+function decorGrantCheck(){
+  if(!S || !S.decor) return [];
+  const seen = Object.keys(S.guestsSeen || {}).length;
+  const miles = Object.keys(S.miles || {}).filter(k => S.miles[k]).length;
+  const got = [];
+  for(const it of CONFIG.decor.items){
+    if(S.decor.granted && S.decor.granted[it.id]) continue;
+    const u = it.unlock || { kind:'starter' };
+    const ok = u.kind === 'starter' ? true : (u.kind === 'seen' ? seen >= (u.n || 0) : (u.kind === 'miles' ? miles >= (u.n || 0) : false));
+    if(!ok) continue;
+    S.decor.granted = S.decor.granted || {};
+    S.decor.granted[it.id] = true;
+    S.decor.owned[it.id] = (S.decor.owned[it.id] || 0) + 1;
+    got.push(it);
+  }
+  if(got.length) pushLog('新陈设到货：' + got.map(it => it.name).join('、') + '（见客房布置）');
+  return got;
+}
+function decorPlacedGroups(){
+  const set = {};
+  if(!S || !S.decor) return set;
+  for(const row of S.decor.rooms) for(const id of row){
+    const it = decorItem(id);
+    if(it) it.fav.forEach(gp => { set[gp] = true; });
+  }
+  return set;
+}
+function decorMatchCount(roomIdx, type){
+  const grp = guestGroupOf(type);
+  if(!grp) return 0;
+  const row = decorRow(roomIdx);
+  let n = 0;
+  for(const id of row){ const it = decorItem(id); if(it && it.fav.indexOf(grp) >= 0) n++; }
+  return n;
+}
+function renderDecor(){
+  const box = document.getElementById('decorBox');
+  if(!box || !S) return;
+  decorGrantCheck();
+  let html = '<div class="sect">客 房 布 置 · 陈设合哪类客人口味，就招哪类客</div>';
+  for(let i = 0; i < S.rooms.count; i++){
+    const row = decorRow(i), g = S.guests[i];
+    html += '<div class="up-row"><div class="info"><div class="t">第 ' + (i + 1) + ' 间' + (g ? ' · ' + esc(g.label) + ' ' + esc(g.name) : ' · 空房') + '</div>' +
+      '<div class="d">' + CONFIG.decor.cats.map((c, ci) => { const it = decorItem(row[ci]); return c.label + '：' + (it ? esc(it.name) : '空'); }).join(' · ') +
+      (g ? ' · 合口味 ' + decorMatchCount(i, g.type) + '/3' : '') + '</div></div>' +
+      '<button class="small decor-slot" onclick="openDecor(' + i + ')">布置</button></div>';
+  }
+  const ownedList = CONFIG.decor.items.filter(it => (S.decor.owned[it.id] || 0) > 0);
+  html += '<div class="small-note">闲置库存：' + (ownedList.length ? ownedList.map(it => esc(it.name) + ' ×' + S.decor.owned[it.id]).join('、') : '暂无（图鉴点亮、里程碑领取会送来新陈设）') + '</div>';
+  box.innerHTML = html;
+}
+function openDecor(roomIdx){
+  if(!S || roomIdx < 0 || roomIdx >= S.rooms.count) return false;
+  setCoachFlag('tourDecor');
+  playSession = { kind:'decor', room: roomIdx };
+  renderDecorPanel();
+  return true;
+}
+function renderDecorPanel(){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'decor') return;
+  const i = ses.room, row = decorRow(i), g = S.guests[i];
+  const grp = g ? guestGroupOf(g.type) : null;
+  let html = '<h3>布 置 · 第 ' + (i + 1) + ' 间</h3>' +
+    '<div class="small-note">' + (g ? '现住：' + esc(g.label) + ' ' + esc(g.name) + '（' + esc((CONFIG.playGroups[grp] || {}).label || '') + '）——摆合他口味的陈设，这一间更招他这类客。' : '空房：先摆上，合哪类客人口味就招哪类客。') + '置入占库存 1 件，撤下返还。</div>';
+  CONFIG.decor.cats.forEach((c, ci) => {
+    const cur = decorItem(row[ci]);
+    html += '<div class="sect">' + c.label + '：' + (cur ? esc(cur.name) : '空') + (cur ? ' <button class="small ghost" onclick="decorPlace(' + ci + ',null)">撤下</button>' : '') + '</div>' +
+      '<div class="btnrow play-opts">' +
+      CONFIG.decor.items.filter(it => it.cat === c.id).map(it => {
+        const own = S.decor.owned[it.id] || 0;
+        const isCur = row[ci] === it.id;
+        const favHit = grp && it.fav.indexOf(grp) >= 0;
+        return '<button class="small' + (isCur ? ' accent' : '') + '" onclick="decorPlace(' + ci + ',\'' + it.id + '\')"' + (own <= 0 && !isCur ? ' disabled' : '') + '>' +
+          esc(it.name) + '<span class="opt-tags">' + it.fav.map(x => (CONFIG.playGroups[x] || {}).label || x).join('·') + (favHit ? ' · 合现住客' : '') + ' · 库存 ' + own + '</span></button>';
+      }).join('') + '</div>';
+  });
+  html += '<div class="btnrow"><button class="small accent" onclick="closePlay()">布置好了</button></div>';
+  openPlay(html, null);
+}
+function decorPlace(catIdx, itemId){
+  const ses = playSession;
+  if(!ses || ses.kind !== 'decor') return;
+  const row = decorRow(ses.room);
+  const old = row[catIdx];
+  if(old === itemId) { renderDecorPanel(); return; }
+  if(itemId && (S.decor.owned[itemId] || 0) <= 0) return;
+  if(old) S.decor.owned[old] = (S.decor.owned[old] || 0) + 1;
+  if(itemId) S.decor.owned[itemId]--;
+  row[catIdx] = itemId;
+  save();
+  renderRooms();
+  renderDecor();
+  renderDecorPanel();
 }
 /* 吆喝揽客：守卫＝高峰中不可重喊、冷却内不可喊（shoutNow 唯一入口） */
 function shoutNow(){
@@ -2744,8 +3608,10 @@ function claimMilestone(id){
   if(metricValue(m.metric) < m.target) return false;
   S.miles[id] = true;
   ledger('milestone', m.coins, m.fame, '里程碑达成：' + m.label);
+  decorGrantCheck();   /* 里程碑领取数是陈设到货源之一：领完即查到货（v1.4.5 布置客房） */
   save();
   renderMilestones();
+  renderDecor();
   updateDynamic();
   renderLog();
   showToast('里程碑奖励到账 +' + m.coins + ' 铜钱' + (m.fame ? ' / 声望 +' + m.fame : ''));
@@ -3544,7 +4410,7 @@ function renderMain(){
       '<div id="sub-build-fac">' +
         '<div class="card" id="roomsCard"><h3>客 房</h3><div class="rooms" id="roomsGrid"></div>' +
           '<div class="rate-line">当前房价 <b id="priceVal">0</b> 文/间 · 在住进账约 <b id="rateVal">0</b> 铜钱/分钟（含厨房与伙计加成）</div>' +
-          '<div id="welcomeBox"></div></div>' +
+          '<div id="welcomeBox"></div><div id="decorBox"></div></div>' +
         '<div class="card" id="upgradesCard"><h3>修 缮 与 设 施</h3><div id="upgradesBox"></div></div>' +
       '</div>' +
       '<div id="sub-build-staff" style="display:none">' +
@@ -3616,11 +4482,14 @@ function renderMain(){
     '<div id="soonMask" class="modal-mask" style="display:none"><div class="modal-box">' +
       '<h3>待 开 放 预 告</h3><div id="soonBody"></div>' +
       '<div class="btnrow"><button class="small accent" onclick="hideSoon()">知道了</button></div>' +
-    '</div></div>';
+    '</div></div>' +
+    '<div id="playMask" class="modal-mask" style="display:none"><div class="modal-box"><div id="playBox"></div></div></div>' +
+    '<div id="coachRing" class="coachRing" style="display:none"></div>' +
+    '<div id="coachBubble" style="display:none"></div>';
   document.getElementById('innNameView').textContent = S.name;
   document.body.classList.add('has-tabbar');
   todaySig = ''; offlineSig = ''; questSig = '';
-  renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderWelcome(); renderEvents(); renderUpgrades();
+  renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderDecor(); renderWelcome(); renderEvents(); renderUpgrades();
   renderShout(); renderDish(); renderGarden();
   renderStaff(); renderCommissions(); renderMilestones(); renderCodex();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
@@ -4034,6 +4903,22 @@ function renderWelcome(){
   }
   box.innerHTML = html;
 }
+/* 房卡亲手操控入口行（v1.4.5）：深谈/掌勺/奉茶三钮与既有遂愿并列，托管轨入口与行为一字未动；
+   钮的禁用态把原因写在钮面上（已叙/已满/已试两回），不让玩家点了才知道 */
+function roomActsHtml(i, g){
+  let btns = '';
+  if(g.talked) btns += '<button class="small" disabled>深谈 · 今日已叙</button>';
+  else if(talkCountToday(g.type) >= CONFIG.talk.perTypeDaily) btns += '<button class="small" disabled>深谈 · 这类客今日已叙满</button>';
+  else btns += '<button class="small talk-act-btn" onclick="openTalk(' + i + ')">深谈' + (talkBondOf(g.type) > 0 ? ' · ' + talkStageOf(g.type).name : '') + '</button>';
+  if(g.wish && g.wish.kind === 'dish'){
+    if(g.order && g.order.tried >= 2) btns += '<button class="small" disabled>掌勺 · 已试两回</button>';
+    else btns += '<button class="small cook-act-btn" onclick="openCook(' + i + ')">掌勺做饭</button>';
+  }
+  if(g.tead) btns += '<button class="small" disabled>奉茶 · 已奉过</button>';
+  else if(teaCountToday() >= CONFIG.tea.dailyMax) btns += '<button class="small" disabled>奉茶 · 今日已满</button>';
+  else btns += '<button class="small tea-act-btn" onclick="openTea(' + i + ')">奉茶</button>';
+  return '<div class="btnrow room-acts">' + btns + '</div>';
+}
 function renderRooms(){
   const grid = document.getElementById('roomsGrid');
   if(!grid) return;
@@ -4045,12 +4930,17 @@ function renderRooms(){
         '<div class="gname">' + esc(g.name) + '</div>' +
         '<div class="gtype">' + esc(g.label) + '</div>' +
         '<div class="gstay">余 ' + Math.max(1, g.stayLeft) + ' 程</div>' +
+        (talkBondOf(g.type) > 0 ? '<div class="gline">交情 · ' + talkStageOf(g.type).name + '（' + talkBondOf(g.type) + '/' + CONFIG.talk.bondCap + '）</div>' : '') +
+        (function(){ const row = (S.decor && S.decor.rooms[i]) || []; const names = row.map(id => decorItem(id)).filter(Boolean).map(it => it.name);
+          if(!names.length) return ''; const mc = decorMatchCount(i, g.type);
+          return '<div class="gline">陈设：' + names.join(' · ') + (mc ? '（合口味 ' + mc + '）' : '') + '</div>'; })() +
         (g.trialQ ? '<div class="gline">体验上房 · 按「' + esc(CONFIG.qualityNames[g.trialQ] || '') + '」结账</div>' : '') +
         (guestLineByType(g.type, g.name) ? '<div class="gline">「' + esc(guestLineByType(g.type, g.name)) + '」</div>' : '') +
         (g.wish ? (function(){ const k = wishKindDef(g.wish.kind), chk = wishCheck(g), rw = wishReward(g);
           return '<div class="gwish">心愿：' + esc(k ? k.text : '') + '<br>' +
             (chk.ok ? '<button class="small accent" onclick="fulfillWish(' + i + ')">遂愿（小费 ' + rw.coins + '）</button>'
-                    : '<span class="gwish-hint">' + esc(chk.hint) + '</span>') + '</div>'; })() : '') + '</div>';
+                    : '<span class="gwish-hint">' + esc(chk.hint) + '</span>') + '</div>'; })() : '') +
+        roomActsHtml(i, g) + '</div>';
     }else{
       html += '<div class="room empty">' + (IMG.rooms ? '<img class="room-empty-img" src="' + IMG.rooms + '" alt="">' : '') + '<span>空 房</span></div>';
     }
@@ -4284,12 +5174,19 @@ function renderCommissions(){
   let html = headImgHtml('caravan') + '<div class="btnrow">' + CONFIG.commissionTiers.map(t => {
     const rw = commissionReward(t);
     return '<button class="small" onclick="startCommission(\'' + t.id + '\')">' + t.hours + ' 小时 · 报酬 ' + rw.coins + ' 文</button>';
+  }).join('') + '</div>' +
+  /* 喂马备程（v1.4.5）：亲手轨入口与托管「出发」并列，基准报酬同源 commissionReward，配料档归来结算定 */
+  '<div class="btnrow">' + CONFIG.commissionTiers.map(t => {
+    return '<button class="small feed-act-btn" onclick="openFeed(\'' + t.id + '\')">' + t.hours + ' 小时 · 亲手备料出发</button>';
   }).join('') + '</div>';
   if(packActive('journey')){
     html += '<div class="sect">远 行 季 限 定</div>' +
       '<div class="btnrow">' + CONFIG.journeyTiers.map(t => {
         const rw = commissionReward(t);
         return '<button class="small" onclick="startCommission(\'' + t.id + '\')">' + t.name + ' · ' + t.hours + ' 小时 · 报酬 ' + rw.coins + ' 文</button>';
+      }).join('') + '</div>' +
+      '<div class="btnrow">' + CONFIG.journeyTiers.map(t => {
+        return '<button class="small feed-act-btn" onclick="openFeed(\'' + t.id + '\')">' + t.name + ' · 亲手备料出发</button>';
       }).join('') + '</div>';
   }
   const uo = S.urgent;
@@ -4429,7 +5326,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:6px;">把驿站放回桌面：离线房钱攒满 12 小时就溢出了，点桌面图标一键回来领取（需在虎扑 App 内使用）。</div>' +
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
-    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份。</div>' +
+    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
       '。贵客图鉴段 2026-11-26 开启。重置说明：如需重开驿站，请到本页存档区两步确认删档，删除后不可恢复（导入前备份除外）。</div>' +
@@ -4568,6 +5465,7 @@ function updateDynamic(){
     const sig = evNow ? evNow.id + ':' + evNow.choices.map(c => choiceAffordable(c) ? '1' : '0').join('') : '';
     if(sig !== evAffordSig) renderEvents();
   }
+  maybeCoach();   /* 亲手操控层情境引导：first-flag 未落且目标在当前页时才提点（内部自带全套守卫） */
 }
 
 /* ================= 工具 ================= */
@@ -4697,7 +5595,7 @@ function tourSeedWish(){
   if(S.guests.some(g => g.wish)) return;
   const g = S.guests[0];
   if(!g) return;
-  const k = CONFIG.wish.kinds[randInt(0, CONFIG.wish.kinds.length - 1)];
+  const k = wishPoolKinds()[randInt(0, wishPoolKinds().length - 1)];
   g.wish = { kind: k.id };
   g.stayLeft = Math.max(g.stayLeft, CONFIG.wish.minStayTicks);
   save();
@@ -4961,6 +5859,14 @@ window.YZ = {
   weatherOf: weatherOf, guestWeightToday: guestWeightToday,
   dishOf: dishOf, dishDef: dishDef, dishMultFor: dishMultFor, setDish: setDish,
   wishCheck: wishCheck, wishReward: wishReward, fulfillWish: fulfillWish,
+  guestGroupOf: guestGroupOf, wishPoolKinds: wishPoolKinds, arriveGuest: arriveGuest, guestRoomPrice: guestRoomPrice,
+  talkBondOf: talkBondOf, talkStageOf: talkStageOf, talkCountToday: talkCountToday, talkEndKey: talkEndKey,
+  openTalk: openTalk, talkPick: talkPick, openCook: openCook, cookPick: cookPick, cookServe: cookServe,
+  cookCheck: cookCheck, cookProfileOf: cookProfileOf,
+  openTea: openTea, teaPick: teaPick, teaServe: teaServe, teaCheck: teaCheck, teaCorrectTea: teaCorrectTea, teaCountToday: teaCountToday,
+  openFeed: openFeed, feedAdj: feedAdj, feedConfirm: feedConfirm, feedGradeOf: feedGradeOf, feedIdeal: feedIdeal, feedMultOf: feedMultOf,
+  openDecor: openDecor, decorPlace: decorPlace, decorMatchCount: decorMatchCount, decorPlacedGroups: decorPlacedGroups, decorGrantCheck: decorGrantCheck, renderDecor: renderDecor,
+  closePlay: closePlay, coachCur: function(){ return coachCur; }, coachDone: coachDone, maybeCoach: maybeCoach,
   shoutActive: shoutActive, shoutNow: shoutNow,
   pickShoutFrag: pickShoutFrag, shoutComboActive: shoutComboActive, shoutComboGroups: shoutComboGroups,
   shoutComboText: shoutComboText, shoutComboHits: shoutComboHits, shoutComboFull: shoutComboFull,
