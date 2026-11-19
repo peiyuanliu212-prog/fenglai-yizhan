@@ -628,7 +628,7 @@ const CONFIG = {
     { date:'2026-11-22', title:'宴会厅开门 · 收藏开张', kind:'gate' },
     { date:'2026-11-23', title:'丰收日 · 抉择与委托奖励 ×1.5', kind:'boost', mod:{ eventMult:1.5, commissionMult:1.5, multLabel:'丰收日加码' } },
     { date:'2026-11-24', title:'掌柜考校 · 抉择奖励 ×1.5（伙计专精同日开启）', kind:'boost', mod:{ eventMult:1.5, multLabel:'掌柜考校加码' } },
-    { date:'2026-11-25', title:'新事件上新', kind:'data' },
+    { date:'2026-11-25', title:'新事件上新 · 连环故事开场（深谈面熟的种子今日承接）', kind:'data' },
     { date:'2026-11-26', title:'贵客临门', kind:'gate' },
     { date:'2026-11-27', title:'名厨日 · 厨房加成翻倍', kind:'boost', mod:{ kitchenDouble:true } },
     { date:'2026-11-28', title:'周末市集 · 礼包 4 次、金额 +50%', kind:'boost', mod:{ giftTimes:4, giftMult:1.5 } },
@@ -967,11 +967,11 @@ const CONFIG = {
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'spec-1124', lines: [
-    { name:'伙计专精', how:'四位伙计各多一条专精线：接待、待客、掌勺、跑委托这些平日做的事都算历练，达标后花钱升阶，加成并进他原本的那份产出', goto:'build:staffCard' },
-    { name:'历练与升阶全明牌', how:'历练进度、当前第几阶、还差多少次升阶、现在加了多少——伙计卡上逐项写清；入专精 5000 文、升阶 20000 / 80000 文，价钱就写在按钮上', goto:'build:staffCard' },
-    { name:'不升阶也照旧', how:'专精是给老伙计的加码，不是新门槛：从不升阶的玩家，收入与委托报酬和从前一个数，已有等级加成原样保留', goto:'build:staffCard' },
-    { name:'掌柜考校 · 今日限定', how:'11月24日是掌柜考校日：今日抉择的正奖励 ×1.5，做抉择更值钱，只限今天', goto:'affair:eventsCard' }
+  introCard: { ver: 'chain-1125', lines: [
+    { name:'连环故事「遗落的钱袋」', how:'和客人深谈到「面熟」结下的故事种子，今日起会引出一桩钱袋失主的连环故事：三幕连着演，今日选完、下一幕明日必到，终幕的谢礼数目就写在卡上', goto:'affair:eventsCard' },
+    { name:'新事件十张上新', how:'「借伞的姑娘」「夜半歌声」两段连环故事与四张新抉择今日入池——带「第 N 幕」角标的就是连环故事，演到第几幕卡上写得明明白白', goto:'affair:eventsCard' },
+    { name:'链进度随时回看', how:'事务页抉择上方有连环故事进度行：哪段故事演到第几幕、哪段已经完结，一眼看清，不怕断了线', goto:'affair:eventsCard' },
+    { name:'不深谈也照旧', how:'连环故事是给爱叙旧的玩家加的线：从不深谈的人，每日抉择的池子与从前一张不差，两段老故事照常随机出现', goto:'affair:eventsCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -988,10 +988,12 @@ const CONFIG = {
   garden: { plots: 4, dailyUse: 4, bonusPerUnit: 0.01, bonusCap: 0.25 },
   /* 连环故事伪链（v1.4 经济加厚批 B1）：种子卡走随机池，抉择后同链下一幕于次日必出
      （pickEventsForDay 唯一排卡口）；acts 顺序即幕次，进度存 chainProg[chainId]＝已完成幕数；
-     11/25 引擎批承接同一进度字段 */
+     11/25 引擎批承接同一进度字段。链 A「遗落的钱袋」（v1.4.8）：首幕带 needSeed——须深谈
+     面熟埋下的故事种子（S.talk.seeds）武装后才入池，首幕开场消费一颗种子（doEventChoice） */
   chains: [
     { id:'chain_umbrella', label:'借伞的姑娘', acts:['e_umbrella', 'e_umbrella2', 'e_umbrella3'] },
-    { id:'chain_song', label:'夜半歌声', acts:['e_song', 'e_song2', 'e_song3'] }
+    { id:'chain_song', label:'夜半歌声', acts:['e_song', 'e_song2', 'e_song3'] },
+    { id:'chain_purse', label:'遗落的钱袋', acts:['e_purse1', 'e_purse2', 'e_purse3'] }
   ],
   /* 旅客池 36 种：weight 权重 / priceMult 价格系数 / minLevel 等级门 / minKitchen / minStable / gate 日期门 */
   guestTypes: [
@@ -1073,6 +1075,15 @@ const CONFIG = {
       { label:'贴在堂前供人辨认', coins:0, fame:2, favor:2 }, { label:'收进柜里慢慢研究', coins:5, fame:0, favor:0 } ] },
     { id:'e_snowmsg', pool:'daily', img:'ev_caravan', from:'2026-11-25', title:'雪夜急信', text:'风雪里驰来一骑，信使冻得说不出话，只把一封急信塞进掌柜手里。', choices:[
       { label:'热汤暖屋，免了房钱', coins:-10, fame:4, favor:3 }, { label:'按急件加价接待', coins:35, fame:-1, favor:-1 } ] },
+    /* 连环链 A「遗落的钱袋」（v1.4.8，11/25 承接深谈种子）：首幕 needSeed——深谈至面熟埋下的
+       故事种子（S.talk.seeds）武装后才入池（eventPool 唯一过滤口），首幕开场消费一颗种子；
+       后续幕走既有伪链引擎次日必续；终幕谢礼数目写在卡面与选项上＝明牌回报，结算仍走 ledger */
+    { id:'e_purse1', pool:'daily', img:'ev_lost', from:'2026-11-25', chainSeed:true, needSeed:true, chain:'chain_purse', title:'落下的钱袋', text:'一位与你面熟的客人退了房，小二收拾屋子，在枕下摸到一只沉甸甸的钱袋——袋口还系着一封没写完的信。', choices:[
+      { label:'托脚夫沿路打听失主', coins:-20, fame:4, favor:3 }, { label:'挂在柜台招领', coins:0, fame:3, favor:2 } ] },
+    { id:'e_purse2', pool:'daily', img:'ev_day', from:'2026-11-25', chain:'chain_purse', title:'寻袋的人', text:'钱袋的事有了下文：一位老者寻上门来，说那是他家小儿攒了三年、要进京赶考的盘缠——出示的凭据，与袋中那封信一一对得上。', choices:[
+      { label:'请他喝碗热茶压惊', coins:-10, fame:6, favor:5 }, { label:'物归原主，分文未动', coins:0, fame:5, favor:4 } ] },
+    { id:'e_purse3', pool:'daily', img:'ev_dusk', from:'2026-11-25', chain:'chain_purse', title:'钱袋归主', text:'赶考的后生亲自登门：盘缠分文未少。他把一包红纸封好的铜板推到柜台上——「三百文谢礼，不成敬意。先生若不收，我这书也读不踏实。」', choices:[
+      { label:'收下谢礼（三百文）', coins:300, fame:3, favor:3 }, { label:'分文不取，只留善名', coins:0, fame:8, favor:5 } ] },
     /* 故事日长文案卡（v1.3，2026-11-29 上新，慢玩向） */
     { id:'e_oldfriend', pool:'daily', img:'ev_day', from:'2026-11-29', title:'驿站老客 · 沈账房', text:'沈账房又来了。二十年前他头一回路过，那时驿站还只有两间漏雨的房，他把一枚铜钱压在柜台底下，说等发达了回来赎。这些年他每回都住同一间房、点同一碗阳春面。今天他进门先笑：「掌柜，我发达啦。」说着把当年的铜钱推了过来，旁边添了一锭银子——「这间房，往后替我留着。有人赶路没钱，就让他住，账记我名下。」', choices:[
       { label:'收下银子，立个善缘账', coins:120, fame:6, favor:5 }, { label:'只收当年的铜钱，银子退回', coins:10, fame:8, favor:5 } ] },
@@ -2341,9 +2352,17 @@ function metricValue(metric){
     default: return 0;
   }
 }
+/* 链 A 首幕入池门（v1.4.8）：needSeed 卡须先被深谈故事种子武装——链已开场（prog>0）后
+   按既有链卡口径回池；从不深谈者 seeds 恒空、prog 恒 0，其事件池与旧版逐值不变 */
+function chainSeedArmed(e){
+  if(!e || !e.needSeed) return true;
+  if(!S || !S.chainProg) return false;
+  if((S.chainProg[e.chain] || 0) > 0) return true;
+  return !!(S.talk && S.talk.seeds && S.talk.seeds.length);
+}
 function eventPool(){
-  /* 日常池按 from 上新日过滤（v1.3 数据上新：未到上新日的卡不入池） */
-  const daily = CONFIG.events.filter(e => e.pool === 'daily' && (!e.from || dayStr() >= e.from));
+  /* 日常池按 from 上新日过滤（v1.3 数据上新：未到上新日的卡不入池）；needSeed 链首幕另过种子门 */
+  const daily = CONFIG.events.filter(e => e.pool === 'daily' && (!e.from || dayStr() >= e.from) && chainSeedArmed(e));
   if(packActive('banquet')) return daily.concat(CONFIG.events.filter(e => e.pool === 'banquet'));
   return daily;
 }
@@ -2809,8 +2828,14 @@ function doEventChoice(idx){
   const effFame = ch.fame > 0 ? Math.round(ch.fame * evMult) : ch.fame;
   ledger('event', effCoins, effFame, '事件「' + ev.title + '」已抉择', ch.favor);
   const chnDone = chainDefOf(ev);   /* 伪链推进：按幕次顺序完成才推进进度，乱序不算 */
-  if(chnDone && chainActNo(ev) === clampInt(S.chainProg[chnDone.id], 0, chnDone.acts.length, 0) + 1)
+  const progBefore = chnDone ? clampInt(S.chainProg[chnDone.id], 0, chnDone.acts.length, 0) : 0;
+  if(chnDone && chainActNo(ev) === progBefore + 1)
     S.chainProg[chnDone.id] = chainActNo(ev);
+  /* 链 A 种子消费口（v1.4.8）：needSeed 首幕 0→1 开场时吃掉一颗深谈种子，多余种子留存待后续链 */
+  if(chnDone && ev.needSeed && progBefore === 0 && S.chainProg[chnDone.id] === 1
+     && S.talk && S.talk.seeds && S.talk.seeds.length)
+    S.talk.seeds.splice(0, 1);
+  if(chnDone) setCoachFlag('tourChain');   /* 真实抉择链卡即落旗（coach 口径同既有情境引导） */
   S.eventsDone++;
   S.totalEvents++;
   questBump('events', 1);
@@ -3099,7 +3124,11 @@ const COACH_DEFS = [
     body:'收集页新开「收藏套装」分栏：图鉴六类集齐一类，收入永久 +4%。接待过的旅客再来必得碎片，碎片能换缺片和陈设；等不及的缺片按按钮上的明码价直接补购。进度、碎片和保底半价都在分栏里明牌。' },
   { flag:'tourSpec', tab:'build', sub:'staff', when:() => packActive('specialty'), target:() => document.querySelector('.spec-act-btn') || document.querySelector('#staffBox .spec-box'),
     title:'伙计专精：历练够了，花钱升阶',
-    body:'每位伙计多了「专精」：历练不用另刷——接待、待客、掌勺、跑委托这些平日做的事都算数，进度就写在伙计卡上。历练达标后花一笔铜钱入专精/升阶（价钱写在按钮上），加成直接并进他原本的那份产出；不升也照旧，不设新门槛。' }
+    body:'每位伙计多了「专精」：历练不用另刷——接待、待客、掌勺、跑委托这些平日做的事都算数，进度就写在伙计卡上。历练达标后花一笔铜钱入专精/升阶（价钱写在按钮上），加成直接并进他原本的那份产出；不升也照旧，不设新门槛。' },
+  { flag:'tourChain', tab:'affair', sub:null, when:() => { const ev = currentEvent(); return !!(ev && chainDefOf(ev)); },
+    target:() => document.querySelector('#eventsBox .claim-chip') || document.getElementById('eventsBox'),
+    title:'连环故事：这事还没完',
+    body:'带「连环故事 · 第 N 幕」角标的抉择是一段连着的故事：一共三幕，今日选完，下一幕明日必在抉择里等你，终幕有明牌的回报。演到第几幕，事务页抉择上方随时能回看。和客人深谈到「面熟」结下的种子，还会引出新的连环故事。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
