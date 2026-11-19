@@ -613,7 +613,7 @@ const CONFIG = {
     { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
-  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26' },
+  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26', process:'2026-11-27' },
   /* 每日上新日历（v1.3）：运营期 2026-11-17～11-30 逐日一条，{date,title,kind,mod?} 为唯一事实源。
      晨间小结「明日上新」与今日清单「今日上新」小条都读此表；单日修正 mod 只在既有公式/结算出口
      被 calMod() 读取（eventMult 抉择正奖励倍率 / commissionMult 委托报酬倍率 / kitchenDouble 厨房
@@ -630,7 +630,7 @@ const CONFIG = {
     { date:'2026-11-24', title:'掌柜考校 · 抉择奖励 ×1.5（伙计专精同日开启）', kind:'boost', mod:{ eventMult:1.5, multLabel:'掌柜考校加码' } },
     { date:'2026-11-25', title:'新事件上新 · 连环故事开场（深谈面熟的种子今日承接）', kind:'data' },
     { date:'2026-11-26', title:'贵客临门 · 可邀驻店', kind:'gate' },
-    { date:'2026-11-27', title:'名厨日 · 名厨驻店，厨房加成翻倍', kind:'boost', mod:{ kitchenDouble:true } },
+    { date:'2026-11-27', title:'名厨日 · 名厨驻店，厨房加成翻倍（后厨加工坊同日开张）', kind:'boost', mod:{ kitchenDouble:true } },
     { date:'2026-11-28', title:'周末市集 · 礼包 4 次、金额 +50%', kind:'boost', mod:{ giftTimes:4, giftMult:1.5 } },
     { date:'2026-11-29', title:'故事日 · 说书人驻店、老客长谈', kind:'data' },
     { date:'2026-11-30', title:'运营庆典 · 结算答谢', kind:'finale' }
@@ -849,7 +849,10 @@ const CONFIG = {
     mains: [
       { id:'pork', name:'猪蹄膀', tags:['油大','下饭'] }, { id:'fish', name:'河鲜', tags:['鲜','原味'] },
       { id:'tofu', name:'云水豆腐', tags:['至味','清淡'] }, { id:'shanzhen', name:'山珍菌菇', tags:['山珍','鲜'] },
-      { id:'grain', name:'米糕面点', tags:['管饱','实在'] }, { id:'veg', name:'时蔬', tags:['清淡','养身'] }
+      { id:'grain', name:'米糕面点', tags:['管饱','实在'] }, { id:'veg', name:'时蔬', tags:['清淡','养身'] },
+      /* 加工成品主料（B2-2 接通 v1.4.5 占位口）：process 标记——常规主料行不渲染、由加工坊口径单独露钮；
+         判定仍走 cookCheck 唯一口（按 tags 命中），serve 时耗成品 1 件走 processMove */
+      { id:'pickled', name:'腌菜成品', tags:['下饭','实在'], process:true }
     ],
     sides: [
       { id:'congjiang', name:'葱姜', tags:['下饭'] }, { id:'guihua', name:'桂花', tags:['清甜','细软'] },
@@ -975,14 +978,28 @@ const CONFIG = {
     teaHour: 12, teaFavor: 2,
     storyDay: '2026-11-29', storyUntil: '2026-11-30', storyFavorMult: 1.5, storyWishFavor: 6,
     matsGift: 2 },
+  /* 后厨加工链 lite（B2-2，日期门 gates.process=2026-11-27）：收获分流→原料池→2 槽队列→三成品＋快腌。
+     加工是转换不是印钞：成品直售价＝incomeRate()×sellMinutes/件（快腌按 quickShare 折），走 goodsSellPrice 唯一口；
+     物料增减只走 processMove() 唯一函数（物料非货币、不经 ledger；铜钱只经直售 ledger 入账）。
+     腌菜急单：有成品时每日急单按 urgentChance 变面，报酬在 commissionPayout 唯一出口再 ×urgentMult、接单扣成品 1 件 */
+  process: {
+    slots: 2, batch: 5, sellMinutes: 30, quickShare: 0.25,
+    urgentChance: 0.5, urgentMult: 1.5,
+    goods: [
+      { id:'pickled_greens', name:'腌青菜', crop:'greens',  hours:2 },
+      { id:'quick_greens',   name:'快腌青菜', crop:'greens', hours:0.5, quick:true },
+      { id:'dried_pumpkin',  name:'南瓜干', crop:'pumpkin', hours:6 },
+      { id:'lotus_powder',   name:'藕粉',   crop:'lotus',   hours:12 }
+    ]
+  },
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'resident-1126', lines: [
-    { name:'驻店客人', how:'贵客、名厨、说书人会住进驿站一两天，驻店期间有加成、送别还有回礼——和贵客深谈到「知交」，就能在他的房卡上邀他驻店两日', goto:'home:soonResidentCard' },
-    { name:'送别有回礼，午后有茶叙', how:'驻店首日午后陪他喝杯茶叙旧；送别那天的回礼数目（声望、好感）从驻店第一天起就写明在晨间小结和驻店卡上，不玩虚的', goto:'home:soonResidentCard' },
-    { name:'名厨驻店', how:'11月27日名厨驻店一日：厨房加成翻倍照旧，事务页还多一张他的专属抉择，陪他过过招', goto:'home:soonResidentCard' },
-    { name:'说书人驻店', how:'11月29日故事日，说书人住进驿站讲古一场：那天的好感入账翻一半，他还惦记一口驿站的腌菜——备好一件加工成品就能遂他的愿', goto:'home:soonResidentCard' }
+  introCard: { ver: 'process-1127', lines: [
+    { name:'后厨加工坊', how:'菜园收获时能选「送加工坊」：青菜、南瓜、莲藕攒成原料，排进加工队列做成腌青菜、南瓜干、藕粉，还有半小时就好的快腌青菜', goto:'build:soonKitchenCard' },
+    { name:'成品明码直售', how:'做好的成品按当前收入速率 ×30 分钟明码直售（快腌按四分之一计价），价钱就写在按钮上；收成品时还能顺手再排一槽', goto:'build:soonKitchenCard' },
+    { name:'腌菜急单优先兑付', how:'手边有成品时，每日加急单可能换面成腌菜急单：接单扣 1 件成品、报酬再多五成；成品还能递给说书人遂他的腌菜心愿', goto:'affair:commissionsCard' },
+    { name:'不加工也照旧', how:'收获不选分流，就还是入后厨当食材给收入加成——托管老规矩一字不变，加工坊纯是多一条出路', goto:'build:gardenCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1493,7 +1510,9 @@ function sanitizeProcess(raw){
   }
   if(Array.isArray(raw.queue)) out.queue = raw.queue
     .filter(q => q && typeof q === 'object' && typeof q.goodsId === 'string' && +q.end > 0)
-    .slice(0, 4).map(q => ({ goodsId: q.goodsId, end: Math.floor(+q.end) }));
+    .slice(0, 4).map(q => ({ goodsId: q.goodsId, end: Math.floor(+q.end),
+      /* B2-2 补字段（只上不下）：n＝本批件数（旧项无此字段回 1）、start＝入队时刻（回 0，渲染时按时长反推） */
+      n: clampInt(q.n, 1, 999, 1), start: Math.max(0, Math.floor(+q.start || 0)) }));
   return out;
 }
 function sanitizeDecor(raw){
@@ -1606,7 +1625,7 @@ function normalize(raw){
   }
   s.urgent = (raw.urgent && typeof raw.urgent === 'object' && typeof raw.urgent.day === 'string'
       && CONFIG.commissionTiers.some(t => t.id === raw.urgent.tierId) && +raw.urgent.expiresAt > 0)
-    ? { day: raw.urgent.day, tierId: raw.urgent.tierId, expiresAt: Math.floor(+raw.urgent.expiresAt), taken: raw.urgent.taken === true }
+    ? { day: raw.urgent.day, tierId: raw.urgent.tierId, expiresAt: Math.floor(+raw.urgent.expiresAt), taken: raw.urgent.taken === true, pickled: raw.urgent.pickled === true }
     : null;
   /* 广告扩展批加法字段：第二张加急单（与 urgent 同形状清洗）/ 体验券日戳 / 邀请排队旗，非法一律回默认 */
   s.urgent2 = (raw.urgent2 && typeof raw.urgent2 === 'object' && typeof raw.urgent2.day === 'string'
@@ -2971,7 +2990,7 @@ function claimCommission(id){
   S.commissions = S.commissions.filter(x => x.id !== id);
   S.totalCommissions++;
   questBump('commissions', 1);
-  ledger('commission', rw.coins, rw.fame, c.urgent ? '加急单完成，报酬 +' + rw.coins + ' 铜钱（翻倍）' : (tier.name ? '远行委托「' + tier.name + '」完成，报酬 +' + rw.coins + ' 铜钱' : '商队委托完成，报酬 +' + rw.coins + ' 铜钱'));
+  ledger('commission', rw.coins, rw.fame, c.pickled ? '腌菜急单完成，报酬 +' + rw.coins + ' 铜钱（急单翻倍 ×腌菜加成）' : (c.urgent ? '加急单完成，报酬 +' + rw.coins + ' 铜钱（翻倍）' : (tier.name ? '远行委托「' + tier.name + '」完成，报酬 +' + rw.coins + ' 铜钱' : '商队委托完成，报酬 +' + rw.coins + ' 铜钱')));
   if(tier.line) pushLog(tier.line);   /* 远行季专属完成台词 */
   save();
   renderCommissions();
@@ -2989,6 +3008,7 @@ function commissionPayout(c){
   if(!t) return null;
   const rw = commissionReward(t);
   if(c.urgent) rw.coins = rw.coins * CONFIG.urgent.mult;   /* 加急单报酬翻倍：结算唯一出口 */
+  if(c.pickled) rw.coins = Math.round(rw.coins * CONFIG.process.urgentMult);   /* 腌菜急单（B2-2）：普通急单之上再 ×1.5，同出口注入 */
   if(c.feed) rw.coins = Math.round(rw.coins * feedMultOf(c.feed.grade));   /* 喂马备程：配料档倍率只在此唯一出口注入；无 feed 的托管单原公式逐值不变 */
   return rw;
 }
@@ -2999,6 +3019,8 @@ function ensureUrgent(){
   const tiers = CONFIG.commissionTiers;
   const t = tiers[Math.floor(Math.random() * tiers.length)];
   S.urgent = { day: today, tierId: t.id, expiresAt: Date.now() + CONFIG.urgent.minutes * 60000, taken: false };
+  /* 腌菜急单变面（B2-2）：加工坊开门且手边有成品时按概率换面——无成品恒不变面，托管玩家零感知 */
+  if(packActive('process') && processGoodsTotal() > 0 && Math.random() < CONFIG.process.urgentChance) S.urgent.pickled = true;
   save();
   return S.urgent;
 }
@@ -3013,19 +3035,28 @@ function startUrgent(){
   if(activeCommissionCount() >= CONFIG.commissionMaxActive){ showToast('同时进行的委托已满'); return false; }
   const tier = tierDef(u.tierId);
   if(!tier) return false;
+  /* 腌菜急单接单即扣成品 1 件（processMove 唯一口）；临到接单没货了明示拒绝、不静默吞单 */
+  let usedGoods = null;
+  if(u.pickled){
+    usedGoods = processTakeAnyGoods();
+    if(!usedGoods){ showToast('腌菜急单要先扣 1 件成品——手边没货了，这张单先放着'); return false; }
+  }
   u.taken = true;
   const now = Date.now();
   S.commissions.push({
     id: 'cm' + now + '_' + Math.floor(Math.random() * 100000),
     tierId: tier.id, hours: tier.hours,
     start: now, end: now + tier.hours * 3600 * 1000,
-    claimed: false, urgent: true
+    claimed: false, urgent: true, pickled: !!u.pickled
   });
-  pushLog('接下加急单（' + tier.hours + ' 小时商队，报酬翻倍）');
+  pushLog(u.pickled
+    ? '接下腌菜急单（扣' + usedGoods.name + ' 1 件，' + tier.hours + ' 小时商队，报酬 ×' + (CONFIG.urgent.mult * CONFIG.process.urgentMult) + '）'
+    : '接下加急单（' + tier.hours + ' 小时商队，报酬翻倍）');
+  if(u.pickled) setCoachFlag('tourProcessUrgent');   /* 真实兑付即落旗（coach 口径同既有情境引导） */
   save();
   renderCommissions();
   renderLog();
-  showToast('加急单已接下，归来报酬翻倍');
+  showToast(u.pickled ? '腌菜急单已接下，归来报酬 ×' + (CONFIG.urgent.mult * CONFIG.process.urgentMult) : '加急单已接下，归来报酬翻倍');
   return true;
 }
 function entrustPayout(){ return S.entrust ? Math.floor(S.entrust.amt * (1 + CONFIG.entrust.bonus)) : 0; }
@@ -3217,7 +3248,15 @@ const COACH_DEFS = [
   { flag:'tourResident', tab:'home', sub:null, when:() => !!S.resident,
     target:() => document.getElementById('soonResidentCard'),
     title:'驻店客人：住下来，就有加成',
-    body:'受邀的贵客会在驿站住满两日：驻店期间，和他同类的客人来得更勤；首日午后还能陪他喝杯茶叙叙旧。送别那天，事务页第一张抉择就是送别——回礼数目早早写明在晨间小结和这张驻店卡上。说书人故事日也会来驻店一场，那天的好感入账翻一半。' }
+    body:'受邀的贵客会在驿站住满两日：驻店期间，和他同类的客人来得更勤；首日午后还能陪他喝杯茶叙叙旧。送别那天，事务页第一张抉择就是送别——回礼数目早早写明在晨间小结和这张驻店卡上。说书人故事日也会来驻店一场，那天的好感入账翻一半。' },
+  { flag:'tourProcess', tab:'build', sub:'garden', when:() => packActive('process'),
+    target:() => document.querySelector('#gardenBox .up-card button.accent') || document.querySelector('#processBox .proc-start-btn') || document.getElementById('soonKitchenCard'),
+    title:'后厨加工坊：收成多一条出路',
+    body:'菜园收获时多了一个选择：入后厨当食材（照旧给收入加成），或送加工坊当原料——青菜做腌菜、南瓜晒干、莲藕磨藕粉，还有半小时的快腌。食材、原料、成品三层各管一摊：成品能直售换钱、能优先兑加急单、能递给客人遂心愿。' },
+  { flag:'tourProcessUrgent', tab:'affair', sub:null, when:() => packActive('process') && processGoodsTotal() > 0,
+    target:() => document.getElementById('commissionsBox'),
+    title:'成品兑急单：优先兑付更赚钱',
+    body:'手边有了加工成品，每日加急单可能换面成「腌菜急单」：接单扣 1 件成品，报酬在急单翻倍之上再多五成。成品不急着兑也能在加工坊直售，价钱按当前收入速率明码标在按钮上。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
@@ -3451,8 +3490,7 @@ function favorIn(n){ return n > 0 ? Math.round(n * residentFavorMult()) : n; }
 function grantResidentMats(){
   const pool = CONFIG.crops.filter(c => !c.rare);
   const c = pool[Math.floor(Math.random() * pool.length)];
-  if(!S.process) S.process = sanitizeProcess(null);
-  S.process.mats[c.id] = (S.process.mats[c.id] || 0) + CONFIG.resident.matsGift;
+  processMove('mats', c.id, CONFIG.resident.matsGift);   /* 物料入账走 processMove 唯一口（B2-2 收口） */
   return c;
 }
 /* 晨间驻店结算（rollDayIfNeeded 在排卡之前调用；renderAll 另兜底调用一次防首日建档错过）：
@@ -3530,19 +3568,100 @@ function residentTea(){
     '<div class="btnrow"><button class="small accent" onclick="closePlay()">知道了</button></div>', null);
   return true;
 }
+/* ================= 后厨加工链（B2-2，日期门 gates.process） =================
+   物料账唯一口：S.process.mats（原料）/ S.process.goods（成品）的计数增减只许经 processMove——
+   收获分流、排产扣料、收取入货、直售、急单扣货、心愿交付、掌勺耗货、贵客回礼原料全走它，禁散点直改。
+   物料非货币不经 ledger；铜钱只经直售 sellGoods 的 ledger 入账、急单报酬只经 commissionPayout 出口 */
+function processGoodsDef(id){ return CONFIG.process.goods.find(g => g.id === id) || null; }
+function processMove(what, id, delta){
+  if(!S || !id || !delta) return 0;
+  if(!S.process) S.process = sanitizeProcess(null);
+  const tab = what === 'mats' ? S.process.mats : (what === 'goods' ? S.process.goods : null);
+  if(!tab) return 0;
+  const cur = tab[id] || 0;
+  const nv = Math.max(0, Math.min(999, cur + Math.floor(delta)));
+  if(nv <= 0) delete tab[id]; else tab[id] = nv;
+  return nv - cur;
+}
+function processGoodsTotal(){
+  if(!S || !S.process) return 0;
+  return Object.keys(S.process.goods).reduce((a, k) => a + (S.process.goods[k] || 0), 0);
+}
+/* 按 CONFIG.process.goods 表序取第一件有库存的成品并扣下（急单兑付/心愿交付/掌勺耗货共用同一口径） */
+function processTakeAnyGoods(){
+  if(!S || !S.process) return null;
+  for(const g of CONFIG.process.goods){
+    if((S.process.goods[g.id] || 0) > 0){ processMove('goods', g.id, -1); return g; }
+  }
+  return null;
+}
+/* 成品直售价唯一口：incomeRate()×sellMinutes/件，快腌按 quickShare 折（转换标定、随成长缩放） */
+function goodsSellPrice(g){ return Math.max(1, Math.round(incomeRate() * CONFIG.process.sellMinutes * (g.quick ? CONFIG.process.quickShare : 1))); }
+function processStart(goodsId){
+  const g = processGoodsDef(goodsId);
+  if(!g || !S) return false;
+  if(!packActive('process')){ showToast('后厨加工坊将于 11月27日开放'); return false; }
+  if(!S.process) S.process = sanitizeProcess(null);
+  if(S.process.queue.length >= CONFIG.process.slots){ showToast('加工队列满了（' + CONFIG.process.slots + ' 槽），先把做好的收了再排'); return false; }
+  const have = S.process.mats[g.crop] || 0;
+  if(have < 1){ showToast('没有' + (cropDef(g.crop) ? cropDef(g.crop).name : '') + '原料——收获时选「送加工坊」攒原料'); return false; }
+  const n = Math.min(have, CONFIG.process.batch);
+  processMove('mats', g.crop, -n);
+  const now = Date.now();
+  S.process.queue.push({ goodsId: g.id, n: n, start: now, end: now + Math.round(g.hours * 3600 * 1000) });
+  pushLog('加工坊开工：' + n + ' 份' + (cropDef(g.crop) ? cropDef(g.crop).name : '') + '原料下锅做' + g.name + '，约 ' + (g.hours < 1 ? Math.round(g.hours * 60) + ' 分钟' : g.hours + ' 小时') + '后出锅');
+  save();
+  renderProcess(); renderLog();
+  showToast(g.name + '加工中（' + n + ' 件），好了来后厨收');
+  sfxPlay('tap');
+  return true;
+}
+/* 收取（领取＝续排）：到期槽点收取入成品库存，结算面板内带「再排一槽」（原料够且有空槽才亮） */
+function processCollect(idx){
+  if(!S || !S.process) return false;
+  const q = S.process.queue[idx];
+  if(!q) return false;
+  if(Date.now() < q.end){ showToast('还没加工好，再等等'); return false; }
+  const g = processGoodsDef(q.goodsId);
+  S.process.queue.splice(idx, 1);
+  processMove('goods', q.goodsId, q.n || 1);
+  save();
+  renderProcess(); updateDynamic();
+  const canRestock = g && (S.process.mats[g.crop] || 0) > 0 && S.process.queue.length < CONFIG.process.slots;
+  openPlay(
+    '<h3>成 品 出 锅</h3>' +
+    '<div class="play-react">' + (g ? g.name : '成品') + '做好了 <b>' + (q.n || 1) + ' 件</b>，已入成品库存（现有 ' + ((S.process.goods[q.goodsId]) || 0) + ' 件）。</div>' +
+    '<div class="small-note">成品能直售换钱（价在库存行按钮上）、能优先兑加急单、能递给客人遂心愿。</div>' +
+    '<div class="btnrow">' + (canRestock ? '<button class="small accent" onclick="closePlay();processStart(\'' + q.goodsId + '\')">再排一槽</button>' : '') +
+    '<button class="small' + (canRestock ? ' ghost' : ' accent') + '" onclick="closePlay()">知道了</button></div>', null);
+  sfxPlay('reward');
+  return true;
+}
+function sellGoods(goodsId){
+  const g = processGoodsDef(goodsId);
+  if(!g || !S) return false;
+  if(!packActive('process')){ showToast('后厨加工坊将于 11月27日开放'); return false; }
+  if(processMove('goods', goodsId, -1) !== -1){ showToast('这件成品已经不在了'); return false; }
+  const price = goodsSellPrice(g);
+  ledger('process_sell', price, 0, '后厨成品直售：' + g.name + ' 1 件，+' + price + ' 铜钱');
+  setCoachFlag('tourProcessUrgent');   /* 真实直售即落旗（coach 口径同既有情境引导） */
+  save();
+  renderProcess(); updateDynamic(); renderLog();
+  showToast('卖出' + g.name + ' +' + price + ' 铜钱');
+  sfxPlay('reward');
+  return true;
+}
 function residentGoodsCount(){
   if(!S || !S.process || !S.process.goods) return 0;
   return Object.keys(S.process.goods).reduce((a, k) => a + (S.process.goods[k] || 0), 0);
 }
 /* 说书人心愿（留存补项·串 B2-2）：交付任意加工成品 1 件即遂愿，奖励走其 favor ×1.5 口径；
-   无成品时心愿只挂不用、不挡收尾卡。成品增减 B2-2 落地后应收口到 processMove，本批先行直改同一张表 */
+   无成品时心愿只挂不用、不挡收尾卡。成品扣减已收口 processTakeAnyGoods/processMove 唯一口（B2-2） */
 function residentWishDeliver(){
   const r = S && S.resident;
   if(!r || r.kind !== 'story' || r.wishDone) return false;
   if(residentGoodsCount() < 1){ showToast('手边还没有加工成品——后厨加工坊做的腌菜、南瓜干、藕粉都行'); return false; }
-  const k = Object.keys(S.process.goods).find(k => S.process.goods[k] > 0);
-  S.process.goods[k]--;
-  if(S.process.goods[k] <= 0) delete S.process.goods[k];
+  if(!processTakeAnyGoods()) return false;
   r.wishDone = true;
   setCoachFlag('tourResident');   /* 驻店卡上的真实操作即落旗（coach 口径同既有情境引导） */
   const f = favorIn(CONFIG.resident.storyWishFavor);
@@ -3693,8 +3812,14 @@ function renderCookPanel(){
   openPlay(
     '<h3>掌 勺 做 饭</h3>' + playHead(g, g.label + ' ' + g.name + ' 的点菜单') +
     '<div class="small-note">他点菜话说得明白：「就想吃一口 <b>' + esc(prof.keys[0]) + '</b> 的，最好还 <b>' + esc(prof.keys[1]) + '</b>。」——他这一路人的口味，正合今日招牌谱里的「' + esc(prof.dish.name) + '」。料的性味都标在钮上，火候另选一档；有一样当心：甜羹汁忌猛火、时蔬忌猛火。</div>' +
-    cookSlotRow('主料', CONFIG.cook.mains, 'main', p.main) +
-    '<div class="btnrow play-opts"><button class="small" disabled>腌菜成品 · 后厨加工链 11月27日上线后入主料槽</button></div>' +
+    cookSlotRow('主料', CONFIG.cook.mains.filter(m => !m.process), 'main', p.main) +
+    /* 腌菜成品主料口（B2-2 接通 v1.4.5 占位）：门开且有成品才露可选钮（判定仍走 cookCheck 按 tags 命中）；
+       门未开逐字保留原占位文案 */
+    (packActive('process')
+      ? (processGoodsTotal() > 0
+        ? '<div class="btnrow play-opts"><button class="small' + (p.main === 'pickled' ? ' accent' : '') + '" onclick="cookPick(\'main\',\'pickled\')">腌菜成品<span class="opt-tags">下饭·实在</span><span class="opt-tags">库存 ' + processGoodsTotal() + ' 件</span></button></div>'
+        : '<div class="btnrow play-opts"><button class="small" disabled>腌菜成品 · 暂无库存（后厨加工坊做的成品能入主料槽）</button></div>')
+      : '<div class="btnrow play-opts"><button class="small" disabled>腌菜成品 · 后厨加工链 11月27日上线后入主料槽</button></div>') +
     cookSlotRow('配料', CONFIG.cook.sides, 'side', p.side) +
     cookSlotRow('调味', CONFIG.cook.sauces, 'sauce', p.sauce) +
     '<div class="sect">火候</div><div class="btnrow play-opts">' +
@@ -3719,14 +3844,17 @@ function cookServe(){
   let head = '', settle = '';
   if(chk.grade === 'great'){
     S.cook.best++;
-    let favor = 3, selfProd = false;
+    let favor = 3, selfProd = false, pickledUsed = false;
     if(CONFIG.cook.gardenMains.indexOf(ses.picks.main) >= 0 && S.garden && S.garden.stock > 0){ S.garden.stock--; favor += 1; selfProd = true; }
+    /* 腌菜成品主料（B2-2）：对味耗成品 1 件（processMove 唯一口）、额外好感 +1，与自家菜园料同口径 */
+    if(ses.picks.main === 'pickled' && processTakeAnyGoods()){ favor += 1; pickledUsed = true; }
     favor = favorIn(favor);   /* 说书人驻店日好感加成（B2-1）：入账与展示同走 favorIn 修正值 */
     ledger('cook', rw.coins * 2, 2, '亲手掌勺对了 ' + g.label + ' ' + g.name + ' 的口味：小费 +' + (rw.coins * 2) + ' 铜钱 / 声望 +2 / 好感 +' + favor, favor);
     g.wish = null;
     head = '对 味 ！';
-    settle = '小费 +' + (rw.coins * 2) + ' 铜钱（心愿小费翻倍）/ 声望 +2 / 好感 +' + favor + (selfProd ? '（含自家菜园料的好感 +1）' : '') + '，心愿已遂。';
+    settle = '小费 +' + (rw.coins * 2) + ' 铜钱（心愿小费翻倍）/ 声望 +2 / 好感 +' + favor + (selfProd ? '（含自家菜园料的好感 +1）' : '') + (pickledUsed ? '（含自家腌菜的好感 +1）' : '') + '，心愿已遂。';
   }else if(chk.grade === 'ok'){
+    if(ses.picks.main === 'pickled') processTakeAnyGoods();   /* 将就也上了桌：腌菜成品照耗 1 件（无额外好感） */
     const okFavor = favorIn(rw.favor);
     ledger('cook', rw.coins, rw.fame, '亲手掌勺给 ' + g.label + ' ' + g.name + ' 做了道将就的菜：小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + okFavor, okFavor);
     g.wish = null;
@@ -4067,21 +4195,52 @@ function plantCrop(i, cropId){
   tourHook('garden');
   return true;
 }
+let pendingHarvest = -1;   /* 分流面板待收田号（不入存档：关面板即「先不收」、田仍在） */
 function harvestPlot(i){
+  if(!S || !S.garden) return false;
+  const p = S.garden.plots[i];
+  if(!p) return false;
+  if(Date.now() < p.end){ showToast('还没长熟，再等等'); return false; }
+  /* 加工坊开门后收获先弹分流面板（二选一）；门未开走旧路直入后厨，托管玩家逐值不变 */
+  if(packActive('process')){ pendingHarvest = i; renderHarvestPanel(); return true; }
+  return doHarvest(i, 'stock');
+}
+function renderHarvestPanel(){
+  const p = S && S.garden && S.garden.plots[pendingHarvest];
+  if(!p){ closePlay(); return; }
+  const c = cropDef(p.crop);
+  if(!c){ closePlay(); return; }
+  openPlay(
+    '<h3>收 获 分 流</h3>' +
+    '<div class="small-note">这畦' + esc(c.name) + '收了 <b>' + c.yield + ' 份</b>，送去哪边？三层物料各管一摊：<b>食材</b>进后厨存着、每份给总收入 +' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '%；<b>原料</b>进加工坊攒着，做成腌菜、南瓜干、藕粉这些<b>成品</b>——成品能直售、能兑加急单、能遂客心愿。不选就是老规矩入后厨。</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="doHarvest(' + pendingHarvest + ', \'stock\')">入后厨 · 当食材</button>' +
+    '<button class="small proc-mat-btn" onclick="doHarvest(' + pendingHarvest + ', \'mats\')">送加工坊 · 做成品</button></div>' +
+    '<div class="btnrow"><button class="small ghost" onclick="closePlay()">先不收</button></div>', null);
+}
+function doHarvest(i, dest){
   if(!S || !S.garden) return false;
   const p = S.garden.plots[i];
   if(!p) return false;
   if(Date.now() < p.end){ showToast('还没长熟，再等等'); return false; }
   const c = cropDef(p.crop);
   S.garden.plots[i] = null;
-  if(!c){ save(); renderGarden(); return false; }
-  S.garden.stock += c.yield;
-  pushLog('后院收了 ' + c.yield + ' 份' + c.name + '，送进后厨（食材存量 ' + S.garden.stock + ' 份）');
+  pendingHarvest = -1;
+  if(!c){ save(); renderGarden(); closePlay(); return false; }
+  if(dest === 'mats' && packActive('process')){
+    processMove('mats', c.id, c.yield);
+    pushLog('后院收了 ' + c.yield + ' 份' + c.name + '，送进加工坊当原料（' + c.name + '原料 ' + (S.process.mats[c.id] || 0) + ' 份）');
+    showToast('原料 +' + c.yield + ' 份' + c.name + '（去后厨加工坊排产）');
+  }else{
+    S.garden.stock += c.yield;
+    pushLog('后院收了 ' + c.yield + ' 份' + c.name + '，送进后厨（食材存量 ' + S.garden.stock + ' 份）');
+    showToast('收获 +' + c.yield + ' 份食材');
+  }
+  setCoachFlag('tourProcess');   /* 真实分流（任一去向）即落旗（coach 口径同既有情境引导） */
   save();
-  renderGarden();
+  renderGarden(); renderProcess();
   updateDynamic();
   renderLog();
-  showToast('收获 +' + c.yield + ' 份食材');
+  closePlay();
   sfxPlay('reward');
   return true;
 }
@@ -4904,8 +5063,7 @@ function renderMain(){
       '<div id="sub-build-garden" style="display:none">' +
         '<div class="card" id="dishCard"><h3>今 日 招 牌</h3><div id="dishBox"></div></div>' +
         '<div class="card" id="gardenCard"><h3>后 院 菜 园</h3><div id="gardenBox"></div></div>' +
-        '<div class="card" id="soonKitchenCard"><h3>后 厨 加 工</h3>' +
-          '<button class="soon-plaque" data-soon="kitchen" onclick="showSoon(\'kitchen\')"><span class="soon-tag">待开放</span><span class="soon-name">后厨加工链</span><span class="soon-date">11月27日开放</span></button></div>' +
+        '<div class="card" id="soonKitchenCard"><h3>后 厨 加 工</h3><div id="processBox"></div></div>' +
       '</div>' +
     '</div>' +
     '<div class="tabpage" id="page-affair">' +
@@ -4980,12 +5138,12 @@ function renderMain(){
   todaySig = ''; offlineSig = ''; questSig = ''; residentSig = '';
   settleResidentMorning();   /* 驻店晨间兜底（B2-1）：首日建档等错过 roll 的场合在此补结算，重复调用幂等 */
   renderMorning(); renderResident(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderDecor(); renderWelcome(); renderEvents(); renderUpgrades();
-  renderShout(); renderDish(); renderGarden();
+  renderShout(); renderDish(); renderGarden(); renderProcess();
   renderStaff(); renderCommissions(); renderMilestones(); renderCodex(); renderCollect();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
 }
-const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', specialty:'伙计专精', noble:'贵客图鉴段' };
+const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', specialty:'伙计专精', noble:'贵客图鉴段', process:'后厨加工坊' };
 /* 明日预告（纯展示）：首段为「明日上新」——读 CONFIG.calendar 明日条目（预告本身即留存钩子）；
    日历无明日条目时回退到日期门派生；不发奖、不写存档 */
 function tomorrowPreview(){
@@ -5640,6 +5798,60 @@ function renderGarden(){
   }).join('') + '</div>';
   box.innerHTML = html;
 }
+/* 加工坊段（B2-2）：门未开逐字渲染原挂牌（probe_soon 锚点保全）；门开后原料池/队列/排产/成品库存全明牌——
+   原料数、批量、时长、进度、直售价（goodsSellPrice 派生）全摆在按钮与行文里，队列满/无原料禁用且写明原因 */
+let processSig = '';
+function renderProcess(){
+  const box = document.getElementById('processBox');
+  if(!box || !S) return;
+  if(!packActive('process')){
+    const plaque = '<button class="soon-plaque" data-soon="kitchen" onclick="showSoon(\'kitchen\')"><span class="soon-tag">待开放</span><span class="soon-name">后厨加工链</span><span class="soon-date">11月27日开放</span></button>';
+    if(box.innerHTML !== plaque) box.innerHTML = plaque;
+    processSig = 'closed';
+    return;
+  }
+  if(!S.process) S.process = sanitizeProcess(null);
+  const now = Date.now(), P = CONFIG.process;
+  const sig = JSON.stringify([S.process, Math.floor(now / 60000), Math.round(incomeRate() * 10)]);
+  if(sig === processSig) return;
+  processSig = sig;
+  let html = '<div class="small-note">三层物料各管一摊：<b>食材</b>在后厨存着给收入加成；<b>原料</b>是收获时分流送进来的作物；<b>成品</b>能直售、能优先兑加急单、能递给客人遂心愿。加工是转换不是印钞——直售价＝当前收入速率 ×' + P.sellMinutes + ' 分钟/件（快腌按四分之一计），价钱写在按钮上。</div>';
+  /* 原料池 */
+  html += '<div class="sect">原 料 池</div><div class="small-note">' +
+    CONFIG.crops.filter(c => !c.rare).map(c => esc(c.name) + '原料 <b>' + (S.process.mats[c.id] || 0) + '</b> 份').join(' · ') +
+    '（收获时选「送加工坊」攒原料；每槽一批最多下 ' + P.batch + ' 份）</div>';
+  /* 队列 */
+  html += '<div class="sect">加 工 队 列（' + S.process.queue.length + '/' + P.slots + ' 槽）</div>';
+  if(!S.process.queue.length) html += '<div class="small-note">队列空着——挑一样成品排产，计时离线照走，好了来收。</div>';
+  html += S.process.queue.map((q, idx) => {
+    const g = processGoodsDef(q.goodsId);
+    const dur = g ? g.hours * 3600 * 1000 : 0;
+    const start = q.start > 0 ? q.start : Math.max(0, q.end - dur);
+    const ready = now >= q.end;
+    const pct = ready ? 100 : Math.max(0, Math.min(100, Math.floor((now - start) / Math.max(1, q.end - start) * 100)));
+    return '<div class="up-card"><div class="crop-line"><div class="t grow">' + esc(g ? g.name : '成品') + ' ×' + (q.n || 1) + '</div></div>' +
+      '<div class="plot-bar"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="d">' + (ready ? '出锅了！收下入成品库存' : '加工中，余 ' + fmtLeft(q.end - now)) + '</div>' +
+      (ready ? '<button class="small accent proc-collect-btn" onclick="processCollect(' + idx + ')">收取</button>' : '<button disabled>加工中</button>') + '</div>';
+  }).join('');
+  /* 排产 */
+  const full = S.process.queue.length >= P.slots;
+  html += '<div class="sect">排 产</div><div class="btnrow">' + P.goods.map(g => {
+    const have = S.process.mats[g.crop] || 0;
+    const dis = full || have < 1;
+    const why = full ? '队列满了' : (have < 1 ? '暂无' + (cropDef(g.crop) ? cropDef(g.crop).name : '') + '原料' : '');
+    return '<button class="small proc-start-btn" onclick="processStart(\'' + g.id + '\')"' + (dis ? ' disabled' : '') + '>' +
+      '做' + esc(g.name) + '（' + (g.hours < 1 ? Math.round(g.hours * 60) + ' 分钟' : g.hours + ' 小时') + ' · 原料 ' + have + (why ? ' · ' + why : '') + '）</button>';
+  }).join('') + '</div>';
+  /* 成品库存 */
+  html += '<div class="sect">成 品 库 存</div>';
+  const rows = P.goods.filter(g => (S.process.goods[g.id] || 0) > 0);
+  if(!rows.length) html += '<div class="small-note">暂无成品——排一槽加工，好了来收。</div>';
+  html += rows.map(g => '<div class="up-row"><div class="info"><div class="t">' + esc(g.name) + ' ×' + S.process.goods[g.id] + '</div>' +
+    '<div class="d">可直售 · 可优先兑加急单 · 可交付旅客心愿（说书人惦记这一口）</div></div>' +
+    '<button class="small proc-sell-btn" onclick="sellGoods(\'' + g.id + '\')">直售 ' + goodsSellPrice(g) + ' 文</button></div>').join('');
+  box.innerHTML = html;
+}
 /* 专精块（v1.4.7）：日期门未开只露预告、不露任何数值；门开后逐岗明示——当前阶、历练进度
    （现值/门槛/还差 N）、当前加成与升阶按钮明码价，数字全走 CONFIG.specialty 与派生口 */
 function specCardHtml(t){
@@ -5723,11 +5935,17 @@ function renderCommissions(){
   if(uo && !uo.taken && Date.now() < uo.expiresAt){
     const ut = tierDef(uo.tierId);
     const urw = ut ? commissionReward(ut) : { coins: 0, fame: 0 };
-    html += '<div class="up-row"><div class="info"><div class="t">加 急 单 · ' + (ut ? ut.hours : '') + ' 小时商队</div>' +
-      '<div class="d">报酬翻倍 ' + (urw.coins * CONFIG.urgent.mult) + ' 铜钱 / 声望 ' + urw.fame + ' · 接单倒计时 <span class="cm-left" data-end="' + uo.expiresAt + '">' + fmtLeft(uo.expiresAt - Date.now()) + '</span></div></div>' +
-      '<button class="small" onclick="startUrgent()">接单</button></div>';
+    if(uo.pickled){
+      html += '<div class="up-row"><div class="info"><div class="t">腌 菜 急 单 · ' + (ut ? ut.hours : '') + ' 小时商队</div>' +
+        '<div class="d">优先兑付：接单扣成品 1 件 · 报酬 ' + Math.round(urw.coins * CONFIG.urgent.mult * CONFIG.process.urgentMult) + ' 铜钱（急单翻倍 ×腌菜 ' + CONFIG.process.urgentMult + '）/ 声望 ' + urw.fame + ' · 接单倒计时 <span class="cm-left" data-end="' + uo.expiresAt + '">' + fmtLeft(uo.expiresAt - Date.now()) + '</span></div></div>' +
+        '<button class="small accent" onclick="startUrgent()">接单（扣成品 1 件）</button></div>';
+    }else{
+      html += '<div class="up-row"><div class="info"><div class="t">加 急 单 · ' + (ut ? ut.hours : '') + ' 小时商队</div>' +
+        '<div class="d">报酬翻倍 ' + (urw.coins * CONFIG.urgent.mult) + ' 铜钱 / 声望 ' + urw.fame + ' · 接单倒计时 <span class="cm-left" data-end="' + uo.expiresAt + '">' + fmtLeft(uo.expiresAt - Date.now()) + '</span></div></div>' +
+        '<button class="small" onclick="startUrgent()">接单</button></div>';
+    }
   }else if(uo && uo.taken){
-    html += '<div class="small-note">今日加急单已接下（在下方委托里，报酬翻倍）。</div>';
+    html += '<div class="small-note">今日' + (uo.pickled ? '腌菜急单' : '加急单') + '已接下（在下方委托里，报酬加成）。</div>';
   }else if(uo){
     html += '<div class="small-note">今日加急单已过期作废，明日再来。</div>';
   }
@@ -5751,7 +5969,7 @@ function renderCommissions(){
   for(const c of S.commissions){
     const ct = tierDef(c.tierId);
     const rw = commissionPayout(c) || { coins: 0, fame: 0 };
-    html += '<div class="up-row"><div class="info"><div class="t">' + (c.urgent ? '加急单 · ' : '') + (ct && ct.name ? '远行委托 · ' + esc(ct.name) : '商队委托') + ' · ' + c.hours + ' 小时</div>' +
+    html += '<div class="up-row"><div class="info"><div class="t">' + (c.pickled ? '腌菜急单 · ' : (c.urgent ? '加急单 · ' : '')) + (ct && ct.name ? '远行委托 · ' + esc(ct.name) : '商队委托') + ' · ' + c.hours + ' 小时</div>' +
       '<div class="d">报酬 ' + rw.coins + ' 铜钱 / 声望 ' + rw.fame + ' · <span class="cm-left" data-end="' + c.end + '">' + fmtLeft(c.end - Date.now()) + '</span></div></div>' +
       '<button class="small" onclick="claimCommission(\'' + c.id + '\')"' + (commissionReady(c) ? '' : ' disabled') + '>领取</button>' +
       '<button class="small" onclick="instantCommission(\'' + c.id + '\')">广告立即完成</button></div>';
@@ -5985,7 +6203,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:6px;">把驿站放回桌面：离线房钱攒满 12 小时就溢出了，点桌面图标一键回来领取（需在虎扑 App 内使用）。</div>' +
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
-    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '；驻店新规矩：与贵客深谈到「知交」可邀其驻店 ' + CONFIG.resident.days + ' 日，驻店期间其同类客群到访权重 ×' + CONFIG.resident.weightMult + '，送别回礼＝声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，说书人故事日驻店期间好感入账 ×' + CONFIG.resident.storyFavorMult + '。</div>' +
+    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '；驻店新规矩：与贵客深谈到「知交」可邀其驻店 ' + CONFIG.resident.days + ' 日，驻店期间其同类客群到访权重 ×' + CONFIG.resident.weightMult + '，送别回礼＝声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，说书人故事日驻店期间好感入账 ×' + CONFIG.resident.storyFavorMult + '；后厨加工新规矩（11月27日起）：收获可分流送加工坊做成品，成品直售价＝当前收入速率×' + CONFIG.process.sellMinutes + ' 分钟/件（快腌按四分之一计），腌菜急单报酬在急单翻倍之上再 ×' + CONFIG.process.urgentMult + '、接单扣成品 1 件。</div>' +
     '<div class="small-note" style="margin-top:8px;">伙计专精公示（11/24 起）：历练不另设账——掌柜看累计接待、小二看奉茶＋深谈待客、厨子看掌勺次数、马夫看累计完成委托；入专精 ' + CONFIG.specialty.fees[0] + ' 文、升阶 ' + CONFIG.specialty.fees[1] + ' / ' + CONFIG.specialty.fees[2] + ' 文（四岗全满共 ' + (CONFIG.specialty.fees[0] + CONFIG.specialty.fees[1] + CONFIG.specialty.fees[2]) * 4 + ' 文）；每阶加成：掌柜总收入 +' + Math.round(CONFIG.specialty.lines.innkeeper.per * 100) + '%、小二总收入 +' + Math.round(CONFIG.specialty.lines.waiter.per * 100) + '%、厨子总收入 +' + Math.round(CONFIG.specialty.lines.cook.per * 100) + '%、马夫委托报酬 +' + Math.round(CONFIG.specialty.lines.groom.per * 100) + '%，均并入原加成口径、不另开乘区；从不升阶者收益与从前一致。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
@@ -6552,6 +6770,9 @@ window.YZ = {
   inviteResident: inviteResident, settleResidentMorning: settleResidentMorning, renderResident: renderResident,
   residentMorningHtml: residentMorningHtml, residentTea: residentTea, residentTeaEligible: residentTeaEligible,
   residentWishDeliver: residentWishDeliver, residentGoodsCount: residentGoodsCount, grantResidentMats: grantResidentMats,
+  processMove: processMove, processStart: processStart, processCollect: processCollect, sellGoods: sellGoods,
+  doHarvest: doHarvest, renderProcess: renderProcess, processGoodsDef: processGoodsDef, goodsSellPrice: goodsSellPrice,
+  processTakeAnyGoods: processTakeAnyGoods, processGoodsTotal: processGoodsTotal,
   adPending: function(){ return S ? S.adPending : null; },
   saveSlot: saveSlot, loadSlot: loadSlot, slotInfo: slotInfo,
   saveFailToasts: function(){ return saveFailToasts; }, importBackupOk: function(){ return lastImportBackupOk; },
