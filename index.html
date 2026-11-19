@@ -629,10 +629,10 @@ const CONFIG = {
     { date:'2026-11-23', title:'丰收日 · 抉择与委托奖励 ×1.5', kind:'boost', mod:{ eventMult:1.5, commissionMult:1.5, multLabel:'丰收日加码' } },
     { date:'2026-11-24', title:'掌柜考校 · 抉择奖励 ×1.5（伙计专精同日开启）', kind:'boost', mod:{ eventMult:1.5, multLabel:'掌柜考校加码' } },
     { date:'2026-11-25', title:'新事件上新 · 连环故事开场（深谈面熟的种子今日承接）', kind:'data' },
-    { date:'2026-11-26', title:'贵客临门', kind:'gate' },
-    { date:'2026-11-27', title:'名厨日 · 厨房加成翻倍', kind:'boost', mod:{ kitchenDouble:true } },
+    { date:'2026-11-26', title:'贵客临门 · 可邀驻店', kind:'gate' },
+    { date:'2026-11-27', title:'名厨日 · 名厨驻店，厨房加成翻倍', kind:'boost', mod:{ kitchenDouble:true } },
     { date:'2026-11-28', title:'周末市集 · 礼包 4 次、金额 +50%', kind:'boost', mod:{ giftTimes:4, giftMult:1.5 } },
-    { date:'2026-11-29', title:'故事日 · 老客长谈', kind:'data' },
+    { date:'2026-11-29', title:'故事日 · 说书人驻店、老客长谈', kind:'data' },
     { date:'2026-11-30', title:'运营庆典 · 结算答谢', kind:'finale' }
   ],
   /* 商队委托三档 */
@@ -964,14 +964,25 @@ const CONFIG = {
       groom:     { xpKey:'commissions', xpName:'完成委托',         xpUnit:'支', xpNeed:[4, 12, 30],    per:0.04, effect:'委托报酬' }
     }
   },
+  /* 驻店合流（B2-1，牌面 11/26 随 gates.noble 开门）：贵客驻店 2 日——加成只走非铜钱维度：
+     同组到访权重（guestWeightToday 唯一出口）与好感入账倍率（favorIn 唯一修正口），不碰 incomeRate；
+     送别回礼数值在此单点定义，晨间/驻店卡预告与送别卡 A 选项同源（探针三方对账）；
+     说书人故事日（storyDay）自动驻店至 storyUntil 晨间收尾，好感入账 ×storyFavorMult；
+     贵客送别回礼预送加工原料 matsGift 份进 S.process.mats（B2-2 前只存不用，晨间预告行明示）；
+     enabled=false 即整段回现行单日口径（回退开关） */
+  resident: { enabled: true, days: 2, weightMult: 1.5,
+    farewellFame: 6, farewellFavor: 4,
+    teaHour: 12, teaFavor: 2,
+    storyDay: '2026-11-29', storyUntil: '2026-11-30', storyFavorMult: 1.5, storyWishFavor: 6,
+    matsGift: 2 },
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'chain-1125', lines: [
-    { name:'连环故事「遗落的钱袋」', how:'和客人深谈到「面熟」结下的故事种子，今日起会引出一桩钱袋失主的连环故事：三幕连着演，今日选完、下一幕明日必到，终幕的谢礼数目就写在卡上', goto:'affair:eventsCard' },
-    { name:'新事件十张上新', how:'「借伞的姑娘」「夜半歌声」两段连环故事与四张新抉择今日入池——带「第 N 幕」角标的就是连环故事，演到第几幕卡上写得明明白白', goto:'affair:eventsCard' },
-    { name:'链进度随时回看', how:'事务页抉择上方有连环故事进度行：哪段故事演到第几幕、哪段已经完结，一眼看清，不怕断了线', goto:'affair:eventsCard' },
-    { name:'不深谈也照旧', how:'连环故事是给爱叙旧的玩家加的线：从不深谈的人，每日抉择的池子与从前一张不差，两段老故事照常随机出现', goto:'affair:eventsCard' }
+  introCard: { ver: 'resident-1126', lines: [
+    { name:'驻店客人', how:'贵客、名厨、说书人会住进驿站一两天，驻店期间有加成、送别还有回礼——和贵客深谈到「知交」，就能在他的房卡上邀他驻店两日', goto:'home:soonResidentCard' },
+    { name:'送别有回礼，午后有茶叙', how:'驻店首日午后陪他喝杯茶叙旧；送别那天的回礼数目（声望、好感）从驻店第一天起就写明在晨间小结和驻店卡上，不玩虚的', goto:'home:soonResidentCard' },
+    { name:'名厨驻店', how:'11月27日名厨驻店一日：厨房加成翻倍照旧，事务页还多一张他的专属抉择，陪他过过招', goto:'home:soonResidentCard' },
+    { name:'说书人驻店', how:'11月29日故事日，说书人住进驿站讲古一场：那天的好感入账翻一半，他还惦记一口驿站的腌菜——备好一件加工成品就能遂他的愿', goto:'home:soonResidentCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1089,6 +1100,17 @@ const CONFIG = {
       { label:'收下银子，立个善缘账', coins:120, fame:6, favor:5 }, { label:'只收当年的铜钱，银子退回', coins:10, fame:8, favor:5 } ] },
     { id:'e_oldcook', pool:'daily', img:'ev_dusk', from:'2026-11-29', title:'驿站老客 · 哑巴厨子', text:'隔壁镇的哑巴厨子在驿站帮过三年厨，从不开口，只会指着灶台比划。今晚他拎着一坛自家酿的酒坐在灶边，忽然把酒坛推到掌柜面前，又指了指酒坛底——坛底压着一张字条，是他一笔一划写了三天的：「酒，送你。我，回乡，抱孙子了。灶上的火，你替我看着，别让它凉了。」字歪歪扭扭，却看得人心里发烫。', choices:[
       { label:'收下酒，替他看好灶火', coins:30, fame:5, favor:5 }, { label:'回赠路费，送他到镇口', coins:-20, fame:7, favor:5 } ] },
+    /* 名厨日叙事改造（B2-1，2026-11-27 上新）：名厨驻店一日专属卡——加成仍走 calMod.kitchenDouble
+       一字不改，本卡只补叙事与其掌勺抉择，from 后常驻日常池 */
+    { id:'e_chef', pool:'daily', img:'ev_day', from:'2026-11-27', title:'名厨驻店', text:'今日驻店的名厨在后厨转了一圈，卷起袖子说：灶是好灶，就是火候没人管。掌柜的，可敢让我露一手？驿站的招牌菜若经他指点，往后客人们怕是要排队。', choices:[
+      { label:'请他露一手招牌菜', coins:-15, fame:5, favor:3 }, { label:'只请他指点后厨', coins:0, fame:3, favor:2 } ] },
+    /* 驻店专属卡（B2-1）：带 residentCard 标记——永不入随机池（eventPool 过滤），只由驻店状态机
+       在送别/收尾日经 pickEventsForDay 强排当日首张、只出一次；A 选项即送别回礼明牌，
+       数值与 CONFIG.resident.farewellFame/farewellFavor 同源（探针对账） */
+    { id:'e_resident_bye', pool:'daily', img:'ev_dusk', residentCard:'farewell', title:'送别贵客', text:'驻店的日子到了尾声。贵客收拾好行装，在堂前站了站：这两日住得舒心，临行前，掌柜的也该收下驿站应得的体面——回礼已经备下，就在柜台上。', choices:[
+      { label:'收下回礼，送他上路', coins:0, fame:6, favor:4 }, { label:'亲自送到镇口再叙', coins:-10, fame:8, favor:4 } ] },
+    { id:'e_story_bye', pool:'daily', img:'ev_night', residentCard:'storybye', title:'说书人收尾', text:'说书人收起醒木，对着满堂拱了拱手：这一场书说到这里。临行他把那段压箱底的段子又小声讲给掌柜听了一遍——「下回再来，接着这段往下说。」', choices:[
+      { label:'奉上茶水润喉', coins:-5, fame:3, favor:3 }, { label:'请他下回再来', coins:0, fame:2, favor:2 } ] },
     { id:'b_feast', pool:'banquet', img:'ev_banquet', title:'宴会厅·乡绅寿宴', text:'本地乡绅要借宴会厅办六十寿宴。', choices:[
       { label:'精心筹备', coins:60, fame:5, favor:2 }, { label:'简单操办', coins:90, fame:1, favor:0 } ] },
     { id:'b_wedding', pool:'banquet', img:'ev_banquet', title:'宴会厅·喜宴', text:'一对新人想在驿站办喜宴，图个热闹。', choices:[
@@ -1361,6 +1383,10 @@ function defaultState(){
     bonds: {},
     talk: { count: 0, day: '', counts: {}, seeds: [], wishDue: [] },
     residentInvite: false,
+    /* B2-1 驻店（v1.4.9 加法字段）：resident 驻店状态（sanitizeResident）；process 加工物料账
+       （B2-2 声明形状，本批先行落地——贵客回礼原料只存不用，sanitizeProcess 同口径清洗） */
+    resident: null,
+    process: { mats: {}, queue: [], goods: {} },
     cook: { done: 0, best: 0 },
     tea: { served: 0, perfect: 0, day: '', count: 0 },
     decor: { owned: {}, rooms: [], granted: {} },
@@ -1432,6 +1458,42 @@ function sanitizeCollect(raw){
   out.earned = clampInt(raw.earned, 0, 999999, 0);
   out.repeats = clampInt(raw.repeats, 0, 999999, 0);
   if(out.earned < out.shards) out.earned = out.shards;   /* 累计获得不得小于现存余额（只上不下） */
+  return out;
+}
+/* 驻店状态清洗（B2-1）：kind 只认 noble/story；noble 的 type 必须是带 noble 门的贵客类型、
+   story 的 type 恒说书人；日期须 YYYY-MM-DD 形状且 untilDay 不早于 startDay，非法一律回 null（无驻店） */
+function sanitizeResident(raw){
+  if(!raw || typeof raw !== 'object') return null;
+  const kind = raw.kind;
+  if(kind !== 'noble' && kind !== 'story') return null;
+  const t = CONFIG.guestTypes.find(x => x.id === raw.type);
+  if(!t) return null;
+  if(kind === 'noble' && t.gate !== 'noble') return null;
+  if(kind === 'story' && t.id !== 'storyteller') return null;
+  const dsOk = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  if(!dsOk(raw.startDay) || !dsOk(raw.untilDay) || raw.untilDay < raw.startDay) return null;
+  return { kind: kind, type: t.id, label: t.label,
+    name: (typeof raw.name === 'string') ? raw.name.slice(0, 12) : '',
+    startDay: raw.startDay, untilDay: raw.untilDay,
+    teaDay: dsOk(raw.teaDay) ? raw.teaDay : '',
+    farewell: raw.farewell === true, wishDone: raw.wishDone === true };
+}
+/* 加工物料账清洗（B2-2 声明形状、本批先行）：mats 只认作物 id、goods 只认字符串键，计数 clamp；
+   queue 只留 {goodsId, end} 合法形状至多 4 槽；形状非法回空账，老档零回溯 */
+function sanitizeProcess(raw){
+  const out = { mats: {}, queue: [], goods: {} };
+  if(!raw || typeof raw !== 'object') return out;
+  if(raw.mats && typeof raw.mats === 'object') for(const c of CONFIG.crops){
+    const v = clampInt(raw.mats[c.id], 0, 999, 0);
+    if(v > 0) out.mats[c.id] = v;
+  }
+  if(raw.goods && typeof raw.goods === 'object') for(const k of Object.keys(raw.goods)){
+    const v = clampInt(raw.goods[k], 0, 999, 0);
+    if(v > 0) out.goods[k] = v;
+  }
+  if(Array.isArray(raw.queue)) out.queue = raw.queue
+    .filter(q => q && typeof q === 'object' && typeof q.goodsId === 'string' && +q.end > 0)
+    .slice(0, 4).map(q => ({ goodsId: q.goodsId, end: Math.floor(+q.end) }));
   return out;
 }
 function sanitizeDecor(raw){
@@ -1587,6 +1649,8 @@ function normalize(raw){
   if(Array.isArray(rt145.seeds)) s.talk.seeds = rt145.seeds.filter(id => CONFIG.guestTypes.some(t => t.id === id));
   if(Array.isArray(rt145.wishDue)) s.talk.wishDue = rt145.wishDue.filter(id => CONFIG.guestTypes.some(t => t.id === id));
   s.residentInvite = raw.residentInvite === true;
+  s.resident = sanitizeResident(raw.resident);   /* B2-1 驻店：非法形状回 null，老档无字段即无驻店 */
+  s.process = sanitizeProcess(raw.process);       /* 加工物料账（B2-2 形状先行）：老档补空账 */
   const rc145 = (raw.cook && typeof raw.cook === 'object') ? raw.cook : {};
   s.cook = { done: Math.max(0, Math.floor(+rc145.done || 0)), best: Math.max(0, Math.floor(+rc145.best || 0)) };
   const rte145 = (raw.tea && typeof raw.tea === 'object') ? raw.tea : {};
@@ -2092,6 +2156,10 @@ function guestWeightToday(t){
   /* 布置客房：任一房摆有合该客群的陈设，该组到访权重再乘陈设倍率（同层叠乘，仍是唯一出口） */
   const dgrp = guestGroupOf(t.id);
   if(dgrp && decorPlacedGroups()[dgrp]) base *= CONFIG.decor.weightMult;
+  /* 驻店贵客（B2-1）：驻店期间其所属客群到访权重再乘驻店倍率（同层叠乘，仍是唯一出口；
+     residentMod 为驻店修正唯一派生口，无驻店时倍率恒 1、权重逐值不变） */
+  const rm = residentMod();
+  if(rm.group && dgrp === rm.group) base *= rm.weightMult;
   return base;
 }
 /* ================= 吆喝口号（亲手操控层试点） =================
@@ -2362,7 +2430,7 @@ function chainSeedArmed(e){
 }
 function eventPool(){
   /* 日常池按 from 上新日过滤（v1.3 数据上新：未到上新日的卡不入池）；needSeed 链首幕另过种子门 */
-  const daily = CONFIG.events.filter(e => e.pool === 'daily' && (!e.from || dayStr() >= e.from) && chainSeedArmed(e));
+  const daily = CONFIG.events.filter(e => e.pool === 'daily' && (!e.from || dayStr() >= e.from) && chainSeedArmed(e) && !e.residentCard);
   if(packActive('banquet')) return daily.concat(CONFIG.events.filter(e => e.pool === 'banquet'));
   return daily;
 }
@@ -2683,6 +2751,10 @@ function chainActNo(ev){
 }
 function pickEventsForDay(){
   const picked = [];
+  /* 驻店送别/收尾卡（B2-1）：送别日由状态机晨间置旗，专属卡强排当日首张、只出一次；
+     卡本体永不入随机池（eventPool 已过滤 residentCard），无驻店待办时排卡与旧版逐值不变 */
+  if(S && S.resident && S.resident.farewell)
+    picked.push(S.resident.kind === 'story' ? 'e_story_bye' : 'e_resident_bye');
   /* 伪链接续（B1）：进行中的连环故事，下一幕今日必出、排在当日首张；种子卡仍走随机池，
      后续幕不入随机池（eventPool 含全池，此处过滤 act>1 的链卡） */
   for(const c of CONFIG.chains){
@@ -2717,6 +2789,7 @@ function rollDayIfNeeded(){
   S.ads = {};
   S.urgent = null;   /* 加急单跨日作废，新一日由 ensureUrgent 重新刷 */
   S.urgent2 = null;   /* 广告再唤的第二张加急单同口径跨日作废（体验券按 trialDay 日戳比对、天然跨日失效，不在此清） */
+  settleResidentMorning();   /* 驻店晨间结算（B2-1）：置送别旗/过日自动送别/说书人入驻，须在排卡之前 */
   S.eventsToday = pickEventsForDay();
   S.eventsDone = 0;
   ensureQuests();   /* 日课随日界滚动：questsNext 转正＋生成新的明日预告 */
@@ -2735,7 +2808,7 @@ let tickTimer = null;
 function tick(){
   if(!S || !S.name) return;
   let changed = false;
-  if(rollDayIfNeeded()){ changed = true; renderMorning(); renderEvents(); renderAdsBox(); }
+  if(rollDayIfNeeded()){ changed = true; renderMorning(); renderResident(); renderEvents(); renderAdsBox(); }
   if(settleEntrust()) changed = true;   /* 离线托付到期结算（走 ledger，与晨间小结同账） */
   if(S.guests.length < S.rooms.count && Math.random() < arrivalChance()){
     if(arriveGuest()) changed = true;
@@ -2826,7 +2899,8 @@ function doEventChoice(idx){
   const evMult = calMod().eventMult || 1;
   const effCoins = ch.coins > 0 ? Math.round(ch.coins * evMult) : ch.coins;
   const effFame = ch.fame > 0 ? Math.round(ch.fame * evMult) : ch.fame;
-  ledger('event', effCoins, effFame, '事件「' + ev.title + '」已抉择', ch.favor);
+  const effFavor = favorIn(ch.favor);   /* 说书人驻店日好感加成（B2-1）：只放大正入账，负好感原样 */
+  ledger('event', effCoins, effFame, '事件「' + ev.title + '」已抉择', effFavor);
   const chnDone = chainDefOf(ev);   /* 伪链推进：按幕次顺序完成才推进进度，乱序不算 */
   const progBefore = chnDone ? clampInt(S.chainProg[chnDone.id], 0, chnDone.acts.length, 0) : 0;
   if(chnDone && chainActNo(ev) === progBefore + 1)
@@ -2835,6 +2909,16 @@ function doEventChoice(idx){
   if(chnDone && ev.needSeed && progBefore === 0 && S.chainProg[chnDone.id] === 1
      && S.talk && S.talk.seeds && S.talk.seeds.length)
     S.talk.seeds.splice(0, 1);
+  /* 驻店专属卡收尾（B2-1）：送别卡抉择后补发加工原料回礼并清驻（声望/好感已在卡面选项里
+     经 ledger 入账）；说书人收尾卡抉择后清驻。漏抉择过日的自动结算在 settleResidentMorning */
+  if(ev.residentCard && S.resident){
+    if(ev.residentCard === 'farewell' && S.resident.kind === 'noble'){
+      const mc = grantResidentMats();
+      pushLog('贵客临行留了一小包' + mc.name + '原料（×' + CONFIG.resident.matsGift + '）在柜上——加工坊开张后可用');
+    }
+    S.resident = null;
+    renderResident();
+  }
   if(chnDone) setCoachFlag('tourChain');   /* 真实抉择链卡即落旗（coach 口径同既有情境引导） */
   S.eventsDone++;
   S.totalEvents++;
@@ -2847,7 +2931,7 @@ function doEventChoice(idx){
   const fb = [];
   if(effCoins) fb.push((effCoins > 0 ? '+' : '') + effCoins + ' 铜钱');
   if(effFame) fb.push((effFame > 0 ? '+' : '') + effFame + ' 声望');
-  if(ch.favor) fb.push((ch.favor > 0 ? '+' : '') + ch.favor + ' 好感');
+  if(effFavor) fb.push((effFavor > 0 ? '+' : '') + effFavor + ' 好感');
   if(evMult > 1) fb.push(calMod().multLabel || '当日加码');   /* 加码名目随日历（丰收日/掌柜考校），不写死 */
   showToast('「' + ev.title + '」已抉择' + (fb.length ? '：' + fb.join(' / ') : ''));
   tourHook('event');
@@ -3053,7 +3137,8 @@ function fulfillWish(i){
   if(!chk.ok){ showToast(chk.hint || '眼下还遂不了这个心愿'); return false; }
   const kind = g.wish.kind, rw = wishReward(g);
   g.wish = null;   /* 先摘心愿再发奖：重复点击天然幂等 */
-  ledger('wish', rw.coins, rw.fame, '遂了 ' + g.label + ' ' + g.name + ' 的心愿：小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor, rw.favor);
+  const effFavor = favorIn(rw.favor);   /* 说书人驻店日好感加成（B2-1）：入账/日志/提示同走修正值 */
+  ledger('wish', rw.coins, rw.fame, '遂了 ' + g.label + ' ' + g.name + ' 的心愿：小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + effFavor, effFavor);
   if(kind === 'hurry'){
     S.guests.splice(S.guests.indexOf(g), 1);
     pushLog(g.name + ' 吃上一口热乎的，心满意足提前上路了');
@@ -3062,7 +3147,7 @@ function fulfillWish(i){
   renderRooms();
   updateDynamic();
   renderLog();
-  showToast('心愿遂了 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor);
+  showToast('心愿遂了 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + effFavor);
   sfxPlay('reward');
   return true;
 }
@@ -3128,7 +3213,11 @@ const COACH_DEFS = [
   { flag:'tourChain', tab:'affair', sub:null, when:() => { const ev = currentEvent(); return !!(ev && chainDefOf(ev)); },
     target:() => document.querySelector('#eventsBox .claim-chip') || document.getElementById('eventsBox'),
     title:'连环故事：这事还没完',
-    body:'带「连环故事 · 第 N 幕」角标的抉择是一段连着的故事：一共三幕，今日选完，下一幕明日必在抉择里等你，终幕有明牌的回报。演到第几幕，事务页抉择上方随时能回看。和客人深谈到「面熟」结下的种子，还会引出新的连环故事。' }
+    body:'带「连环故事 · 第 N 幕」角标的抉择是一段连着的故事：一共三幕，今日选完，下一幕明日必在抉择里等你，终幕有明牌的回报。演到第几幕，事务页抉择上方随时能回看。和客人深谈到「面熟」结下的种子，还会引出新的连环故事。' },
+  { flag:'tourResident', tab:'home', sub:null, when:() => !!S.resident,
+    target:() => document.getElementById('soonResidentCard'),
+    title:'驻店客人：住下来，就有加成',
+    body:'受邀的贵客会在驿站住满两日：驻店期间，和他同类的客人来得更勤；首日午后还能陪他喝杯茶叙叙旧。送别那天，事务页第一张抉择就是送别——回礼数目早早写明在晨间小结和这张驻店卡上。说书人故事日也会来驻店一场，那天的好感入账翻一半。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
@@ -3325,6 +3414,225 @@ function finishTalk(){
     '<div class="btnrow"><button class="small accent" onclick="closePlay()">收下这份交情</button></div>', null);
 }
 
+/* ================= 驻店合流（B2-1，v1.4.9） =================
+   形态：不做独立系统——贵客临门（gates.noble）驻店化＋名厨日叙事＋说书人故事日驻店。
+   状态 S.resident 单槽（同时只许一位）；加成只走非铜钱维度：贵客驻店给其所属客群到访权重
+   （guestWeightToday 唯一出口）、说书人驻店给好感入账倍率（favorIn 唯一修正口），不碰 incomeRate。
+   residentMod() 为驻店修正唯一派生口：无驻店/门未开/不在驻店期内恒回 {group:null, 倍率全 1}，
+   托管玩家（从不深谈、无邀约资格）全程 resident 恒 null、权重与收益逐值不变。
+   送别/收尾走专属抉择卡：晨间状态机置 farewell 旗 → pickEventsForDay 强排当日首张、只出一次；
+   漏抉择过日由晨间自动结算（贵客回礼照发、只发一次），玩家不吃亏 */
+function dayAddStr(ds, n){
+  const p = ds.split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2]);
+  d.setDate(d.getDate() + n);
+  return dayStr(d);
+}
+function dayDiffStr(a, b){   /* b - a 的天数差（本地日期口径） */
+  const pa = a.split('-').map(Number), pb = b.split('-').map(Number);
+  return Math.round((new Date(pb[0], pb[1] - 1, pb[2]) - new Date(pa[0], pa[1] - 1, pa[2])) / 86400000);
+}
+function residentMod(){
+  const none = { group: null, weightMult: 1, favorMult: 1 };
+  if(!S || !S.resident || !CONFIG.resident.enabled) return none;
+  const r = S.resident, today = dayStr();
+  if(today < r.startDay || today > r.untilDay) return none;
+  if(r.kind === 'story') return { group: null, weightMult: 1, favorMult: CONFIG.resident.storyFavorMult };
+  return { group: guestGroupOf(r.type), weightMult: CONFIG.resident.weightMult, favorMult: 1 };
+}
+function residentDaysLeft(){
+  if(!S || !S.resident) return 0;
+  return Math.max(0, dayDiffStr(dayStr(), S.resident.untilDay)) + 1;
+}
+function residentFavorMult(){ return residentMod().favorMult; }
+/* 好感入账唯一修正口：正入账乘驻店倍率（说书人驻店日），负好感与 0 原样——
+   既有四处正好感入账（抉择/遂愿/掌勺/奉茶）全经此口，展示文案同源用修正值 */
+function favorIn(n){ return n > 0 ? Math.round(n * residentFavorMult()) : n; }
+function grantResidentMats(){
+  const pool = CONFIG.crops.filter(c => !c.rare);
+  const c = pool[Math.floor(Math.random() * pool.length)];
+  if(!S.process) S.process = sanitizeProcess(null);
+  S.process.mats[c.id] = (S.process.mats[c.id] || 0) + CONFIG.resident.matsGift;
+  return c;
+}
+/* 晨间驻店结算（rollDayIfNeeded 在排卡之前调用；renderAll 另兜底调用一次防首日建档错过）：
+   说书人故事日自动入驻（单槽不抢位）／送别日置旗／过日自动送别发回礼（只发一次） */
+function settleResidentMorning(){
+  if(!S || !CONFIG.resident.enabled) return;
+  const today = dayStr();
+  if(!S.resident && today === CONFIG.resident.storyDay && packActive('noble')){
+    S.resident = { kind:'story', type:'storyteller', label:'说书人', name:'', startDay: today,
+      untilDay: CONFIG.resident.storyUntil, teaDay:'', farewell:false, wishDone:false };
+    pushLog('说书人在驿站住下了：今日讲古一场，听书入账的好感 ×' + CONFIG.resident.storyFavorMult + '，明晨收尾');
+  }
+  const r = S.resident;
+  if(!r) return;
+  if(today > r.untilDay){
+    if(r.kind === 'noble'){
+      ledger('resident', 0, CONFIG.resident.farewellFame,
+        '送别 ' + r.label + ' ' + r.name + '：回礼 声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor,
+        CONFIG.resident.farewellFavor);
+      const c = grantResidentMats();
+      pushLog('贵客临行留了一小包' + c.name + '原料（×' + CONFIG.resident.matsGift + '）在柜上——加工坊开张后可用');
+    }else{
+      pushLog('说书人一早便走了，醒木还留在堂上——下回再来，接着那段往下说');
+    }
+    S.resident = null;
+  }else if(today === r.untilDay){
+    r.farewell = true;
+  }
+}
+/* 邀驻：五重校验（门开/无在驻/贵客类型/邀约资格/该类型知交），任一不合只 toast 原因、零写入 */
+function inviteResident(i){
+  const g = S && S.guests[i];
+  if(!g) return false;
+  if(!CONFIG.resident.enabled || !packActive('noble')){ showToast('贵客驻店将于 11月26日开放'); return false; }
+  if(S.resident){ showToast('已有一位驻店客在住，先送别了再邀下一位'); return false; }
+  const t = CONFIG.guestTypes.find(x => x.id === g.type);
+  if(!t || t.gate !== 'noble'){ showToast('只有贵客能应邀驻店'); return false; }
+  if(!S.residentInvite || talkBondOf(g.type) < CONFIG.talk.bondCap){ showToast('交情还没到「知交」——先和他深谈到知交，才能邀他驻店'); return false; }
+  const today = dayStr();
+  S.resident = { kind:'noble', type:g.type, label:g.label, name:g.name, startDay: today,
+    untilDay: dayAddStr(today, CONFIG.resident.days - 1), teaDay:'', farewell:false, wishDone:false };
+  /* coach tourResident 不在此落旗：情境步要在首位驻店客临门后于开始页首现（定案口径），
+     落旗点是驻店卡上的真实操作（茶叙/心愿交付）与玩家点「知道了」 */
+  const grp = guestGroupOf(g.type);
+  pushLog(g.label + ' ' + g.name + ' 应邀驻店 ' + CONFIG.resident.days + ' 日：同为「' +
+    ((CONFIG.playGroups[grp] || {}).label || '') + '」的客人会来得更勤');
+  save();
+  renderRooms(); renderResident(); updateDynamic();
+  showToast(g.label + ' ' + g.name + ' 驻店了——送别回礼已备下：声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor);
+  return true;
+}
+function residentTeaEligible(){
+  const r = S && S.resident;
+  return !!(r && r.kind === 'noble' && dayStr() === r.startDay &&
+    new Date().getHours() >= CONFIG.resident.teaHour && r.teaDay !== dayStr());
+}
+/* 午后茶叙（留存补项·错峰触点）：驻店首日 12 点后在驻店卡出钮、点击才叙（不自动弹窗）；
+   teaDay 防重当日只一次；漏触发次日晨间只补文案不补 favor（防刷，见 residentMorningHtml） */
+function residentTea(){
+  if(!residentTeaEligible()) return false;
+  const r = S.resident;
+  r.teaDay = dayStr();
+  setCoachFlag('tourResident');   /* 驻店卡上的真实操作即落旗（coach 口径同既有情境引导） */
+  const f = favorIn(CONFIG.resident.teaFavor);
+  ledger('resident_tea', 0, 0, '午后陪 ' + r.label + ' ' + r.name + ' 喝了杯茶：好感 +' + f, f);
+  save();
+  renderResident();
+  const lines = { wen:'他呷了口茶，说这驿站的清静，比翰林院的还难得。', shang:'他掂了掂茶盏，笑道：掌柜的会做生意，更会做人。',
+    jiang:'他一口饮尽，抹了把嘴：痛快！这茶解乏。', bai:'他捧着茶碗暖手，说起家乡的田，眼里有了光。',
+    fang:'他双手合十谢过，只道茶香里有山里的味道。', gui:'他慢条斯理地品完，才说：这茶，配得上这间驿站。' };
+  openPlay(
+    '<h3>午 后 茶 叙</h3>' +
+    '<div class="play-react">' + esc(r.label) + ' ' + esc(r.name) + '：' + (lines[guestGroupOf(r.type)] || lines.bai) + '</div>' +
+    '<div class="small-note">好感 +' + f + ' 已入账。明日送别——回礼已备下：声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，送别抉择在事务页。</div>' +
+    '<div class="btnrow"><button class="small accent" onclick="closePlay()">知道了</button></div>', null);
+  return true;
+}
+function residentGoodsCount(){
+  if(!S || !S.process || !S.process.goods) return 0;
+  return Object.keys(S.process.goods).reduce((a, k) => a + (S.process.goods[k] || 0), 0);
+}
+/* 说书人心愿（留存补项·串 B2-2）：交付任意加工成品 1 件即遂愿，奖励走其 favor ×1.5 口径；
+   无成品时心愿只挂不用、不挡收尾卡。成品增减 B2-2 落地后应收口到 processMove，本批先行直改同一张表 */
+function residentWishDeliver(){
+  const r = S && S.resident;
+  if(!r || r.kind !== 'story' || r.wishDone) return false;
+  if(residentGoodsCount() < 1){ showToast('手边还没有加工成品——后厨加工坊做的腌菜、南瓜干、藕粉都行'); return false; }
+  const k = Object.keys(S.process.goods).find(k => S.process.goods[k] > 0);
+  S.process.goods[k]--;
+  if(S.process.goods[k] <= 0) delete S.process.goods[k];
+  r.wishDone = true;
+  setCoachFlag('tourResident');   /* 驻店卡上的真实操作即落旗（coach 口径同既有情境引导） */
+  const f = favorIn(CONFIG.resident.storyWishFavor);
+  ledger('resident_wish', 0, 0, '遂了说书人的心愿（递上一件驿站的腌菜成品）：好感 +' + f, f);
+  save();
+  renderResident(); updateDynamic();
+  showToast('说书人吃得眯起眼：好感 +' + f);
+  return true;
+}
+let residentSig = '';
+function renderResident(){
+  const box = document.getElementById('residentBody');
+  if(!box || !S) return;
+  const r = S.resident, R = CONFIG.resident;
+  const sig = [packActive('noble') ? 1 : 0, R.enabled ? 1 : 0,
+    r ? [r.kind, r.type, r.untilDay, r.teaDay, r.wishDone ? 1 : 0, r.farewell ? 1 : 0].join('/') : '-',
+    S.residentInvite ? 1 : 0, residentTeaEligible() ? 1 : 0,
+    r && r.kind === 'story' ? residentGoodsCount() : 0, dayStr()].join('|');
+  if(sig === residentSig) return;
+  residentSig = sig;
+  if(!packActive('noble') || !R.enabled){
+    /* 门未开：原挂牌逐字渲染（probe_soon 锚点保全），点牌仍走 showSoon 预告 */
+    box.innerHTML = '<button class="soon-plaque" data-soon="resident" onclick="showSoon(\'resident\')"><span class="soon-tag">待开放</span><span class="soon-name">名厨 · 说书人驻店</span><span class="soon-date">11月26日开放</span></button>';
+    return;
+  }
+  let html = '';
+  if(r && r.kind === 'noble'){
+    const grp = guestGroupOf(r.type);
+    html += '<div class="up-row"><div class="info"><div class="t">驻店中 · ' + esc(r.label) + ' ' + esc(r.name) + '</div>' +
+      '<div class="d">剩 ' + residentDaysLeft() + ' 日（含今日）· 同为「' + esc((CONFIG.playGroups[grp] || {}).label || '') + '」的客人到访权重 ×' + R.weightMult + '；' +
+      (r.farewell
+        ? '今日送别：事务页第一张抉择就是送别——回礼 声望 +' + R.farewellFame + ' / 好感 +' + R.farewellFavor + ' 已备下'
+        : '明日送别，备下回礼：声望 +' + R.farewellFame + ' / 好感 +' + R.farewellFavor) + '</div></div></div>';
+    if(residentTeaEligible())
+      html += '<div class="btnrow"><button class="small accent resident-tea-btn" onclick="residentTea()">午后茶叙 · 陪他喝杯茶</button></div>';
+    else if(dayStr() === r.startDay && r.teaDay !== dayStr())
+      html += '<div class="small-note">午后（' + R.teaHour + ' 点后）回来，陪他喝杯茶叙叙旧。</div>';
+    else if(r.teaDay === r.startDay)
+      html += '<div class="small-note">今日茶叙已叙过了。</div>';
+  }else if(r && r.kind === 'story'){
+    html += '<div class="up-row"><div class="info"><div class="t">驻店中 · 说书人</div>' +
+      '<div class="d">今日在大堂讲古：好感入账 ×' + R.storyFavorMult + '（抉择、遂愿、掌勺、奉茶的好感都算）；' +
+      (r.farewell ? '今日收尾：事务页第一张抉择就是收尾一讲' : '明晨收尾，收尾一讲在事务页') + '</div></div></div>';
+    if(!r.wishDone){
+      html += '<div class="small-note">他的心愿：想吃一口驿站的腌菜——任意一件加工成品都行。</div>';
+      if(residentGoodsCount() > 0)
+        html += '<div class="btnrow"><button class="small accent resident-wish-btn" onclick="residentWishDeliver()">递上一件成品 · 遂他的愿</button></div>';
+      else
+        html += '<div class="small-note">（手边还没有成品：后厨加工坊做的腌菜、南瓜干、藕粉都能递；没有也不挡明晨收尾）</div>';
+    }else{
+      html += '<div class="small-note">他的腌菜心愿已遂。</div>';
+    }
+  }else if(S.residentInvite){
+    html += '<div class="small-note">你已有驻店邀约的资格：贵客在住时，点他房卡上的「邀驻店」，请他住满 ' + R.days +
+      ' 日——驻店期间同类客人来得更勤，送别还有回礼（声望 +' + R.farewellFame + ' / 好感 +' + R.farewellFavor + '）。</div>';
+  }else{
+    html += '<div class="small-note">和一位贵客深谈到「知交」，就能邀他驻店 ' + R.days +
+      ' 日：驻店期间同类客人来得更勤，送别还有回礼（声望 +' + R.farewellFame + ' / 好感 +' + R.farewellFavor + '）。</div>';
+  }
+  if(dayStr() === '2026-11-27')
+    html += '<div class="small-note" style="margin-top:4px;">今日名厨驻店掌勺：厨房加成翻倍，事务页还有一张「名厨驻店」的抉择。</div>';
+  box.innerHTML = html;
+}
+/* 晨间小结驻店行：驻店中/今日送别＋回礼预告（数值与 CONFIG 同源）；茶叙漏触发只补文案不补 favor */
+function residentMorningHtml(){
+  if(!S) return '';
+  const R = CONFIG.resident;
+  let html = '';
+  const r = S.resident;
+  if(r && R.enabled){
+    const who = esc(r.label) + (r.name ? ' ' + esc(r.name) : '');
+    if(dayStr() === r.untilDay){
+      html += '<div class="small-note" style="margin-top:4px;">驻店 · 今日送别：' + who + '——' +
+        (r.kind === 'noble'
+          ? '备下回礼：声望 +' + R.farewellFame + ' / 好感 +' + R.farewellFavor + '，送别抉择在事务页第一张。'
+          : '收尾一讲在事务页第一张抉择。') + '</div>';
+    }else{
+      html += '<div class="small-note" style="margin-top:4px;">驻店中：' + who + ' · 剩 ' + residentDaysLeft() + ' 日——' +
+        (r.kind === 'noble'
+          ? '明日送别，备下回礼：声望 +' + R.farewellFame + ' / 好感 +' + R.farewellFavor + '。'
+          : '今日好感入账 ×' + R.storyFavorMult + '。') + '</div>';
+    }
+    if(r.kind === 'noble' && r.startDay !== dayStr() && r.teaDay !== r.startDay)
+      html += '<div class="small-note" style="margin-top:4px;">昨日午后没赶上茶叙，今晨补叙一句：他说这驿站的茶，比京城的也不差。</div>';
+  }
+  if(dayStr() === '2026-11-27')
+    html += '<div class="small-note" style="margin-top:4px;">今日名厨驻店掌勺：厨房加成翻倍，事务页还有一张「名厨驻店」的抉择。</div>';
+  return html;
+}
+
 /* ================= 掌勺做饭（亲手操控层①） =================
    dish 心愿客的亲手轨（与「遂愿」托管轨并列）：三槽选料＋火候，cookCheck 唯一判定——
    得分＝口味词命中数＋火候对错（满 3 对味、2 将就、口味全偏或犯禁忌翻车）；重做（tried≥1）封顶将就。
@@ -3413,15 +3721,17 @@ function cookServe(){
     S.cook.best++;
     let favor = 3, selfProd = false;
     if(CONFIG.cook.gardenMains.indexOf(ses.picks.main) >= 0 && S.garden && S.garden.stock > 0){ S.garden.stock--; favor += 1; selfProd = true; }
+    favor = favorIn(favor);   /* 说书人驻店日好感加成（B2-1）：入账与展示同走 favorIn 修正值 */
     ledger('cook', rw.coins * 2, 2, '亲手掌勺对了 ' + g.label + ' ' + g.name + ' 的口味：小费 +' + (rw.coins * 2) + ' 铜钱 / 声望 +2 / 好感 +' + favor, favor);
     g.wish = null;
     head = '对 味 ！';
-    settle = '小费 +' + (rw.coins * 2) + ' 铜钱（心愿小费翻倍）/ 声望 +2 / 好感 +' + favor + (selfProd ? '（用了自家菜园的料，好感额外 +1）' : '') + '，心愿已遂。';
+    settle = '小费 +' + (rw.coins * 2) + ' 铜钱（心愿小费翻倍）/ 声望 +2 / 好感 +' + favor + (selfProd ? '（含自家菜园料的好感 +1）' : '') + '，心愿已遂。';
   }else if(chk.grade === 'ok'){
-    ledger('cook', rw.coins, rw.fame, '亲手掌勺给 ' + g.label + ' ' + g.name + ' 做了道将就的菜：小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor, rw.favor);
+    const okFavor = favorIn(rw.favor);
+    ledger('cook', rw.coins, rw.fame, '亲手掌勺给 ' + g.label + ' ' + g.name + ' 做了道将就的菜：小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + okFavor, okFavor);
     g.wish = null;
     head = '将 就';
-    settle = '小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + rw.favor + '（与点「遂愿」同值，白忙不亏），心愿已遂。';
+    settle = '小费 +' + rw.coins + ' 铜钱 / 声望 +' + rw.fame + ' / 好感 +' + okFavor + '（与点「遂愿」同值，白忙不亏），心愿已遂。';
   }else{
     const fee = Math.round(roomPrice() * CONFIG.cook.feeMult);
     let paid = 0;
@@ -3513,17 +3823,20 @@ function teaServe(){
   if(chk.hits >= 3){
     S.tea.perfect++;
     const tip = Math.max(5, Math.round(guestRoomPrice(g) * (g.priceMult || 1) * CONFIG.tea.tipMult));
-    ledger('tea', tip, 0, '给 ' + g.label + ' ' + g.name + ' 沏出知味茶：茶钱 +' + tip + ' 铜钱 / 好感 +3', 3);
+    const f3 = favorIn(3);
+    ledger('tea', tip, 0, '给 ' + g.label + ' ' + g.name + ' 沏出知味茶：茶钱 +' + tip + ' 铜钱 / 好感 +' + f3, f3);
     head = '知 味 ！';
-    settle = '茶钱 +' + tip + ' 铜钱 / 好感 +3 已入账。';
+    settle = '茶钱 +' + tip + ' 铜钱 / 好感 +' + f3 + ' 已入账。';
   }else if(chk.hits === 2){
-    ledger('tea', 0, 0, '给 ' + g.label + ' ' + g.name + ' 奉茶合口：好感 +2', 2);
+    const f2 = favorIn(2);
+    ledger('tea', 0, 0, '给 ' + g.label + ' ' + g.name + ' 奉茶合口：好感 +' + f2, f2);
     head = '合 口';
-    settle = '好感 +2 已入账（无茶钱）。';
+    settle = '好感 +' + f2 + ' 已入账（无茶钱）。';
   }else{
-    ledger('tea', 0, 0, '给 ' + g.label + ' ' + g.name + ' 奉茶不对路：好感 +1', 1);
+    const f1 = favorIn(1);
+    ledger('tea', 0, 0, '给 ' + g.label + ' ' + g.name + ' 奉茶不对路：好感 +' + f1, f1);
     head = '不 对 路';
-    settle = '他笑笑说下次火候到了再来——好感 +1，不扣任何东西。';
+    settle = '他笑笑说下次火候到了再来——好感 +' + f1 + '，不扣任何东西。';
   }
   save();
   renderRooms();
@@ -4495,7 +4808,7 @@ function refreshOnSwitch(){
   todaySig = ''; offlineSig = ''; questSig = ''; shoutSig = ''; dishSig = ''; gardenSig = '';
   if(window.__pfForceFull) window.__pfForceFull(); else { renderRooms(); renderLog(); }
   updateDynamic();
-  renderMorning(); renderQuests(); renderEvents(); renderCommissions();
+  renderMorning(); renderResident(); renderQuests(); renderEvents(); renderCommissions();
   renderMilestones(); renderCodex(); renderCollect(); renderStaff(); renderUpgrades(); renderAdsBox();
   renderIntroCard(); renderWelcome();
 }
@@ -4567,8 +4880,7 @@ function renderMain(){
         '<div id="offlineBody"></div>' +
       '</div>' +
       '<div class="card" id="shoutCard"><h3>吆 喝 揽 客</h3><div id="shoutBody"></div></div>' +
-      '<div class="card" id="soonResidentCard"><h3>大 堂 驻 店</h3>' +
-        '<button class="soon-plaque" data-soon="resident" onclick="showSoon(\'resident\')"><span class="soon-tag">待开放</span><span class="soon-name">名厨 · 说书人驻店</span><span class="soon-date">11月26日开放</span></button></div>' +
+      '<div class="card" id="soonResidentCard"><h3>大 堂 驻 店</h3><div id="residentBody"></div></div>' +
       '<div class="card" id="todayCard"><h3>今 日 清 单</h3><div id="todayBody"></div><div id="questBody"></div></div>' +
       '<div class="card"><h3>驿 站 动 态</h3><ul class="log" id="logList"></ul></div>' +
       '<div class="foot">自动存档中 · 累计接待 <span id="totalGuestsVal">0</span> 位旅客 · 旅客好感 <span id="favorVal">0</span></div>' +
@@ -4665,8 +4977,9 @@ function renderMain(){
     '<div id="coachBubble" style="display:none"></div>';
   document.getElementById('innNameView').textContent = S.name;
   document.body.classList.add('has-tabbar');
-  todaySig = ''; offlineSig = ''; questSig = '';
-  renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderDecor(); renderWelcome(); renderEvents(); renderUpgrades();
+  todaySig = ''; offlineSig = ''; questSig = ''; residentSig = '';
+  settleResidentMorning();   /* 驻店晨间兜底（B2-1）：首日建档等错过 roll 的场合在此补结算，重复调用幂等 */
+  renderMorning(); renderResident(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderDecor(); renderWelcome(); renderEvents(); renderUpgrades();
   renderShout(); renderDish(); renderGarden();
   renderStaff(); renderCommissions(); renderMilestones(); renderCodex(); renderCollect();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
@@ -4715,7 +5028,8 @@ function renderMorning(){
       S.morning.earned + '</b> 铜钱' + (S.morning.offline > 0 ? '；离线房钱 <b>' + S.morning.offline + '</b> 铜钱待领取（见离线明牌）' : '') + '。' +
       (function(){ const w = weatherOf(); return '<div class="small-note" style="margin-top:6px;">今日天气：<b>' + esc(w.label) + '</b>——' + esc(w.desc) + '（全天进账 ×' + w.rateMult + '）。</div>'; })() +
       '<div class="small-note" style="margin-top:6px;">' + esc(tomorrowPreview()) + '</div>' +
-      (S.entrust ? '<div class="small-note" style="margin-top:4px;">托付在途：本金 ' + S.entrust.amt + ' 铜钱，约 ' + fmtLeft(S.entrust.end - Date.now()) + '后结回 ' + entrustPayout() + ' 铜钱（结回当日计入晨间小结）。</div>' : '');
+      (S.entrust ? '<div class="small-note" style="margin-top:4px;">托付在途：本金 ' + S.entrust.amt + ' 铜钱，约 ' + fmtLeft(S.entrust.end - Date.now()) + '后结回 ' + entrustPayout() + ' 铜钱（结回当日计入晨间小结）。</div>' : '') +
+      residentMorningHtml();   /* 驻店行（B2-1）：驻店中/今日送别＋回礼预告，数值与 CONFIG.resident 同源 */
   }else{
     card.style.display = 'none';
   }
@@ -4817,7 +5131,7 @@ function hideNotice(){
    不写任何玩法逻辑、不入存档；弹窗只由玩家点击牌面打开，进游戏绝不自动弹（平台红线）。 */
 const SOON_SPOTS = {
   kitchen:  { name: '后厨加工链',        date: '11月27日开放',              blurb: '菜园的收成送进后厨，腌、晒、酿成能卖钱的好物——后厨从此多一条加工链。' },
-  resident: { name: '名厨 · 说书人驻店', date: '11月26日开放',              blurb: '请名厨坐镇后厨、邀说书人驻店讲古，大堂天天有客、有戏、有热闹。' },
+  resident: { name: '名厨 · 说书人驻店', date: '11月26日开放',              blurb: '贵客、名厨、说书人会住进驿站一两天：驻店期间同类客人来得更勤，送别还有回礼。和贵客深谈到「知交」，便能邀他驻店。' },
   prepay:   { name: '老客预存',          date: '11月29日开放',              blurb: '熟客可以预存房钱了：投店优先留房，往来更亲近，老客关系再进一步。' },
   rival:    { name: '同行斗店',          date: '11月30日开放（先开评分榜）', blurb: '跟十里八乡的同行比一比：先开评分榜见高下，看谁家驿站更得人心。' }
 };
@@ -5098,6 +5412,14 @@ function roomActsHtml(i, g){
   if(g.tead) btns += '<button class="small" disabled>奉茶 · 已奉过</button>';
   else if(teaCountToday() >= CONFIG.tea.dailyMax) btns += '<button class="small" disabled>奉茶 · 今日已满</button>';
   else btns += '<button class="small tea-act-btn" onclick="openTea(' + i + ')">奉茶</button>';
+  /* 邀驻店（B2-1）：贵客类型＋驻店门已开才露面；已有在驻不亮钮，资格未到亮禁用钮把原因写在钮面 */
+  const gtDef = CONFIG.guestTypes.find(x => x.id === g.type);
+  if(gtDef && gtDef.gate === 'noble' && packActive('noble') && CONFIG.resident.enabled && !S.resident){
+    if(S.residentInvite && talkBondOf(g.type) >= CONFIG.talk.bondCap)
+      btns += '<button class="small resident-act-btn" onclick="inviteResident(' + i + ')">邀驻店 · 住 ' + CONFIG.resident.days + ' 日</button>';
+    else
+      btns += '<button class="small" disabled>邀驻店 · 深谈到「知交」后可邀</button>';
+  }
   return '<div class="btnrow room-acts">' + btns + '</div>';
 }
 function renderRooms(){
@@ -5112,6 +5434,7 @@ function renderRooms(){
         '<div class="gtype">' + esc(g.label) + '</div>' +
         '<div class="gstay">余 ' + Math.max(1, g.stayLeft) + ' 程</div>' +
         (talkBondOf(g.type) > 0 ? '<div class="gline">交情 · ' + talkStageOf(g.type).name + '（' + talkBondOf(g.type) + '/' + CONFIG.talk.bondCap + '）</div>' : '') +
+        (S.resident && S.resident.type === g.type ? '<div class="gline">驻店中 · 剩 ' + residentDaysLeft() + ' 日（送别有回礼）</div>' : '') +
         (function(){ const row = (S.decor && S.decor.rooms[i]) || []; const names = row.map(id => decorItem(id)).filter(Boolean).map(it => it.name);
           if(!names.length) return ''; const mc = decorMatchCount(i, g.type);
           return '<div class="gline">陈设：' + names.join(' · ') + (mc ? '（合口味 ' + mc + '）' : '') + '</div>'; })() +
@@ -5662,7 +5985,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:6px;">把驿站放回桌面：离线房钱攒满 12 小时就溢出了，点桌面图标一键回来领取（需在虎扑 App 内使用）。</div>' +
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
-    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '。</div>' +
+    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '；驻店新规矩：与贵客深谈到「知交」可邀其驻店 ' + CONFIG.resident.days + ' 日，驻店期间其同类客群到访权重 ×' + CONFIG.resident.weightMult + '，送别回礼＝声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，说书人故事日驻店期间好感入账 ×' + CONFIG.resident.storyFavorMult + '。</div>' +
     '<div class="small-note" style="margin-top:8px;">伙计专精公示（11/24 起）：历练不另设账——掌柜看累计接待、小二看奉茶＋深谈待客、厨子看掌勺次数、马夫看累计完成委托；入专精 ' + CONFIG.specialty.fees[0] + ' 文、升阶 ' + CONFIG.specialty.fees[1] + ' / ' + CONFIG.specialty.fees[2] + ' 文（四岗全满共 ' + (CONFIG.specialty.fees[0] + CONFIG.specialty.fees[1] + CONFIG.specialty.fees[2]) * 4 + ' 文）；每阶加成：掌柜总收入 +' + Math.round(CONFIG.specialty.lines.innkeeper.per * 100) + '%、小二总收入 +' + Math.round(CONFIG.specialty.lines.waiter.per * 100) + '%、厨子总收入 +' + Math.round(CONFIG.specialty.lines.cook.per * 100) + '%、马夫委托报酬 +' + Math.round(CONFIG.specialty.lines.groom.per * 100) + '%，均并入原加成口径、不另开乘区；从不升阶者收益与从前一致。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
@@ -6225,6 +6548,10 @@ window.YZ = {
   adUrgentSecond: adUrgentSecond, startUrgent2: startUrgent2, adsTotalToday: adsTotalToday,
   renderWelcome: renderWelcome,
   showSoon: showSoon, hideSoon: hideSoon, SOON_SPOTS: SOON_SPOTS,
+  residentMod: residentMod, residentDaysLeft: residentDaysLeft, residentFavorMult: residentFavorMult, favorIn: favorIn,
+  inviteResident: inviteResident, settleResidentMorning: settleResidentMorning, renderResident: renderResident,
+  residentMorningHtml: residentMorningHtml, residentTea: residentTea, residentTeaEligible: residentTeaEligible,
+  residentWishDeliver: residentWishDeliver, residentGoodsCount: residentGoodsCount, grantResidentMats: grantResidentMats,
   adPending: function(){ return S ? S.adPending : null; },
   saveSlot: saveSlot, loadSlot: loadSlot, slotInfo: slotInfo,
   saveFailToasts: function(){ return saveFailToasts; }, importBackupOk: function(){ return lastImportBackupOk; },
