@@ -613,7 +613,7 @@ const CONFIG = {
     { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
-  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', noble:'2026-11-26' },
+  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26' },
   /* 每日上新日历（v1.3）：运营期 2026-11-17～11-30 逐日一条，{date,title,kind,mod?} 为唯一事实源。
      晨间小结「明日上新」与今日清单「今日上新」小条都读此表；单日修正 mod 只在既有公式/结算出口
      被 calMod() 读取（eventMult 抉择正奖励倍率 / commissionMult 委托报酬倍率 / kitchenDouble 厨房
@@ -626,8 +626,8 @@ const CONFIG = {
     { date:'2026-11-20', title:'远行季限定委托', kind:'data' },
     { date:'2026-11-21', title:'新面孔到访', kind:'data' },
     { date:'2026-11-22', title:'宴会厅开门 · 收藏开张', kind:'gate' },
-    { date:'2026-11-23', title:'丰收日 · 抉择与委托奖励 ×1.5', kind:'boost', mod:{ eventMult:1.5, commissionMult:1.5 } },
-    { date:'2026-11-24', title:'伙计专精 · 即将开启', kind:'preview' },
+    { date:'2026-11-23', title:'丰收日 · 抉择与委托奖励 ×1.5', kind:'boost', mod:{ eventMult:1.5, commissionMult:1.5, multLabel:'丰收日加码' } },
+    { date:'2026-11-24', title:'掌柜考校 · 抉择奖励 ×1.5（伙计专精同日开启）', kind:'boost', mod:{ eventMult:1.5, multLabel:'掌柜考校加码' } },
     { date:'2026-11-25', title:'新事件上新', kind:'data' },
     { date:'2026-11-26', title:'贵客临门', kind:'gate' },
     { date:'2026-11-27', title:'名厨日 · 厨房加成翻倍', kind:'boost', mod:{ kitchenDouble:true } },
@@ -945,14 +945,33 @@ const CONFIG = {
     tierLabels: ['', '寻常', '稀有', '绝品'],
     decorShard: { seen: 6, miles: 10 }
   },
+  /* 伙计专精（v1.4.7，11/24 专精批，日期门 gates.specialty）：四岗各一条专精线，阶 0 未入→1/2/3。
+     历练不新开计数口：specXpOf 按 lines[id].xpKey 派生既有累计量（guests＝累计接待 totalGuests、
+     commissions＝累计委托 totalCommissions、meals＝掌勺累计 cook.done、service＝奉茶＋深谈待客
+     tea.served＋talk.count）；升阶双门＝历练达 xpNeed[当前阶]＋铜钱 fees[当前阶]（A3 定案
+     5000/20000/80000、四岗全满总盘 105000×4＝42 万，走 ledger 唯一出口、按钮明示同价）。
+     效果只并入既有公式出口：innkeeper/waiter/cook 经 staffIncomeMult() 进 incomeParts 的 staff
+     分项、groom 经 commissionReward() 的马夫加成括号——不新开乘区；从不升阶者两处逐值不变。
+     存柜券抵扣口（B2-3 老客存柜，11/29）：specFeeDue() 的 voucher 为唯一判定口，本批恒 0，
+     券账本体接入后只改该函数，buySpec 扣费口径（due＝fee－voucher）不动。 */
+  specialty: {
+    fees: [5000, 20000, 80000],
+    tierNames: ['未入专精', '专精 · 初窥', '专精 · 纯熟', '专精 · 大成'],
+    lines: {
+      innkeeper: { xpKey:'guests',      xpName:'接待旅客',         xpUnit:'位', xpNeed:[120, 350, 800], per:0.03, effect:'总收入' },
+      waiter:    { xpKey:'service',     xpName:'待客（奉茶＋深谈）', xpUnit:'次', xpNeed:[6, 18, 45],    per:0.02, effect:'总收入' },
+      cook:      { xpKey:'meals',       xpName:'掌勺做饭',         xpUnit:'次', xpNeed:[2, 6, 15],      per:0.03, effect:'总收入' },
+      groom:     { xpKey:'commissions', xpName:'完成委托',         xpUnit:'支', xpNeed:[4, 12, 30],    per:0.04, effect:'委托报酬' }
+    }
+  },
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'collect-1122', lines: [
-    { name:'收藏套装', how:'图鉴六类成套收集：集齐一类，收入永久 +4%（六类全齐 +24%）；进度与加成在收集页「收藏套装」分栏明牌', goto:'collect:collectCard' },
-    { name:'碎片换缺片', how:'接待过的旅客再来，必得 1 枚收藏碎片（没有概率）；攒碎片能换任意缺片，本组只差最后一件时半价', goto:'collect:collectCard' },
-    { name:'明码补购', how:'等不及的缺片也能直接买：寻常 2000、稀有 8000、绝品 30000 铜钱，价就写在按钮上，只补进度、不产钱', goto:'collect:collectCard' },
-    { name:'离线明牌拆细', how:'离线卡把收入速率拆开算给你看：在住房价、厨房、伙计、菜园、收藏加成与天气、吆喝逐项列清，与实际结算一个数', goto:'home:offlineCard' }
+  introCard: { ver: 'spec-1124', lines: [
+    { name:'伙计专精', how:'四位伙计各多一条专精线：接待、待客、掌勺、跑委托这些平日做的事都算历练，达标后花钱升阶，加成并进他原本的那份产出', goto:'build:staffCard' },
+    { name:'历练与升阶全明牌', how:'历练进度、当前第几阶、还差多少次升阶、现在加了多少——伙计卡上逐项写清；入专精 5000 文、升阶 20000 / 80000 文，价钱就写在按钮上', goto:'build:staffCard' },
+    { name:'不升阶也照旧', how:'专精是给老伙计的加码，不是新门槛：从不升阶的玩家，收入与委托报酬和从前一个数，已有等级加成原样保留', goto:'build:staffCard' },
+    { name:'掌柜考校 · 今日限定', how:'11月24日是掌柜考校日：今日抉择的正奖励 ×1.5，做抉择更值钱，只限今天', goto:'affair:eventsCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1448,7 +1467,9 @@ function normalize(raw){
   for(const k of Object.keys(s.staff)){
     const t = CONFIG.staffTypes.find(x => x.id === k);
     if(!t){ delete s.staff[k]; continue; }
-    s.staff[k] = { lv: clampInt(s.staff[k] && s.staff[k].lv, 1, t.maxLv, 1) };
+    s.staff[k] = { lv: clampInt(s.staff[k] && s.staff[k].lv, 1, t.maxLv, 1),
+      /* 专精阶（v1.4.7 加法字段）：老档无此字段回 0、越界收敛，只上不下 */
+      spec: clampInt(s.staff[k] && s.staff[k].spec, 0, CONFIG.specialty.tierNames.length - 1, 0) };
   }
   s.guests = Array.isArray(raw.guests) ? raw.guests.filter(g => g && g.type && g.name).map(g =>
     Object.assign({}, g, { wish: (g.wish && CONFIG.wish.kinds.some(k => k.id === g.wish.kind)) ? { kind: g.wish.kind } : null,
@@ -2143,7 +2164,65 @@ function staffLv(id){
 function staffIncomeMult(){
   let m = 0;
   for(const t of CONFIG.staffTypes) if(t.incomePerLv) m += staffLv(t.id) * t.incomePerLv;
+  /* 伙计专精（v1.4.7）：掌柜/小二/厨子三岗专精阶 ×per 并入同一伙计分项（马夫专精走委托口）；
+     全员 spec=0 时与旧公式逐值一致 */
+  for(const id of ['innkeeper', 'waiter', 'cook']) m += staffSpec(id) * CONFIG.specialty.lines[id].per;
   return m;
+}
+/* ================= 伙计专精（v1.4.7，11/24 起） =================
+   历练只派生不存储：specXpOf 是唯一历练出处（按 CONFIG.specialty.lines[id].xpKey 读既有累计量）；
+   升阶收费只走 specFeeDue 判定＋ledger 扣账；spec 的存档清洗在 normalize 的 staff 阶梯里 */
+function staffSpec(id){
+  if(!S || !S.staff) return 0;
+  return clampInt(S.staff[id] && S.staff[id].spec, 0, CONFIG.specialty.tierNames.length - 1, 0);
+}
+function specXpOf(id){
+  if(!S) return 0;
+  const line = CONFIG.specialty.lines[id];
+  if(!line) return 0;
+  switch(line.xpKey){
+    case 'guests': return S.totalGuests || 0;
+    case 'commissions': return S.totalCommissions || 0;
+    case 'meals': return (S.cook && S.cook.done) || 0;
+    case 'service': return ((S.tea && S.tea.served) || 0) + ((S.talk && S.talk.count) || 0);
+  }
+  return 0;
+}
+/* 升阶应付判定（唯一口）：fee＝CONFIG 阶梯价；voucher＝存柜券抵扣额（B2-3，11/29 接入券账
+   本体后只改此函数）；due＝实付。满阶返回 null */
+function specFeeDue(id){
+  const tier = staffSpec(id);
+  if(tier >= CONFIG.specialty.fees.length) return null;
+  const fee = CONFIG.specialty.fees[tier];
+  const voucher = 0;   /* B2-3 抵扣口预留：本批无券账，恒 0 */
+  return { tier: tier, fee: fee, voucher: voucher, due: fee - voucher };
+}
+function specReady(id){
+  const due = specFeeDue(id);
+  return !!due && specXpOf(id) >= CONFIG.specialty.lines[id].xpNeed[due.tier];
+}
+function buySpec(id){
+  const t = staffDef(id);
+  if(!t) return false;
+  if(!packActive('specialty')){ showToast('伙计专精将于 2026-11-24 开启'); return false; }
+  if(!S.staff[id]){ showToast('先雇佣' + t.label + '，才能修专精'); return false; }
+  const due = specFeeDue(id);
+  if(!due){ showToast(t.label + '的专精已至大成'); return false; }
+  const line = CONFIG.specialty.lines[id];
+  const xp = specXpOf(id), need = line.xpNeed[due.tier];
+  if(xp < need){ showToast('历练还差 ' + (need - xp) + ' ' + line.xpUnit + '（' + line.xpName + '）'); return false; }
+  if(!ledger('staffSpec', -due.due, 0, t.label + (due.tier === 0 ? '入专精' : '专精升阶') + '至「' + CONFIG.specialty.tierNames[due.tier + 1] + '」，花费 ' + due.due + ' 铜钱')){
+    showToast('铜钱不足，还差 ' + (due.due - S.coins) + ' 文');
+    return false;
+  }
+  S.staff[id].spec = due.tier + 1;
+  setCoachFlag('tourSpec');   /* 真实升阶即落旗（coach 口径同既有情境引导） */
+  save();
+  renderStaff();
+  updateDynamic();
+  showToast(t.label + ' ' + CONFIG.specialty.tierNames[due.tier + 1] + '：' + line.effect + '每阶 +' + Math.round(line.per * 100) + '%');
+  sfxPlay('upgrade');
+  return true;
 }
 function roomPrice(){ return CONFIG.roomPriceBase * CONFIG.qualityMult[S.rooms.quality]; }
 /* 逐客计价唯一出口：体验上房券快照（g.trialQ）在时按快照档计价，否则按自家品质——roomPrice 仍是全店口径 */
@@ -2181,7 +2260,8 @@ function arrivalChance(){
 }
 function commissionReward(tier){
   const groom = CONFIG.staffTypes.find(t => t.id === 'groom');
-  const mult = 1 + S.stableLv * CONFIG.stableRewardPerLv + staffLv('groom') * (groom ? groom.commissionPerLv : 0);
+  const mult = 1 + S.stableLv * CONFIG.stableRewardPerLv + staffLv('groom') * (groom ? groom.commissionPerLv : 0)
+    + staffSpec('groom') * CONFIG.specialty.lines.groom.per;   /* 马夫专精（v1.4.7）并入同一加成括号，spec=0 时逐值不变 */
   const dayMult = calMod().commissionMult || 1;   /* 丰收日：委托报酬 ×1.5（日历修正，展示与结算同源） */
   return { coins: Math.round(tier.coins * mult * dayMult), fame: tier.fame };
 }
@@ -2700,7 +2780,7 @@ function buyStaff(id){
     showToast('铜钱不足，还差 ' + (cost - S.coins) + ' 文');
     return false;
   }
-  if(isHire) S.staff[id] = { lv: 1 };
+  if(isHire) S.staff[id] = { lv: 1, spec: 0 };
   else S.staff[id].lv++;
   questBump('upgrades', 1);
   save();
@@ -2743,7 +2823,7 @@ function doEventChoice(idx){
   if(effCoins) fb.push((effCoins > 0 ? '+' : '') + effCoins + ' 铜钱');
   if(effFame) fb.push((effFame > 0 ? '+' : '') + effFame + ' 声望');
   if(ch.favor) fb.push((ch.favor > 0 ? '+' : '') + ch.favor + ' 好感');
-  if(evMult > 1) fb.push('丰收日加码');
+  if(evMult > 1) fb.push(calMod().multLabel || '当日加码');   /* 加码名目随日历（丰收日/掌柜考校），不写死 */
   showToast('「' + ev.title + '」已抉择' + (fb.length ? '：' + fb.join(' / ') : ''));
   tourHook('event');
   return true;
@@ -3016,7 +3096,10 @@ const COACH_DEFS = [
     body:'委托卡上多了「亲手备料出发」：黑豆、干草、麸皮配满十份——听马夫的话按路途远近配。配得精，归来报酬多一成半；配凑合，少一成。不配料点「出发」照旧。' },
   { flag:'tourCollect', tab:'collect', sub:null, when:() => packActive('collect'), target:() => document.getElementById('subBtn-collect-sets'),
     title:'收藏套装：集齐成套，细水长流',
-    body:'收集页新开「收藏套装」分栏：图鉴六类集齐一类，收入永久 +4%。接待过的旅客再来必得碎片，碎片能换缺片和陈设；等不及的缺片按按钮上的明码价直接补购。进度、碎片和保底半价都在分栏里明牌。' }
+    body:'收集页新开「收藏套装」分栏：图鉴六类集齐一类，收入永久 +4%。接待过的旅客再来必得碎片，碎片能换缺片和陈设；等不及的缺片按按钮上的明码价直接补购。进度、碎片和保底半价都在分栏里明牌。' },
+  { flag:'tourSpec', tab:'build', sub:'staff', when:() => packActive('specialty'), target:() => document.querySelector('.spec-act-btn') || document.querySelector('#staffBox .spec-box'),
+    title:'伙计专精：历练够了，花钱升阶',
+    body:'每位伙计多了「专精」：历练不用另刷——接待、待客、掌勺、跑委托这些平日做的事都算数，进度就写在伙计卡上。历练达标后花一笔铜钱入专精/升阶（价钱写在按钮上），加成直接并进他原本的那份产出；不升也照旧，不设新门槛。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
@@ -4560,7 +4643,7 @@ function renderMain(){
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
 }
-const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', noble:'贵客图鉴段' };
+const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', specialty:'伙计专精', noble:'贵客图鉴段' };
 /* 明日预告（纯展示）：首段为「明日上新」——读 CONFIG.calendar 明日条目（预告本身即留存钩子）；
    日历无明日条目时回退到日期门派生；不发奖、不写存档 */
 function tomorrowPreview(){
@@ -5205,6 +5288,32 @@ function renderGarden(){
   }).join('') + '</div>';
   box.innerHTML = html;
 }
+/* 专精块（v1.4.7）：日期门未开只露预告、不露任何数值；门开后逐岗明示——当前阶、历练进度
+   （现值/门槛/还差 N）、当前加成与升阶按钮明码价，数字全走 CONFIG.specialty 与派生口 */
+function specCardHtml(t){
+  const line = CONFIG.specialty.lines[t.id];
+  if(!line) return '';
+  if(!packActive('specialty'))
+    return '<div class="d spec-box">专精：历练升阶 · 11/24 开启（敬请期待）</div>';
+  const cur = S.staff[t.id];
+  if(!cur) return '<div class="d spec-box">专精：雇佣上工后开启</div>';
+  const tier = staffSpec(t.id), xp = specXpOf(t.id);
+  const pct = n => '+' + Math.round(n * 100) + '%';
+  let h = '<div class="d spec-box">专精：' + CONFIG.specialty.tierNames[tier] +
+    ' · ' + line.effect + ' ' + pct(tier * line.per) + '（每阶 ' + pct(line.per) + '）</div>';
+  const due = specFeeDue(t.id);
+  if(!due) return h + '<div class="d">历练 ' + xp + '（' + line.xpName + '）· 已满阶</div>';
+  const need = line.xpNeed[due.tier];
+  const barPct = Math.max(0, Math.min(100, Math.floor(xp / need * 100)));
+  h += '<div class="plot-bar"><i style="width:' + barPct + '%"></i></div>' +
+    '<div class="d">历练 ' + xp + '/' + need + '（' + line.xpName + '）' +
+    (xp >= need ? ' · 历练已满，可升阶' : ' · 还差 ' + (need - xp) + ' ' + line.xpUnit + '升阶') + '</div>';
+  h += (xp >= need)
+    ? '<button class="small spec-act-btn' + (S.coins >= due.due ? ' accent' : '') + '" onclick="buySpec(\'' + t.id + '\')">' +
+      (due.tier === 0 ? '入专精' : '升阶') + ' · ' + due.due + ' 文</button>'
+    : '<button class="small" disabled>历练不足 · 还差 ' + (need - xp) + ' ' + line.xpUnit + '</button>';
+  return h;
+}
 function renderStaff(){
   const box = document.getElementById('staffBox');
   if(!box) return;
@@ -5219,7 +5328,7 @@ function renderStaff(){
       (cur ? '（' + cur.lv + ' 级）' : '（未雇佣）') + '</div><div class="d">' + t.desc + '</div>' +
       (cost === null ? '<button disabled>已满级</button>'
         : '<button class="small" id="staffBtn_' + t.id + '" onclick="buyStaff(\'' + t.id + '\')">' +
-          (cur ? '升级' : '雇佣') + ' · ' + cost + ' 文</button>') + '</div>';
+          (cur ? '升级' : '雇佣') + ' · ' + cost + ' 文</button>') + specCardHtml(t) + '</div>';
   }).join('') + '</div>';
   for(const t of CONFIG.staffTypes){
     const b = document.getElementById('staffBtn_' + t.id), c = staffCost(t.id);
@@ -5525,6 +5634,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
     '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '。</div>' +
+    '<div class="small-note" style="margin-top:8px;">伙计专精公示（11/24 起）：历练不另设账——掌柜看累计接待、小二看奉茶＋深谈待客、厨子看掌勺次数、马夫看累计完成委托；入专精 ' + CONFIG.specialty.fees[0] + ' 文、升阶 ' + CONFIG.specialty.fees[1] + ' / ' + CONFIG.specialty.fees[2] + ' 文（四岗全满共 ' + (CONFIG.specialty.fees[0] + CONFIG.specialty.fees[1] + CONFIG.specialty.fees[2]) * 4 + ' 文）；每阶加成：掌柜总收入 +' + Math.round(CONFIG.specialty.lines.innkeeper.per * 100) + '%、小二总收入 +' + Math.round(CONFIG.specialty.lines.waiter.per * 100) + '%、厨子总收入 +' + Math.round(CONFIG.specialty.lines.cook.per * 100) + '%、马夫委托报酬 +' + Math.round(CONFIG.specialty.lines.groom.per * 100) + '%，均并入原加成口径、不另开乘区；从不升阶者收益与从前一致。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
       (packActive('collect') ? '；收藏套装已开启（2026-11-22）：图鉴六类集齐一类收入 +' + Math.round(CONFIG.collect.setBonusPct * 100) + '%，重复旅客必得碎片 ' + CONFIG.collect.shardPerRepeat + ' 枚，缺片补购价寻常 ' + CONFIG.collect.tierPrice[1] + '／稀有 ' + CONFIG.collect.tierPrice[2] + '／绝品 ' + CONFIG.collect.tierPrice[3] + ' 铜钱明码' : '；收藏套装 2026-11-22 开启') +
@@ -6047,6 +6157,7 @@ window.YZ = {
   incomeRate: incomeRate, offlineGain: offlineGain, upgradeCost: upgradeCost, guestPool: guestPool,
   arrivalChance: arrivalChance, commissionReward: commissionReward, packActive: packActive,
   staffCost: staffCost, staffLv: staffLv, metricValue: metricValue, eventPool: eventPool,
+  staffSpec: staffSpec, specXpOf: specXpOf, specFeeDue: specFeeDue, specReady: specReady, buySpec: buySpec, renderStaff: renderStaff,
   ledger: function(k, c, f){ return ledger(k, c, f, null); },
   buyUpgrade: buyUpgrade, buyStaff: buyStaff,
   currentEvent: currentEvent, doEventChoice: doEventChoice,
