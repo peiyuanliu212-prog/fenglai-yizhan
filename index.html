@@ -613,7 +613,7 @@ const CONFIG = {
     { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
-  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', noble:'2026-11-26' },
+  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', noble:'2026-11-26' },
   /* 每日上新日历（v1.3）：运营期 2026-11-17～11-30 逐日一条，{date,title,kind,mod?} 为唯一事实源。
      晨间小结「明日上新」与今日清单「今日上新」小条都读此表；单日修正 mod 只在既有公式/结算出口
      被 calMod() 读取（eventMult 抉择正奖励倍率 / commissionMult 委托报酬倍率 / kitchenDouble 厨房
@@ -625,7 +625,7 @@ const CONFIG = {
     { date:'2026-11-19', title:'商队委托开门', kind:'gate' },
     { date:'2026-11-20', title:'远行季限定委托', kind:'data' },
     { date:'2026-11-21', title:'新面孔到访', kind:'data' },
-    { date:'2026-11-22', title:'宴会厅开门', kind:'gate' },
+    { date:'2026-11-22', title:'宴会厅开门 · 收藏开张', kind:'gate' },
     { date:'2026-11-23', title:'丰收日 · 抉择与委托奖励 ×1.5', kind:'boost', mod:{ eventMult:1.5, commissionMult:1.5 } },
     { date:'2026-11-24', title:'伙计专精 · 即将开启', kind:'preview' },
     { date:'2026-11-25', title:'新事件上新', kind:'data' },
@@ -930,15 +930,29 @@ const CONFIG = {
       { id:'dc_veil', name:'素纱帐', cat:'bed', fav:['gui','fang'], unlock:{ kind:'miles', n:8 } }
     ]
   },
+  /* 收藏副线（v1.4.6，11/22 门 gates.collect）：图鉴六组（CONFIG.guestGroups）为套装——
+     集齐一组经 collectSetMult 并入 incomeRate 加成括号给永久 +setBonusPct（不新开乘区）；
+     重复旅客（图鉴已点亮的自然到访）必转碎片 shardPerRepeat 枚（无概率，即保底口径、计数明牌）；
+     碎片换指定缺片：价按组内稀有度档 tierShard，本组只差 1 件时半价（集齐保底）；
+     A2 铜钱明码补购：同档 tierPrice、按钮明示、走 ledger 唯一出口，补购只点亮进度不产出任何资源；
+     陈设同归收藏：未到货陈设可按 decorShard 价用碎片换（starter 免费货源不入兑换），与 S.decor.owned 同一张库存表。
+     稀有度档 collectTierOf 为唯一派生：组内最高门槛者/贵客段为绝品档，其余按门槛分稀有/寻常 */
+  collect: {
+    setBonusPct: 0.04,
+    shardPerRepeat: 1,
+    tierPrice: [0, 2000, 8000, 30000],
+    tierShard: [0, 3, 8, 20],
+    tierLabels: ['', '寻常', '稀有', '绝品'],
+    decorShard: { seen: 6, miles: 10 }
+  },
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'hands-on', lines: [
-    { name:'深谈交好', how:'在住旅客房卡点「深谈」：三段话读人选话题，交情从生客叙到知交——投缘有专属心愿，知交能邀他日后驻店', goto:'build:roomsCard' },
-    { name:'掌勺做饭', how:'带「想吃对味招牌」心愿的客人能亲手掌勺：三槽选料配火候，对味小费翻倍，翻车只赔这单料钱', goto:'build:roomsCard' },
-    { name:'沏茶待客', how:'给在住客奉茶：选茶、定水温、控浸泡，沏对了有茶钱，沏错也不罚', goto:'build:roomsCard' },
-    { name:'喂马备程', how:'委托出发前亲手配十份料：配得精，归来报酬多一成半；配凑合，少一成', goto:'affair:commissionsCard' },
-    { name:'布置客房', how:'图鉴与里程碑攒下的陈设摆进客房：合哪类客人口味，就招哪类客来', goto:'build:roomsCard' }
+  introCard: { ver: 'collect-1122', lines: [
+    { name:'收藏套装', how:'图鉴六类成套收集：集齐一类，收入永久 +4%（六类全齐 +24%）；进度与加成在收集页「收藏套装」分栏明牌', goto:'collect:collectCard' },
+    { name:'碎片换缺片', how:'接待过的旅客再来，必得 1 枚收藏碎片（没有概率）；攒碎片能换任意缺片，本组只差最后一件时半价', goto:'collect:collectCard' },
+    { name:'明码补购', how:'等不及的缺片也能直接买：寻常 2000、稀有 8000、绝品 30000 铜钱，价就写在按钮上，只补进度、不产钱', goto:'collect:collectCard' },
+    { name:'离线明牌拆细', how:'离线卡把收入速率拆开算给你看：在住房价、厨房、伙计、菜园、收藏加成与天气、吆喝逐项列清，与实际结算一个数', goto:'home:offlineCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1276,6 +1290,7 @@ function defaultState(){
     staff: {},
     guests: [],
     guestsSeen: {},
+    collect: { shards: 0, earned: 0, repeats: 0 },
     miles: {},
     commissions: [],
     lastSeen: Date.now(),
@@ -1380,6 +1395,15 @@ function sanitizeAdPending(raw){
 /* 陈设存档清洗（v1.4.5）：owned 只认清单内物品的正计数；rooms 每行按 [壁饰,案头,床品] 槽位
    逐格验物品存在且类别对位，非法格归 null。库存表形状按 11/22 收藏副线预期（计数型）设计 */
 function decorItem(id){ return CONFIG.decor.items.find(x => x.id === id) || null; }
+function sanitizeCollect(raw){
+  const out = { shards: 0, earned: 0, repeats: 0 };
+  if(!raw || typeof raw !== 'object') return out;
+  out.shards = clampInt(raw.shards, 0, 99999, 0);
+  out.earned = clampInt(raw.earned, 0, 999999, 0);
+  out.repeats = clampInt(raw.repeats, 0, 999999, 0);
+  if(out.earned < out.shards) out.earned = out.shards;   /* 累计获得不得小于现存余额（只上不下） */
+  return out;
+}
 function sanitizeDecor(raw){
   const out = { owned: {}, rooms: [], granted: {} };
   if(!raw || typeof raw !== 'object') return out;
@@ -1537,6 +1561,7 @@ function normalize(raw){
   s.tea = { served: Math.max(0, Math.floor(+rte145.served || 0)), perfect: Math.max(0, Math.floor(+rte145.perfect || 0)),
     day: (typeof rte145.day === 'string') ? rte145.day : '', count: clampInt(rte145.count, 0, CONFIG.tea.dailyMax, 0) };
   s.decor = sanitizeDecor(raw.decor);
+  s.collect = sanitizeCollect(raw.collect);
   s.garden = { plots: [], stock: 0, seeds: 0 };
   if(raw.garden && typeof raw.garden === 'object'){
     s.garden.stock = clampInt(raw.garden.stock, 0, 9999, 0);
@@ -2123,11 +2148,32 @@ function staffIncomeMult(){
 function roomPrice(){ return CONFIG.roomPriceBase * CONFIG.qualityMult[S.rooms.quality]; }
 /* 逐客计价唯一出口：体验上房券快照（g.trialQ）在时按快照档计价，否则按自家品质——roomPrice 仍是全店口径 */
 function guestRoomPrice(g){ return CONFIG.roomPriceBase * CONFIG.qualityMult[(g && g.trialQ) || S.rooms.quality]; }
-function incomeRate(){  /* 每分钟铜钱：在住旅客逐间计价（招牌菜对味 ×dishMultFor）×(1+厨房加成+伙计收入加成+菜园食材加成)×天气修正×吆喝高峰修正；名厨日（日历修正）厨房加成翻倍 */
-  let r = 0;
-  for(const g of S.guests) r += guestRoomPrice(g) * (g.priceMult || 1) * dishMultFor(g.type);
-  const kitchenMult = S.kitchenLv * CONFIG.kitchenMultPerLv * (calMod().kitchenDouble ? 2 : 1);
-  return r * (1 + kitchenMult + staffIncomeMult() + gardenStockMult()) * weatherRateMult() * shoutRateMult();
+/* 收藏套装加成（v1.4.6）：图鉴六组集齐组数 ×setBonusPct，只经 incomeParts 并入加成括号，不新开乘区 */
+function collectSetMult(){
+  if(!S || !packActive('collect')) return 0;
+  let done = 0;
+  for(const g of CONFIG.guestGroups){
+    if(g.ids.every(id => S.guestsSeen[id])) done++;
+  }
+  return done * CONFIG.collect.setBonusPct;
+}
+/* 收入构成唯一派生（v1.4.6 离线透明化）：incomeRate 与离线明牌卡共用这一份拆解——
+   展示值即结算值：rate 由 parts 同序合成，加成括号内 collect 为 0 时与旧公式逐值一致 */
+function incomeParts(){
+  let base = 0;
+  for(const g of S.guests) base += guestRoomPrice(g) * (g.priceMult || 1) * dishMultFor(g.type);
+  const kitchen = S.kitchenLv * CONFIG.kitchenMultPerLv * (calMod().kitchenDouble ? 2 : 1);
+  const staff = staffIncomeMult();
+  const garden = gardenStockMult();
+  const collect = collectSetMult();
+  const weather = weatherRateMult();
+  const shout = shoutRateMult();
+  const rate = base * (1 + kitchen + staff + garden + collect) * weather * shout;
+  return { base: base, kitchen: kitchen, staff: staff, garden: garden, collect: collect,
+           weather: weather, shout: shout, rate: rate };
+}
+function incomeRate(){  /* 每分钟铜钱：构成与拆解口径见 incomeParts（单一事实源） */
+  return incomeParts().rate;
 }
 function arrivalChance(){
   return Math.min(0.95, CONFIG.arrivalChancePerTick + S.stableLv * CONFIG.stableArrivalPerLv
@@ -2292,7 +2338,14 @@ function arriveGuest(opts){
   }
   S.guests.push(g);
   /* 邀请来的客不点亮图鉴首遇（评估口径：防看广告刷图鉴），其余计数/结算与自然客无异 */
+  const wasSeen = !!S.guestsSeen[t.id];
   if(!(opts && opts.invited)) S.guestsSeen[t.id] = true;
+  /* 收藏碎片（v1.4.6）：图鉴已点亮的旅客自然再访必转碎片（无概率、计数明牌）；邀请客不计，防刷口径同图鉴 */
+  if(wasSeen && !(opts && opts.invited) && packActive('collect')){
+    S.collect.shards += CONFIG.collect.shardPerRepeat;
+    S.collect.earned += CONFIG.collect.shardPerRepeat;
+    S.collect.repeats += 1;
+  }
   S.totalGuests++;
   S.dayStats.guests++;
   questBump('guests', 1);
@@ -2960,7 +3013,10 @@ const COACH_DEFS = [
     body:'客房卡下面能给每间房摆三件陈设（壁饰/案头/床品）：摆了合哪类客人口味的陈设，哪类客就来得多。陈设从图鉴点亮和里程碑领取里攒，摆进房里占库存、撤下返还。' },
   { flag:'tourFeed', tab:'affair', sub:null, target:() => document.querySelector('.feed-act-btn'),
     title:'喂马备程：出发前亲手配料',
-    body:'委托卡上多了「亲手备料出发」：黑豆、干草、麸皮配满十份——听马夫的话按路途远近配。配得精，归来报酬多一成半；配凑合，少一成。不配料点「出发」照旧。' }
+    body:'委托卡上多了「亲手备料出发」：黑豆、干草、麸皮配满十份——听马夫的话按路途远近配。配得精，归来报酬多一成半；配凑合，少一成。不配料点「出发」照旧。' },
+  { flag:'tourCollect', tab:'collect', sub:null, when:() => packActive('collect'), target:() => document.getElementById('subBtn-collect-sets'),
+    title:'收藏套装：集齐成套，细水长流',
+    body:'收集页新开「收藏套装」分栏：图鉴六类集齐一类，收入永久 +4%。接待过的旅客再来必得碎片，碎片能换缺片和陈设；等不及的缺片按按钮上的明码价直接补购。进度、碎片和保底半价都在分栏里明牌。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
@@ -2995,6 +3051,7 @@ function maybeCoach(){
   if(pm && pm.style.display !== 'none') return;
   for(const d of COACH_DEFS){
     if(S.flags[d.flag]) continue;
+    if(d.when && !d.when()) continue;
     if(uiTab !== d.tab) continue;
     if(d.sub && uiSub[d.tab] !== d.sub) continue;
     const el = d.target();
@@ -3442,6 +3499,11 @@ function decorRow(i){
   while(S.decor.rooms.length <= i) S.decor.rooms.push([null, null, null]);
   return S.decor.rooms[i];
 }
+function decorGive(it){   /* 陈设到货唯一落账口：免费货源（decorGrantCheck）与碎片兑换（exchangeDecor）共用，granted 防双发 */
+  S.decor.granted = S.decor.granted || {};
+  S.decor.granted[it.id] = true;
+  S.decor.owned[it.id] = (S.decor.owned[it.id] || 0) + 1;
+}
 function decorGrantCheck(){
   if(!S || !S.decor) return [];
   const seen = Object.keys(S.guestsSeen || {}).length;
@@ -3452,9 +3514,7 @@ function decorGrantCheck(){
     const u = it.unlock || { kind:'starter' };
     const ok = u.kind === 'starter' ? true : (u.kind === 'seen' ? seen >= (u.n || 0) : (u.kind === 'miles' ? miles >= (u.n || 0) : false));
     if(!ok) continue;
-    S.decor.granted = S.decor.granted || {};
-    S.decor.granted[it.id] = true;
-    S.decor.owned[it.id] = (S.decor.owned[it.id] || 0) + 1;
+    decorGive(it);
     got.push(it);
   }
   if(got.length) pushLog('新陈设到货：' + got.map(it => it.name).join('、') + '（见客房布置）');
@@ -4324,7 +4384,7 @@ function refreshOnSwitch(){
   if(window.__pfForceFull) window.__pfForceFull(); else { renderRooms(); renderLog(); }
   updateDynamic();
   renderMorning(); renderQuests(); renderEvents(); renderCommissions();
-  renderMilestones(); renderCodex(); renderStaff(); renderUpgrades(); renderAdsBox();
+  renderMilestones(); renderCodex(); renderCollect(); renderStaff(); renderUpgrades(); renderAdsBox();
   renderIntroCard(); renderWelcome();
 }
 function switchTab(tab){
@@ -4342,13 +4402,14 @@ function switchSub(group, sub){
   if(!(group in uiSub)) return;
   uiScroll[scrollKey(group)] = window.scrollY || 0;
   uiSub[group] = sub;
+  if(group === 'collect' && sub === 'sets') setCoachFlag('tourCollect');   /* 真实操作即落旗（coach 口径同亲手操控层） */
   applySubs();
   refreshOnSwitch();
   window.scrollTo(0, uiScroll[scrollKey(group)] || 0);
 }
 function applySubs(){
   for(const g of Object.keys(uiSub)){
-    for(const s of ['fac', 'staff', 'garden', 'codex', 'miles']){
+    for(const s of ['fac', 'staff', 'garden', 'codex', 'miles', 'sets']){
       const c = document.getElementById('sub-' + g + '-' + s);
       if(c) c.style.display = uiSub[g] === s ? '' : 'none';
       const b = document.getElementById('subBtn-' + g + '-' + s);
@@ -4433,12 +4494,16 @@ function renderMain(){
       resbarHtml() +
       '<div class="subtabs">' +
         '<button id="subBtn-collect-codex" onclick="switchSub(\'collect\',\'codex\')">旅客图鉴</button>' +
+        '<button id="subBtn-collect-sets" onclick="switchSub(\'collect\',\'sets\')">收藏套装</button>' +
         '<button id="subBtn-collect-miles" onclick="switchSub(\'collect\',\'miles\')">里程碑</button>' +
       '</div>' +
       '<div id="sub-collect-codex">' +
         '<div class="card" id="codexCard"><h3>旅 客 图 鉴（<span id="seenCount">0</span>/' + CONFIG.guestTypes.length + '）</h3><div id="codexBox"></div></div>' +
         '<div class="card" id="soonPrepayCard"><h3>老 客 预 存</h3>' +
           '<button class="soon-plaque" data-soon="prepay" onclick="showSoon(\'prepay\')"><span class="soon-tag">待开放</span><span class="soon-name">老客预存</span><span class="soon-date">11月29日开放</span></button></div>' +
+      '</div>' +
+      '<div id="sub-collect-sets" style="display:none">' +
+        '<div class="card" id="collectCard"><h3>收 藏 套 装</h3><div id="collectBox"></div></div>' +
       '</div>' +
       '<div id="sub-collect-miles" style="display:none">' +
         '<div class="card" id="milesCard"><h3>里 程 碑</h3><div id="milesBox"></div></div>' +
@@ -4491,11 +4556,11 @@ function renderMain(){
   todaySig = ''; offlineSig = ''; questSig = '';
   renderMorning(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderDecor(); renderWelcome(); renderEvents(); renderUpgrades();
   renderShout(); renderDish(); renderGarden();
-  renderStaff(); renderCommissions(); renderMilestones(); renderCodex();
+  renderStaff(); renderCommissions(); renderMilestones(); renderCodex(); renderCollect();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
 }
-const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', noble:'贵客图鉴段' };
+const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', noble:'贵客图鉴段' };
 /* 明日预告（纯展示）：首段为「明日上新」——读 CONFIG.calendar 明日条目（预告本身即留存钩子）；
    日历无明日条目时回退到日期门派生；不发奖、不写存档 */
 function tomorrowPreview(){
@@ -4555,12 +4620,16 @@ function renderOffline(){
   const card = document.getElementById('offlineCard');
   if(card) card.style.display = 'block';   /* 明牌卡常驻展示（凭数据渲染，非自动弹窗） */
   const info = offlineInfo();
-  const sig = [Math.round(info.rate * 10), info.pending, Math.floor(info.progressPct), info.capAmt, S.ads.offlineDouble ? 1 : 0, S.entrust ? S.entrust.amt : 0].join('|');
+  const parts = incomeParts();
+  const pct = x => (x > 0 ? '+' + Math.round(x * 100) + '%' : '0%');
+  const sig = [Math.round(info.rate * 10), info.pending, Math.floor(info.progressPct), info.capAmt, S.ads.offlineDouble ? 1 : 0, S.entrust ? S.entrust.amt : 0,
+    Math.round(parts.base * 10), Math.round(parts.kitchen * 1000), Math.round(parts.staff * 1000), Math.round(parts.garden * 1000), Math.round(parts.collect * 1000), Math.round(parts.weather * 100), Math.round(parts.shout * 100)].join('|');
   if(sig === offlineSig) return;
   offlineSig = sig;
   let html =
     '<div>当前收入速率 <b id="offRateNow">' + (Math.round(info.rate * 10) / 10) + '</b> 铜钱/分钟（在线全额）</div>' +
-    '<div>离线速率 ' + Math.round(CONFIG.offlineRate * 100) + '% · 约 <b>' + (Math.round(info.offRate * 10) / 10) + '</b> 铜钱/分钟</div>';
+    '<div>离线速率 ' + Math.round(CONFIG.offlineRate * 100) + '% · 约 <b>' + (Math.round(info.offRate * 10) / 10) + '</b> 铜钱/分钟</div>' +
+    '<div class="small-note" id="offParts">速率构成（与结算同源）：在住房价合计 ' + (Math.round(parts.base * 10) / 10) + ' · 厨房 ' + pct(parts.kitchen) + ' · 伙计 ' + pct(parts.staff) + ' · 菜园食材 ' + pct(parts.garden) + ' · 收藏套装 ' + pct(parts.collect) + ' · 天气 ×' + (Math.round(parts.weather * 100) / 100) + ' · 吆喝 ×' + (Math.round(parts.shout * 100) / 100) + '——离线待领＝速率 × ' + Math.round(CONFIG.offlineRate * 100) + '% × 累计分钟（封顶 ' + CONFIG.offlineCapHours + ' 小时）</div>';
   if(info.pending >= 1){
     html += '<div style="margin-top:6px;">已累计待领</div>' +
       '<div class="amt" id="offlineAmt">' + info.pending + ' 铜钱</div>' +
@@ -5295,7 +5364,136 @@ function renderCodex(){
       (seenN === types.length ? ' · 已集齐' : '') + '</div>' + types.map(tagHtml).join('');
   }).join('') +
   favorGiftHtml() +
-  '<div class="small-note" style="margin-top:8px;">旅客分六类成套收集，每类的集齐进度都在上方明牌——集齐一套，便是一段完整的江湖。</div>';
+  '<div class="small-note" style="margin-top:8px;">旅客分六类成套收集，每类的集齐进度都在上方明牌——集齐一套，便是一段完整的江湖。碎片、兑换与明码补购在「收藏套装」分栏。</div>';
+}
+/* ================= 收藏副线（v1.4.6，11/22 门） =================
+   套装＝图鉴六组（CONFIG.guestGroups）；碎片 S.collect（重复旅客必得、兑换/计数全明牌）；
+   集齐加成只走 collectSetMult→incomeParts；铜钱补购只走 ledger；碎片不是货币、不入 ledger。
+   兑换/补购点亮 guestsSeen 与自然接待同账（里程碑 seen 指标同源），但不冒充接待计数 */
+function collectGroupOf(typeId){
+  for(const g of CONFIG.guestGroups) if(g.ids.indexOf(typeId) >= 0) return g;
+  return null;
+}
+function collectTierOf(t){
+  if(!t) return 1;
+  if(t.gate === 'noble' || (t.minLevel || 1) >= 8) return 3;
+  const g = collectGroupOf(t.id);
+  if(g){   /* 组内门槛最高者（并列取权重最低＝最罕至）升绝品档 */
+    let top = null;
+    for(const id of g.ids){
+      const o = CONFIG.guestTypes.find(x => x.id === id);
+      if(!o) continue;
+      if(!top || (o.minLevel || 1) > (top.minLevel || 1) ||
+         ((o.minLevel || 1) === (top.minLevel || 1) && (o.weight || 99) < (top.weight || 99))) top = o;
+    }
+    if(top && top.id === t.id) return 3;
+  }
+  if((t.minLevel || 1) >= 4 || t.gate) return 2;
+  return 1;
+}
+function collectPriceOf(t){ return CONFIG.collect.tierPrice[collectTierOf(t)] || 0; }
+function collectMissingInGroup(g){
+  return g.ids.filter(id => !S.guestsSeen[id]);
+}
+function collectShardCost(t){
+  const g = collectGroupOf(t.id);
+  let cost = CONFIG.collect.tierShard[collectTierOf(t)] || 0;
+  if(g && collectMissingInGroup(g).length === 1) cost = Math.ceil(cost / 2);   /* 集齐保底：本组只差这一件，碎片价半价 */
+  return cost;
+}
+function collectDoneGroups(){
+  let n = 0;
+  for(const g of CONFIG.guestGroups) if(collectMissingInGroup(g).length === 0) n++;
+  return n;
+}
+function collectDecorShardCost(it){
+  const u = it.unlock || { kind:'starter' };
+  if(u.kind === 'starter') return 0;   /* 免费货源不入兑换 */
+  return CONFIG.collect.decorShard[u.kind] || 0;
+}
+function shardExchangePiece(typeId){
+  if(!packActive('collect')){ showToast('收藏副线 2026-11-22 开启'); return false; }
+  const t = CONFIG.guestTypes.find(x => x.id === typeId);
+  if(!t || S.guestsSeen[typeId]) return false;
+  const cost = collectShardCost(t);
+  if(S.collect.shards < cost){ showToast('碎片不足（需 ' + cost + ' 枚，现有 ' + S.collect.shards + ' 枚）'); return false; }
+  S.collect.shards -= cost;
+  S.guestsSeen[typeId] = true;
+  pushLog('用 ' + cost + ' 枚碎片换回缺片「' + t.label + '」点亮图鉴');
+  showToast('缺片到手：' + t.label + ' 已点亮（碎片 -' + cost + '）');
+  save(); renderCollect(); renderCodex(); updateDynamic();
+  return true;
+}
+function buyPiece(typeId){
+  if(!packActive('collect')){ showToast('收藏副线 2026-11-22 开启'); return false; }
+  const t = CONFIG.guestTypes.find(x => x.id === typeId);
+  if(!t || S.guestsSeen[typeId]) return false;
+  const price = collectPriceOf(t);
+  if(!ledger('collectBuy', -price, 0, '明码补购缺片「' + t.label + '」 -' + price + ' 铜钱')){ showToast('铜钱不足（需 ' + price + '）'); return false; }
+  S.guestsSeen[typeId] = true;
+  pushLog('「' + t.label + '」已点亮图鉴（补购只补进度，不产出资源）');
+  showToast('补购成功：' + t.label + ' 已点亮（-' + price + ' 铜钱）');
+  save(); renderCollect(); renderCodex(); updateDynamic();
+  return true;
+}
+function exchangeDecor(itemId){
+  if(!packActive('collect')){ showToast('收藏副线 2026-11-22 开启'); return false; }
+  const it = (CONFIG.decor.items || []).find(x => x.id === itemId);
+  if(!it || !S.decor || (S.decor.granted && S.decor.granted[it.id])) return false;
+  const cost = collectDecorShardCost(it);
+  if(cost <= 0) return false;
+  if(S.collect.shards < cost){ showToast('碎片不足（需 ' + cost + ' 枚，现有 ' + S.collect.shards + ' 枚）'); return false; }
+  S.collect.shards -= cost;
+  decorGive(it);
+  pushLog('用 ' + cost + ' 枚碎片换回陈设「' + it.name + '」（见客房布置）');
+  showToast('陈设到手：' + it.name + '（碎片 -' + cost + '）');
+  save(); renderCollect(); renderDecor();
+  return true;
+}
+function renderCollect(){
+  const box = document.getElementById('collectBox');
+  if(!box) return;
+  const C = CONFIG.collect;
+  const bonusPct = Math.round(C.setBonusPct * 100);
+  if(!packActive('collect')){
+    box.innerHTML = '<div class="small-note">收藏副线 2026-11-22 开启：图鉴六类成套收集，集齐一类收入永久 +' + bonusPct + '%；接待过的旅客再来必得碎片，碎片能换缺片，缺片也能明码补购。先把图鉴点亮，22 日开张即有进度。</div>' +
+      CONFIG.guestGroups.map(g => {
+        const types = g.ids.map(id => CONFIG.guestTypes.find(t => t.id === id)).filter(Boolean);
+        const seenN = types.filter(t => S.guestsSeen[t.id]).length;
+        return '<div class="group-line">' + esc(g.label) + '（' + seenN + '/' + types.length + '）· 集齐 +' + bonusPct + '%</div>';
+      }).join('');
+    return;
+  }
+  const done = collectDoneGroups();
+  let html = '<div class="small-note">碎片 <b>' + S.collect.shards + '</b> 枚 · 累计接待重复旅客 ' + S.collect.repeats + ' 位（必得碎片 ' + S.collect.earned + ' 枚，无概率）· 已集齐 ' + done + '/6 组 · 收藏加成 +' + Math.round(collectSetMult() * 100) + '% 已并入收入</div>';
+  for(const g of CONFIG.guestGroups){
+    const types = g.ids.map(id => CONFIG.guestTypes.find(t => t.id === id)).filter(Boolean);
+    const seenN = types.filter(t => S.guestsSeen[t.id]).length;
+    const missing = types.filter(t => !S.guestsSeen[t.id]);
+    html += '<div class="group-line">' + esc(g.label) + '（' + seenN + '/' + types.length + '）' +
+      (missing.length === 0 ? ' · 已集齐，收入 +' + bonusPct + '%' : ' · 还差 ' + missing.length + ' 件') + '</div>';
+    html += types.map(t => {
+      if(S.guestsSeen[t.id]) return '<span class="tag seen">' + esc(t.label) + '</span>';
+      const tier = collectTierOf(t);
+      const sc = collectShardCost(t), price = collectPriceOf(t);
+      const half = missing.length === 1;
+      return '<div style="margin:5px 0;"><span class="tag">' + esc(t.label) + ' · ' + C.tierLabels[tier] + '</span> ' +
+        '<button class="small collect-ex-btn" onclick="shardExchangePiece(\'' + t.id + '\')"' + (S.collect.shards >= sc ? '' : ' disabled') + '>碎片换 ' + sc + ' 枚' + (half ? '（保底半价）' : '') + '</button> ' +
+        '<button class="small collect-buy-btn" onclick="buyPiece(\'' + t.id + '\')"' + (S.coins >= price ? '' : ' disabled') + '>补购 ' + price + ' 铜钱</button></div>';
+    }).join('');
+  }
+  html += '<div class="group-line" style="margin-top:10px;">陈设收藏（与客房布置同一库存）</div>';
+  html += CONFIG.decor.items.map(it => {
+    const own = (S.decor && S.decor.owned[it.id]) || 0;
+    const granted = !!(S.decor && S.decor.granted && S.decor.granted[it.id]);
+    if(granted) return '<span class="tag seen">' + esc(it.name) + ' · 库存 ×' + own + '</span>';
+    const cost = collectDecorShardCost(it);
+    const srcTxt = it.unlock && it.unlock.kind === 'seen' ? '图鉴点亮 ' + it.unlock.n + ' 种到货' : (it.unlock && it.unlock.kind === 'miles' ? '里程碑领取 ' + it.unlock.n + ' 个到货' : '开张即到货');
+    return '<div style="margin:5px 0;"><span class="tag">' + esc(it.name) + ' · 未到货（' + srcTxt + '）</span>' +
+      (cost > 0 ? ' <button class="small" onclick="exchangeDecor(\'' + it.id + '\')"' + (S.collect.shards >= cost ? '' : ' disabled') + '>碎片换 ' + cost + ' 枚</button>' : '') + '</div>';
+  }).join('');
+  html += '<div class="small-note" style="margin-top:8px;">补购与兑换只点亮收集进度，不产出铜钱、声望或好感；集齐加成在离线明牌卡里逐项列明。</div>';
+  box.innerHTML = html;
 }
 function renderAdsBox(){
   const box = document.getElementById('adsBox');
@@ -5329,6 +5527,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
+      (packActive('collect') ? '；收藏套装已开启（2026-11-22）：图鉴六类集齐一类收入 +' + Math.round(CONFIG.collect.setBonusPct * 100) + '%，重复旅客必得碎片 ' + CONFIG.collect.shardPerRepeat + ' 枚，缺片补购价寻常 ' + CONFIG.collect.tierPrice[1] + '／稀有 ' + CONFIG.collect.tierPrice[2] + '／绝品 ' + CONFIG.collect.tierPrice[3] + ' 铜钱明码' : '；收藏套装 2026-11-22 开启') +
       '。贵客图鉴段 2026-11-26 开启。重置说明：如需重开驿站，请到本页存档区两步确认删档，删除后不可恢复（导入前备份除外）。</div>' +
     '<div class="small-note" style="margin-top:8px;">背景音乐：古琴《阳关三叠》。音效为程序实时合成，无外部素材。</div>' +
     '<div class="small-note" style="margin-top:4px;">音乐来源：《阳关三叠》古琴演奏 Charlie Huang，依 CC BY-SA 3.0 授权使用（本游戏内为 72 秒剪辑循环段，同以 CC BY-SA 3.0 提供）。</div>';
@@ -5866,6 +6065,9 @@ window.YZ = {
   openTea: openTea, teaPick: teaPick, teaServe: teaServe, teaCheck: teaCheck, teaCorrectTea: teaCorrectTea, teaCountToday: teaCountToday,
   openFeed: openFeed, feedAdj: feedAdj, feedConfirm: feedConfirm, feedGradeOf: feedGradeOf, feedIdeal: feedIdeal, feedMultOf: feedMultOf,
   openDecor: openDecor, decorPlace: decorPlace, decorMatchCount: decorMatchCount, decorPlacedGroups: decorPlacedGroups, decorGrantCheck: decorGrantCheck, renderDecor: renderDecor,
+  collectSetMult: collectSetMult, incomeParts: incomeParts, collectTierOf: collectTierOf, collectPriceOf: collectPriceOf, collectShardCost: collectShardCost,
+  collectGroupOf: collectGroupOf, collectDoneGroups: collectDoneGroups, collectDecorShardCost: collectDecorShardCost,
+  shardExchangePiece: shardExchangePiece, buyPiece: buyPiece, exchangeDecor: exchangeDecor, renderCollect: renderCollect,
   closePlay: closePlay, coachCur: function(){ return coachCur; }, coachDone: coachDone, maybeCoach: maybeCoach,
   shoutActive: shoutActive, shoutNow: shoutNow,
   pickShoutFrag: pickShoutFrag, shoutComboActive: shoutComboActive, shoutComboGroups: shoutComboGroups,
