@@ -613,7 +613,7 @@ const CONFIG = {
     { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
-  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26', process:'2026-11-27' },
+  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26', process:'2026-11-27', expedition:'2026-11-28' },
   /* 每日上新日历（v1.3）：运营期 2026-11-17～11-30 逐日一条，{date,title,kind,mod?} 为唯一事实源。
      晨间小结「明日上新」与今日清单「今日上新」小条都读此表；单日修正 mod 只在既有公式/结算出口
      被 calMod() 读取（eventMult 抉择正奖励倍率 / commissionMult 委托报酬倍率 / kitchenDouble 厨房
@@ -631,7 +631,7 @@ const CONFIG = {
     { date:'2026-11-25', title:'新事件上新 · 连环故事开场（深谈面熟的种子今日承接）', kind:'data' },
     { date:'2026-11-26', title:'贵客临门 · 可邀驻店', kind:'gate' },
     { date:'2026-11-27', title:'名厨日 · 名厨驻店，厨房加成翻倍（后厨加工坊同日开张）', kind:'boost', mod:{ kitchenDouble:true } },
-    { date:'2026-11-28', title:'周末市集 · 礼包 4 次、金额 +50%', kind:'boost', mod:{ giftTimes:4, giftMult:1.5 } },
+    { date:'2026-11-28', title:'伙计远征开门 · 周末市集（礼包 4 次、金额 +50%）', kind:'boost', mod:{ giftTimes:4, giftMult:1.5 } },
     { date:'2026-11-29', title:'故事日 · 说书人驻店、老客长谈', kind:'data' },
     { date:'2026-11-30', title:'运营庆典 · 结算答谢', kind:'finale' }
   ],
@@ -648,6 +648,32 @@ const CONFIG = {
     { id:'j_guard',  name:'护送镖银', hours:6,  coins:700,  fame:8,  line:'镖银一箱不少，护送的兄弟说，掌柜的茶好。' },
     { id:'j_letter', name:'送信边关', hours:4,  coins:480,  fame:6,  line:'边关的信送到了，回信只有四个字：平安，勿念。' },
     { id:'j_tea',    name:'运茶马道', hours:10, coins:1100, fame:12, line:'茶马道走通了，满载的茶香一路飘回了驿站。' }
+  ],
+  /* 伙计远征-lite（v1.4.11，2026-11-28 开门；评估定案＋A3 补给费主人 2026-11-18 已批）：
+     复用委托骨架的伙计派出线——同时仅 1 支、任一已雇佣伙计可派、不占用岗位产出（在外加成照常）；
+     报酬走 expeditionReward() 平行出口基础值直给（不吃马厩/马夫/日历乘子，定价锚委托线不锚离线线）；
+     fee 为 A3 远征补给费（出发时扣、走 ledger），存柜券抵扣只经 expeditionFeeDue() 判定口（B2-3 接入）；
+     归来 eventChance 概率触发见闻二选一（eventRoll/eventId 派出时定死存档防刷，不进每日抉择池）；
+     无新货币、无新广告点、无每日次数上限（节流靠同时 1 支＋时长本身） */
+  expeditionMaxActive: 1,
+  expeditionEventChance: 0.3,
+  expeditionRoutes: [
+    { id:'ex_near',   name:'近郊采买', hours:2,  coins:180,  fame:2,  fee:300,  blurb:'采买食材杂货、替住客代购捎带' },
+    { id:'ex_letter', name:'送信邻县', hours:6,  coins:560,  fame:6,  fee:1500, blurb:'替住客送信捎物，跑一趟邻县' },
+    { id:'ex_tea',    name:'远行贩茶', hours:12, coins:1250, fame:13, fee:6000, blurb:'走茶马道贩茶、采买山货，归来另掉 1 枚收藏碎片' }
+  ],
+  /* 归途见闻二选一：a 保全型（报酬全额）/ b 义气型（铜钱 ×coinsMult、声望 fameAdd、好感 favorAdd）；
+     效果全部进本表，领取面板按字段逐项明示，不许在结算处散写数字 */
+  expeditionEvents: [
+    { id:'ex_ev_rain', title:'归途遇雨', text:'回程半道下起瓢泼大雨，前头有个小村的晒场正收着粮食，雨一浇就全毁了。',
+      a:{ label:'绕路护货，先赶回驿站', coinsMult:1,   fameAdd:0, favorAdd:0 },
+      b:{ label:'帮村民抢收晒场',       coinsMult:0.5, fameAdd:4, favorAdd:0 } },
+    { id:'ex_ev_slope', title:'山道挑担', text:'山道上遇见一位老丈，挑着两筐山货一步一喘，眼看就要滚下坡去。',
+      a:{ label:'扶他站稳，继续赶路',   coinsMult:1,   fameAdd:0, favorAdd:0 },
+      b:{ label:'替老丈把担子挑上山',   coinsMult:0.5, fameAdd:0, favorAdd:6 } },
+    { id:'ex_ev_child', title:'走失的孩童', text:'岔路口有个走失的孩童在哭，家就在反方向三里外的村子里，天色已经不早。',
+      a:{ label:'指了路，先把货送回',   coinsMult:1,   fameAdd:0, favorAdd:0 },
+      b:{ label:'送孩子回家再折返',     coinsMult:0.5, fameAdd:3, favorAdd:3 } }
   ],
   /* 广告点位与日限（v1.4.3 广告扩展批：新 8 点位全走既有广告框架——vatask 正链＋PENDING 落盘
      ＋AD-1 在途守卫＋ledger/既有结算出口，限次统一进本表；adsDailyCap 为全店日总闸，含旧三点位
@@ -995,11 +1021,11 @@ const CONFIG = {
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'process-1127', lines: [
-    { name:'后厨加工坊', how:'菜园收获时能选「送加工坊」：青菜、南瓜、莲藕攒成原料，排进加工队列做成腌青菜、南瓜干、藕粉，还有半小时就好的快腌青菜', goto:'build:soonKitchenCard' },
-    { name:'成品明码直售', how:'做好的成品按当前收入速率 ×30 分钟明码直售（快腌按四分之一计价），价钱就写在按钮上；收成品时还能顺手再排一槽', goto:'build:soonKitchenCard' },
-    { name:'腌菜急单优先兑付', how:'手边有成品时，每日加急单可能换面成腌菜急单：接单扣 1 件成品、报酬再多五成；成品还能递给说书人遂他的腌菜心愿', goto:'affair:commissionsCard' },
-    { name:'不加工也照旧', how:'收获不选分流，就还是入后厨当食材给收入加成——托管老规矩一字不变，加工坊纯是多一条出路', goto:'build:gardenCard' }
+  introCard: { ver: 'expedition-1128', lines: [
+    { name:'伙计远征', how:'11月28日起，事务页委托卡下新开「伙计远征」：挑一位已雇佣的伙计，派他走近郊采买、送信邻县或远行贩茶，同时只一支队伍在外，不占用他的岗位产出', goto:'affair:commissionsCard' },
+    { name:'补给费明码', how:'出发先交补给费 300／1,500／6,000 文（按钮上写明），归来报酬 180／560／1,250 文外加声望——声望是升驿站等级的硬通货，这条线赚的主要是它', goto:'affair:commissionsCard' },
+    { name:'归途见闻', how:'三成机会在归来时遇上见闻二选一：护货保全报酬，或帮人一把、铜钱减半换声望好感；远行贩茶归来还必掉 1 枚收藏碎片', goto:'affair:commissionsCard' },
+    { name:'不派也照旧', how:'远征纯是多一条派出线：不派不影响委托、离线和日常经营，伙计在外期间他那份加成照常生效', goto:'build:staffCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1362,6 +1388,7 @@ function defaultState(){
     collect: { shards: 0, earned: 0, repeats: 0 },
     miles: {},
     commissions: [],
+    expeditions: [],
     lastSeen: Date.now(),
     day: dayStr(),
     ads: {},
@@ -1372,6 +1399,7 @@ function defaultState(){
     totalGuests: 0,
     totalEarned: 0,
     totalCommissions: 0,
+    totalExpeditions: 0,
     totalEvents: 0,
     dayStats: { guests: 0, earned: 0 },
     eventsToday: [],
@@ -1573,6 +1601,16 @@ function normalize(raw){
   s.guestsSeen = (raw.guestsSeen && typeof raw.guestsSeen === 'object') ? raw.guestsSeen : {};
   s.miles = (raw.miles && typeof raw.miles === 'object') ? raw.miles : {};
   s.commissions = Array.isArray(raw.commissions) ? raw.commissions.filter(c => c && c.tierId && !c.claimed) : [];
+  /* 远征（v1.4.11 加法字段）：平移委托清洗口径——只保留路线/伙计合法且未 claimed 的在外支，
+     eventRoll 缺失/非法回 1（＝不见闻，保守不发事件），eventId 只认表内卡、其余归 null；
+     「谁在外」一律由本数组派生（expeditionOf），staff 上不存第二份状态 */
+  s.expeditions = Array.isArray(raw.expeditions) ? raw.expeditions.filter(e => e && expeditionRouteDef(e.routeId) && staffDef(e.staffId) && !e.claimed).map(e => ({
+    id: String(e.id || ''), routeId: e.routeId, staffId: e.staffId,
+    start: Math.max(0, +e.start || 0), end: Math.max(0, +e.end || 0),
+    eventRoll: (typeof e.eventRoll === 'number' && isFinite(e.eventRoll)) ? Math.min(1, Math.max(0, e.eventRoll)) : 1,
+    eventId: (e.eventId && CONFIG.expeditionEvents.some(ev => ev.id === e.eventId)) ? e.eventId : null,
+    claimed: false
+  })) : [];
   s.ads = (raw.ads && typeof raw.ads === 'object') ? raw.ads : {};
   s.adPending = sanitizeAdPending(raw.adPending);
   s.log = Array.isArray(raw.log) ? raw.log.slice(0, 8) : [];
@@ -1584,6 +1622,7 @@ function normalize(raw){
   s.totalGuests = Math.max(0, Math.floor(+s.totalGuests || 0));
   s.totalEarned = Math.max(0, Math.floor(+s.totalEarned || 0));
   s.totalCommissions = Math.max(0, Math.floor(+s.totalCommissions || 0));
+  s.totalExpeditions = Math.max(0, Math.floor(+s.totalExpeditions || 0));
   s.totalEvents = Math.max(0, Math.floor(+s.totalEvents || 0));
   s.dayStats = (raw.dayStats && typeof raw.dayStats === 'object')
     ? { guests: Math.max(0, Math.floor(+raw.dayStats.guests || 0)), earned: Math.max(0, Math.floor(+raw.dayStats.earned || 0)) }
@@ -3001,6 +3040,166 @@ function claimCommission(id){
   return true;
 }
 
+/* ================= 伙计远征-lite（v1.4.11，2026-11-28 开门） =================
+   状态机平移委托：派出 startExpedition（门控＋已雇佣＋同时 <expeditionMaxActive＋该伙计未在外）
+   → 在外（expeditionReady 纯时间判定，离线照走 end 时间戳）→ 领取 claimExpedition；
+   报酬唯一出口 expeditionReward（基础值直给）；补给费唯一判定口 expeditionFeeDue＋ledger 扣账；
+   归来见闻：eventRoll/eventId 派出时定死，领取时先弹二选一、选后 expeditionSettle 在同一次
+   操作内 ledger＋claimed＋摘除＋save 原子落账——弹窗未选时 claimed 未置位，重进重弹、不丢不重 */
+function expeditionRouteDef(id){ return CONFIG.expeditionRoutes.find(r => r.id === id) || null; }
+function expeditionEventDef(id){ return CONFIG.expeditionEvents.find(e => e.id === id) || null; }
+function expeditionReward(route){ return { coins: route.coins, fame: route.fame }; }
+/* 补给费应付判定（唯一口）：fee＝CONFIG 路线表价；voucher＝存柜券抵扣额（B2-3 老客存柜，
+   11/29 接入券账本体后只改此函数）；due＝实付。与 A2 补购、specFeeDue 两口同构 */
+function expeditionFeeDue(routeId){
+  const route = expeditionRouteDef(routeId);
+  if(!route) return null;
+  const voucher = 0;   /* B2-3 抵扣口预留：本批无券账，恒 0 */
+  return { fee: route.fee, voucher: voucher, due: route.fee - voucher };
+}
+function expeditionOf(staffId){ return (S && S.expeditions || []).find(e => e.staffId === staffId) || null; }
+function expeditionReady(e){ return Date.now() >= e.end; }
+let expStaffPick = null;   /* 远征段选人态（纯 UI，不入存档）：缺省第一位已雇佣伙计 */
+function pickExpStaff(id){ expStaffPick = id; renderCommissions(); }
+function startExpedition(routeId){
+  if(!packActive('expedition')){ showToast('伙计远征将于 2026-11-28 开门'); return false; }
+  const route = expeditionRouteDef(routeId);
+  if(!route) return false;
+  const hired = CONFIG.staffTypes.filter(t => S.staff[t.id]);
+  if(!hired.length){ showToast('先雇一位伙计，才能派他远征'); return false; }
+  const staffId = (expStaffPick && S.staff[expStaffPick]) ? expStaffPick : hired[0].id;
+  if(S.expeditions.length >= CONFIG.expeditionMaxActive){ showToast('已有一支队伍在外，等他归来再派下一支'); return false; }
+  if(expeditionOf(staffId)){ showToast('这位伙计正在远征途中'); return false; }
+  const due = expeditionFeeDue(routeId);
+  if(!due) return false;
+  const t = staffDef(staffId);
+  if(!ledger('expedition', -due.due, 0, '远征补给：派' + (t ? t.label : staffId) + '走「' + route.name + '」，补给费 ' + due.due + ' 文')){
+    showToast('补给费不足，还差 ' + (due.due - S.coins) + ' 文');
+    return false;
+  }
+  const now = Date.now();
+  const roll = Math.random();
+  let evId = null;
+  if(roll < CONFIG.expeditionEventChance && CONFIG.expeditionEvents.length){
+    evId = CONFIG.expeditionEvents[Math.floor(Math.random() * CONFIG.expeditionEvents.length)].id;
+  }
+  S.expeditions.push({
+    id: 'ex' + now + '_' + Math.floor(Math.random() * 100000),
+    routeId: route.id, staffId: staffId,
+    start: now, end: now + route.hours * 3600 * 1000,
+    eventRoll: roll, eventId: evId, claimed: false
+  });
+  pushLog((t ? t.label : staffId) + '带着补给出发远征「' + route.name + '」（' + route.hours + ' 小时）');
+  setCoachFlag('tourExpedition');   /* 真实派出即落旗（coach 口径同既有情境引导） */
+  save();
+  renderCommissions();
+  renderStaff();
+  renderLog();
+  showToast((t ? t.label : staffId) + '已出发 · ' + route.name + '（' + route.hours + ' 小时，补给费 ' + due.due + ' 文）');
+  sfxPlay('page');
+  return true;
+}
+let expClaimPending = null;   /* 待结算的归来见闻（远征实例 id）：面板未选不落账，重进重弹 */
+function claimExpedition(id){
+  const ex = S.expeditions.find(x => x.id === id);
+  if(!ex || ex.claimed) return false;            /* 防重复领取 */
+  if(!expeditionReady(ex)){ showToast('队伍尚未归来'); return false; }
+  const ev = ex.eventId ? expeditionEventDef(ex.eventId) : null;
+  if(ev){
+    expClaimPending = ex.id;
+    const route = expeditionRouteDef(ex.routeId), t = staffDef(ex.staffId);
+    const rw = expeditionReward(route);
+    const eff = c => '铜钱 ' + Math.round(rw.coins * (c.coinsMult || 1)) + ' 文' + (c.fameAdd ? ' · 声望 +' + c.fameAdd : '') + (c.favorAdd ? ' · 好感 +' + c.favorAdd : '');
+    openPlay(
+      '<div class="up-row"><div class="info"><div class="t">归 途 见 闻 · ' + esc(ev.title) + '</div>' +
+      '<div class="d">' + esc(t ? t.label : ex.staffId) + '远征「' + esc(route ? route.name : '') + '」归来，路上遇了事——</div></div></div>' +
+      '<div class="small-note" style="line-height:1.7;">' + esc(ev.text) + '</div>' +
+      '<div class="btnrow" style="margin-top:8px;">' +
+      '<button class="small" onclick="expeditionEventPick(\'a\')">' + esc(ev.a.label) + '（' + eff(ev.a) + '）</button>' +
+      '<button class="small accent" onclick="expeditionEventPick(\'b\')">' + esc(ev.b.label) + '（' + eff(ev.b) + '）</button></div>', null);
+    return true;
+  }
+  return expeditionSettle(ex, null);
+}
+function expeditionEventPick(key){
+  const ex = S.expeditions.find(x => x.id === expClaimPending);
+  expClaimPending = null;
+  if(!ex || ex.claimed){ closePlay(); return false; }
+  const ev = ex.eventId ? expeditionEventDef(ex.eventId) : null;
+  const choice = ev ? ev[key] : null;
+  closePlay();
+  return expeditionSettle(ex, choice);
+}
+function expeditionSettle(ex, choice){
+  const route = expeditionRouteDef(ex.routeId);
+  if(!route) return false;
+  const rw = expeditionReward(route);
+  let coins = rw.coins, fame = rw.fame, favor = 0;
+  if(choice){
+    coins = Math.round(coins * (choice.coinsMult || 1));
+    fame += choice.fameAdd || 0;
+    favor += choice.favorAdd || 0;
+  }
+  /* 远行贩茶归来掉 1 枚收藏碎片（评估可选挂钩，收藏批已落地）：走 S.collect 既有账，earned 同步 */
+  let shard = 0;
+  if(route.hours >= 12 && packActive('collect')) shard = 1;
+  ex.claimed = true;
+  S.expeditions = S.expeditions.filter(x => x.id !== ex.id);
+  S.totalExpeditions++;
+  if(shard){ S.collect.shards += shard; S.collect.earned += shard; }
+  const t = staffDef(ex.staffId);
+  ledger('expedition', coins, fame, '远征「' + route.name + '」归来（' + (t ? t.label : ex.staffId) + '），报酬 +' + coins + ' 铜钱' + (choice ? '（归途见闻已抉择）' : ''), favor);
+  save();
+  renderCommissions();
+  renderStaff();
+  renderMilestones();
+  updateDynamic();
+  renderLog();
+  showToast('远征报酬到账 +' + coins + ' 铜钱 / 声望 +' + fame + (favor ? ' / 好感 +' + favor : '') + (shard ? ' / 碎片 +1' : ''));
+  return true;
+}
+/* 远征段（挂委托卡内，渲染唯一出处）：门前灰态露三路线名/时长/报酬/补给费明牌预告；
+   门后＝状态行（在外/待领）＋带队伙计 chips＋路线派出行（补给费与应付写在按钮上） */
+function expeditionSectionHtml(){
+  let html = '<div class="sect">伙 计 远 征</div>';
+  if(!packActive('expedition')){
+    html += '<div class="small-note">远征将于 2026-11-28 开门：派一位自家已雇佣的伙计走一趟远路，同时只一支队伍在外，不占用他的岗位产出。</div>' +
+      CONFIG.expeditionRoutes.map(r => '<div class="up-row"><div class="info"><div class="t">' + esc(r.name) + ' · ' + r.hours + ' 小时</div>' +
+        '<div class="d">' + esc(r.blurb) + '</div><div class="d">报酬 ' + r.coins + ' 铜钱 / 声望 ' + r.fame + ' · 补给费 ' + r.fee + ' 文</div></div>' +
+        '<button class="small" disabled>11月28日开门</button></div>').join('');
+    return html;
+  }
+  const ex = S.expeditions[0];
+  if(ex){
+    const route = expeditionRouteDef(ex.routeId), t = staffDef(ex.staffId);
+    const rw = route ? expeditionReward(route) : { coins: 0, fame: 0 };
+    html += '<div class="up-row"><div class="info"><div class="t">' + esc(t ? t.label : ex.staffId) + ' 远征中 · ' + esc(route ? route.name : '') + '</div>' +
+      '<div class="d">报酬 ' + rw.coins + ' 铜钱 / 声望 ' + rw.fame + ' · <span class="cm-left" data-end="' + ex.end + '">' + fmtLeft(ex.end - Date.now()) + '</span></div></div>' +
+      '<button class="small" onclick="claimExpedition(\'' + ex.id + '\')"' + (expeditionReady(ex) ? '' : ' disabled') + '>领取</button></div>' +
+      '<div class="small-note">队伍归来后在此领取；同时只派一支，归来再派下一支。</div>';
+    return html;
+  }
+  const hired = CONFIG.staffTypes.filter(t => S.staff[t.id]);
+  if(!hired.length){
+    html += '<div class="small-note">先雇一位伙计（建设页 · 伙计），才能派他远征。</div>' +
+      CONFIG.expeditionRoutes.map(r => '<div class="up-row"><div class="info"><div class="t">' + esc(r.name) + ' · ' + r.hours + ' 小时</div>' +
+        '<div class="d">' + esc(r.blurb) + '</div><div class="d">报酬 ' + r.coins + ' 铜钱 / 声望 ' + r.fame + ' · 补给费 ' + r.fee + ' 文</div></div>' +
+        '<button class="small" disabled>先雇伙计</button></div>').join('');
+    return html;
+  }
+  const pick = (expStaffPick && S.staff[expStaffPick]) ? expStaffPick : hired[0].id;
+  html += '<div class="btnrow">' + hired.map(t =>
+    '<button class="small' + (t.id === pick ? ' accent' : '') + '" onclick="pickExpStaff(\'' + t.id + '\')">' + esc(t.label) + ' 带队</button>').join('') + '</div>' +
+    CONFIG.expeditionRoutes.map(r => {
+      const due = expeditionFeeDue(r.id);
+      return '<div class="up-row"><div class="info"><div class="t">' + esc(r.name) + ' · ' + r.hours + ' 小时</div>' +
+        '<div class="d">' + esc(r.blurb) + '</div><div class="d">报酬 ' + r.coins + ' 铜钱 / 声望 ' + r.fame + '</div></div>' +
+        '<button class="small exp-start-btn" onclick="startExpedition(\'' + r.id + '\')"' + (due && S.coins >= due.due ? '' : ' disabled') + '>派出 · 补给费 ' + (due ? due.due : r.fee) + ' 文</button></div>';
+    }).join('') +
+    '<div class="small-note">出发先交补给费（走账明示）；伙计在外期间，他的那份岗位加成照常生效。</div>';
+  return html;
+}
+
 /* ================= 加急单 / 离线托付 / 好感谢礼（v1.4 经济加厚批 B3/B5/B4） ================= */
 function activeCommissionCount(){ return S.commissions.length + (S.entrust ? 1 : 0); }
 function commissionPayout(c){
@@ -3256,7 +3455,11 @@ const COACH_DEFS = [
   { flag:'tourProcessUrgent', tab:'affair', sub:null, when:() => packActive('process') && processGoodsTotal() > 0,
     target:() => document.getElementById('commissionsBox'),
     title:'成品兑急单：优先兑付更赚钱',
-    body:'手边有了加工成品，每日加急单可能换面成「腌菜急单」：接单扣 1 件成品，报酬在急单翻倍之上再多五成。成品不急着兑也能在加工坊直售，价钱按当前收入速率明码标在按钮上。' }
+    body:'手边有了加工成品，每日加急单可能换面成「腌菜急单」：接单扣 1 件成品，报酬在急单翻倍之上再多五成。成品不急着兑也能在加工坊直售，价钱按当前收入速率明码标在按钮上。' },
+  { flag:'tourExpedition', tab:'affair', sub:null, when:() => packActive('expedition'),
+    target:() => document.querySelector('.exp-start-btn') || document.getElementById('commissionsBox'),
+    title:'伙计远征：派自家的人走一趟远路',
+    body:'委托卡下新开「伙计远征」：选一位已雇佣的伙计带队，三条路线明码——出发先交补给费，归来领铜钱和声望。同时只一支队伍在外，伙计在外期间他那份岗位加成照常生效、不占用。归来时三成机会遇上见闻二选一，帮人还是护货你说了算。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
@@ -5012,7 +5215,7 @@ function updateTabDots(){
   if(!S || !S.name) return;
   const set = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? 'block' : 'none'; };
   set('dot-home', Math.floor(S.offlinePending) >= 1 || !!S.morning || questClaimable());
-  set('dot-affair', (S.eventsToday.length - S.eventsDone) > 0 || S.commissions.some(c => commissionReady(c)));
+  set('dot-affair', (S.eventsToday.length - S.eventsDone) > 0 || S.commissions.some(c => commissionReady(c)) || (S.expeditions || []).some(e => expeditionReady(e)));
   set('dot-collect', CONFIG.milestones.some(m => !S.miles[m.id] && metricValue(m.metric) >= m.target));
 }
 function renderMain(){
@@ -5878,6 +6081,18 @@ function specCardHtml(t){
     : '<button class="small" disabled>历练不足 · 还差 ' + (need - xp) + ' ' + line.xpUnit + '</button>';
   return h;
 }
+/* 伙计卡远征状态行（v1.4.11）：只报状态不设第二派出入口——在外由 S.expeditions 派生，
+   门前灰态、门后未派露「可派出」指向事务页远征段；未雇佣不露行 */
+function staffExpeditionHtml(t, cur){
+  if(!cur) return '';
+  const ex = expeditionOf(t.id);
+  if(ex){
+    const route = expeditionRouteDef(ex.routeId);
+    return '<div class="small-note">远征中 · 「' + esc(route ? route.name : '') + '」· <span class="cm-left" data-end="' + ex.end + '">' + fmtLeft(ex.end - Date.now()) + '</span>（在外期间加成照常）</div>';
+  }
+  if(!packActive('expedition')) return '<div class="small-note">远征 · 11月28日开门（事务页派出）</div>';
+  return '<div class="small-note">远征 · 可派出（事务页 · 伙计远征段选路线）</div>';
+}
 function renderStaff(){
   const box = document.getElementById('staffBox');
   if(!box) return;
@@ -5892,7 +6107,7 @@ function renderStaff(){
       (cur ? '（' + cur.lv + ' 级）' : '（未雇佣）') + '</div><div class="d">' + t.desc + '</div>' +
       (cost === null ? '<button disabled>已满级</button>'
         : '<button class="small" id="staffBtn_' + t.id + '" onclick="buyStaff(\'' + t.id + '\')">' +
-          (cur ? '升级' : '雇佣') + ' · ' + cost + ' 文</button>') + specCardHtml(t) + '</div>';
+          (cur ? '升级' : '雇佣') + ' · ' + cost + ' 文</button>') + specCardHtml(t) + staffExpeditionHtml(t, cur) + '</div>';
   }).join('') + '</div>';
   for(const t of CONFIG.staffTypes){
     const b = document.getElementById('staffBtn_' + t.id), c = staffCost(t.id);
@@ -5975,6 +6190,7 @@ function renderCommissions(){
       '<button class="small" onclick="instantCommission(\'' + c.id + '\')">广告立即完成</button></div>';
   }
   html += '<div class="small-note">立即完成今日已用 ' + adsUsed('instant') + '/3 次。</div>';
+  html += expeditionSectionHtml();   /* 伙计远征段（v1.4.11）：与委托同卡分段，状态机/账目各自独立 */
   box.innerHTML = html;
 }
 function updateCommissionTimes(){
@@ -6205,6 +6421,7 @@ function renderSettings(){
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
     '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '；驻店新规矩：与贵客深谈到「知交」可邀其驻店 ' + CONFIG.resident.days + ' 日，驻店期间其同类客群到访权重 ×' + CONFIG.resident.weightMult + '，送别回礼＝声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，说书人故事日驻店期间好感入账 ×' + CONFIG.resident.storyFavorMult + '；后厨加工新规矩（11月27日起）：收获可分流送加工坊做成品，成品直售价＝当前收入速率×' + CONFIG.process.sellMinutes + ' 分钟/件（快腌按四分之一计），腌菜急单报酬在急单翻倍之上再 ×' + CONFIG.process.urgentMult + '、接单扣成品 1 件。</div>' +
     '<div class="small-note" style="margin-top:8px;">伙计专精公示（11/24 起）：历练不另设账——掌柜看累计接待、小二看奉茶＋深谈待客、厨子看掌勺次数、马夫看累计完成委托；入专精 ' + CONFIG.specialty.fees[0] + ' 文、升阶 ' + CONFIG.specialty.fees[1] + ' / ' + CONFIG.specialty.fees[2] + ' 文（四岗全满共 ' + (CONFIG.specialty.fees[0] + CONFIG.specialty.fees[1] + CONFIG.specialty.fees[2]) * 4 + ' 文）；每阶加成：掌柜总收入 +' + Math.round(CONFIG.specialty.lines.innkeeper.per * 100) + '%、小二总收入 +' + Math.round(CONFIG.specialty.lines.waiter.per * 100) + '%、厨子总收入 +' + Math.round(CONFIG.specialty.lines.cook.per * 100) + '%、马夫委托报酬 +' + Math.round(CONFIG.specialty.lines.groom.per * 100) + '%，均并入原加成口径、不另开乘区；从不升阶者收益与从前一致。</div>' +
+    '<div class="small-note" style="margin-top:8px;">伙计远征公示（11/28 起）：任一已雇佣伙计可派出，同时只 1 支队伍在外，在外期间其岗位加成照常生效；三条路线与补给费——' + CONFIG.expeditionRoutes.map(r => r.name + ' ' + r.hours + ' 小时：补给费 ' + r.fee + ' 文、归来报酬 ' + r.coins + ' 文＋声望 ' + r.fame).join('；') + '；报酬为固定明码，不吃马厩/马夫/日历加成；归来时 ' + Math.round(CONFIG.expeditionEventChance * 100) + '% 概率遇见闻二选一（护货全额，或铜钱减半换声望/好感，选项效果当场明示）；远行贩茶归来另掉收藏碎片 1 枚。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
       (packActive('banquet') ? '；宴会厅事件池已开启（2026-11-22）' : '；宴会厅事件池 2026-11-22 开启') +
       (packActive('collect') ? '；收藏套装已开启（2026-11-22）：图鉴六类集齐一类收入 +' + Math.round(CONFIG.collect.setBonusPct * 100) + '%，重复旅客必得碎片 ' + CONFIG.collect.shardPerRepeat + ' 枚，缺片补购价寻常 ' + CONFIG.collect.tierPrice[1] + '／稀有 ' + CONFIG.collect.tierPrice[2] + '／绝品 ' + CONFIG.collect.tierPrice[3] + ' 铜钱明码' : '；收藏套装 2026-11-22 开启') +
@@ -6732,6 +6949,10 @@ window.YZ = {
   buyUpgrade: buyUpgrade, buyStaff: buyStaff,
   currentEvent: currentEvent, doEventChoice: doEventChoice,
   startCommission: startCommission, claimCommission: claimCommission, instantCommission: instantCommission,
+  expeditionRouteDef: expeditionRouteDef, expeditionReward: expeditionReward, expeditionFeeDue: expeditionFeeDue,
+  expeditionOf: expeditionOf, expeditionReady: expeditionReady, startExpedition: startExpedition,
+  claimExpedition: claimExpedition, expeditionEventPick: expeditionEventPick, pickExpStaff: pickExpStaff,
+  expeditionSectionHtml: expeditionSectionHtml, renderCommissions: renderCommissions,
   claimMilestone: claimMilestone, claimDailyGift: claimDailyGift,
   claimOffline: claimOffline, claimOfflineDouble: claimOfflineDouble,
   entrustOffline: entrustOffline, settleEntrust: settleEntrust, entrustPayout: entrustPayout,
