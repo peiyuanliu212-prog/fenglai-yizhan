@@ -613,7 +613,7 @@ const CONFIG = {
     { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
-  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26', process:'2026-11-27', expedition:'2026-11-28' },
+  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26', process:'2026-11-27', expedition:'2026-11-28', prepay:'2026-11-29' },
   /* 每日上新日历（v1.3）：运营期 2026-11-17～11-30 逐日一条，{date,title,kind,mod?} 为唯一事实源。
      晨间小结「明日上新」与今日清单「今日上新」小条都读此表；单日修正 mod 只在既有公式/结算出口
      被 calMod() 读取（eventMult 抉择正奖励倍率 / commissionMult 委托报酬倍率 / kitchenDouble 厨房
@@ -632,7 +632,7 @@ const CONFIG = {
     { date:'2026-11-26', title:'贵客临门 · 可邀驻店', kind:'gate' },
     { date:'2026-11-27', title:'名厨日 · 名厨驻店，厨房加成翻倍（后厨加工坊同日开张）', kind:'boost', mod:{ kitchenDouble:true } },
     { date:'2026-11-28', title:'伙计远征开门 · 周末市集（礼包 4 次、金额 +50%）', kind:'boost', mod:{ giftTimes:4, giftMult:1.5 } },
-    { date:'2026-11-29', title:'故事日 · 说书人驻店、老客长谈', kind:'data' },
+    { date:'2026-11-29', title:'故事日 · 老客存柜开张、说书人驻店', kind:'data' },
     { date:'2026-11-30', title:'运营庆典 · 结算答谢', kind:'finale' }
   ],
   /* 商队委托三档 */
@@ -981,8 +981,8 @@ const CONFIG = {
      5000/20000/80000、四岗全满总盘 105000×4＝42 万，走 ledger 唯一出口、按钮明示同价）。
      效果只并入既有公式出口：innkeeper/waiter/cook 经 staffIncomeMult() 进 incomeParts 的 staff
      分项、groom 经 commissionReward() 的马夫加成括号——不新开乘区；从不升阶者两处逐值不变。
-     存柜券抵扣口（B2-3 老客存柜，11/29）：specFeeDue() 的 voucher 为唯一判定口，本批恒 0，
-     券账本体接入后只改该函数，buySpec 扣费口径（due＝fee－voucher）不动。 */
+     存柜券抵扣口（B2-3 老客存柜，11/29）：specFeeDue() 的 voucher 为唯一判定口，
+     v1.4.12 已接入券账（prepayCouponDue 读券余额），buySpec 经 couponPay 券优先、铜钱补差。 */
   specialty: {
     fees: [5000, 20000, 80000],
     tierNames: ['未入专精', '专精 · 初窥', '专精 · 纯熟', '专精 · 大成'],
@@ -1018,14 +1018,32 @@ const CONFIG = {
       { id:'lotus_powder',   name:'藕粉',   crop:'lotus',   hours:12 }
     ]
   },
+  /* 老客存柜（B2-3，牌面 11/29 随 gates.prepay 开门）：预存替代版——原案「存钱换收入加成」
+     因乘区放大硬伤不做；本版只做纯回收定向券：本金＝下单时 incomeRate()×分钟额快照锁定、
+     不退；返还物只有定向消费券（券面总额＝本金×couponMult），分档期天数按日返、晨/晚各半
+     （晚半挂 eveningHour 后结算窗口＋声望/好感同行，未领次晨并入、总额守恒）；券只抵三口
+     （A2 碎片补购／A3 专精收费／A3 远征补给费），支付环节券优先、铜钱补差、ledger 双行。
+     红线写死：全程不碰 incomeRate() 任何乘区与加法项；同时只许一笔在存；券余额跨档不清零。
+     enabled=false 只关新存入口，在存档期照常返完（不许截留玩家已存本金的返还） */
+  prepay: {
+    enabled: true,
+    tiers: [
+      { minutes: 240,  days: 1, label: '短存' },
+      { minutes: 720,  days: 3, label: '旬存' },
+      { minutes: 1440, days: 5, label: '久存' }
+    ],
+    couponMult: 1.1,
+    dailyFame: 2, dailyFavor: 3,
+    eveningHour: 18
+  },
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
      goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'expedition-1128', lines: [
-    { name:'伙计远征', how:'11月28日起，事务页委托卡下新开「伙计远征」：挑一位已雇佣的伙计，派他走近郊采买、送信邻县或远行贩茶，同时只一支队伍在外，不占用他的岗位产出', goto:'affair:commissionsCard' },
-    { name:'补给费明码', how:'出发先交补给费 300／1,500／6,000 文（按钮上写明），归来报酬 180／560／1,250 文外加声望——声望是升驿站等级的硬通货，这条线赚的主要是它', goto:'affair:commissionsCard' },
-    { name:'归途见闻', how:'三成机会在归来时遇上见闻二选一：护货保全报酬，或帮人一把、铜钱减半换声望好感；远行贩茶归来还必掉 1 枚收藏碎片', goto:'affair:commissionsCard' },
-    { name:'不派也照旧', how:'远征纯是多一条派出线：不派不影响委托、离线和日常经营，伙计在外期间他那份加成照常生效', goto:'build:staffCard' }
+  introCard: { ver: 'prepay-1129', lines: [
+    { name:'老客存柜', how:'11月29日起，收集页图鉴下方开「老客存柜」：把闲钱存进柜上，本金不退，按日返还定向消费券——券面比本金多出一成', goto:'collect:soonPrepayCard' },
+    { name:'返券晨晚各半', how:'每天的返券拆两半：晨间到账一半，晚间（18 点后）另一半连同声望、好感一起到账；晚上没来，次日晨间自动并入补齐，一文不少', goto:'collect:soonPrepayCard' },
+    { name:'券只抵三处账', how:'存柜券只能花在三处：图鉴缺片补购、伙计专精升阶、远征补给费——付账时券优先抵、铜钱补差，两笔账在存柜页都查得到', goto:'collect:soonPrepayCard' },
+    { name:'不加收入，明码在先', how:'存柜不碰收入速率一文：存之前收入多少，存续期间还是多少。三档价钱按你当下的收入速率明码标在按钮上，存入即锁定', goto:'collect:soonPrepayCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1432,6 +1450,9 @@ function defaultState(){
        （B2-2 声明形状，本批先行落地——贵客回礼原料只存不用，sanitizeProcess 同口径清洗） */
     resident: null,
     process: { mats: {}, queue: [], goods: {} },
+    /* B2-3 老客存柜（v1.4.12 加法字段）：prepay 存柜账（sanitizePrepay）——active 在存一笔、
+       couponBal 定向券余额、flow 券流水（页面明牌用）、lastReturn/lastDoneDay 晨间小结呈现 */
+    prepay: { active: null, couponBal: 0, flow: [], lastReturn: null, lastDoneDay: '' },
     cook: { done: 0, best: 0 },
     tea: { served: 0, perfect: 0, day: '', count: 0 },
     decor: { owned: {}, rooms: [], granted: {} },
@@ -1541,6 +1562,35 @@ function sanitizeProcess(raw){
     .slice(0, 4).map(q => ({ goodsId: q.goodsId, end: Math.floor(+q.end),
       /* B2-2 补字段（只上不下）：n＝本批件数（旧项无此字段回 1）、start＝入队时刻（回 0，渲染时按时长反推） */
       n: clampInt(q.n, 1, 999, 1), start: Math.max(0, Math.floor(+q.start || 0)) }));
+  return out;
+}
+/* 存柜账清洗（B2-3）：active 只认合法档位与日期形状，本金/总额/日额 clamp 为正整数、
+   已返 paid 不得超过 total、晚间待结 eveDue 不得为负；非法整笔丢弃回 null（不截留合法余额）；
+   couponBal/flow 独立清洗，flow 只留最近 30 条 {day, amt, note} */
+function sanitizePrepay(raw){
+  const out = { active: null, couponBal: 0, flow: [], lastReturn: null, lastDoneDay: '' };
+  if(!raw || typeof raw !== 'object') return out;
+  out.couponBal = clampInt(raw.couponBal, 0, 99999999, 0);
+  if(Array.isArray(raw.flow)) out.flow = raw.flow.filter(f => f && typeof f === 'object' &&
+    typeof f.day === 'string' && isFinite(+f.amt) && typeof f.note === 'string')
+    .slice(-30).map(f => ({ day: f.day.slice(0, 10), amt: Math.floor(+f.amt), note: f.note.slice(0, 60) }));
+  if(raw.lastReturn && typeof raw.lastReturn === 'object' && typeof raw.lastReturn.day === 'string' && isFinite(+raw.lastReturn.amt))
+    out.lastReturn = { day: raw.lastReturn.day.slice(0, 10), amt: Math.max(0, Math.floor(+raw.lastReturn.amt)) };
+  out.lastDoneDay = (typeof raw.lastDoneDay === 'string') ? raw.lastDoneDay.slice(0, 10) : '';
+  const a = raw.active;
+  if(a && typeof a === 'object'){
+    const tier = CONFIG.prepay.tiers[a.tier];
+    const dsOk = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    if(tier && a.days === tier.days && dsOk(a.startDay) &&
+       +a.principal > 0 && +a.total > 0 && +a.per >= 0 && +a.paid >= 0 && +a.paid <= +a.total){
+      out.active = { tier: a.tier, principal: Math.floor(+a.principal), startDay: a.startDay,
+        days: tier.days, total: Math.floor(+a.total), per: Math.floor(+a.per),
+        paid: Math.floor(+a.paid),
+        mornDay: dsOk(a.mornDay) ? a.mornDay : '', eveDay: dsOk(a.eveDay) ? a.eveDay : '',
+        eveDue: clampInt(a.eveDue, 0, 99999999, 0) };
+      if(out.active.eveDue === 0) out.active.eveDay = '';
+    }
+  }
   return out;
 }
 function sanitizeDecor(raw){
@@ -1709,6 +1759,7 @@ function normalize(raw){
   s.residentInvite = raw.residentInvite === true;
   s.resident = sanitizeResident(raw.resident);   /* B2-1 驻店：非法形状回 null，老档无字段即无驻店 */
   s.process = sanitizeProcess(raw.process);       /* 加工物料账（B2-2 形状先行）：老档补空账 */
+  s.prepay = sanitizePrepay(raw.prepay);          /* B2-3 存柜账：老档无字段补空账，券余额零丢失 */
   const rc145 = (raw.cook && typeof raw.cook === 'object') ? raw.cook : {};
   s.cook = { done: Math.max(0, Math.floor(+rc145.done || 0)), best: Math.max(0, Math.floor(+rc145.best || 0)) };
   const rte145 = (raw.tea && typeof raw.tea === 'object') ? raw.tea : {};
@@ -2160,8 +2211,16 @@ function confirmDelete(){
 }
 
 /* ================= 账本（铜钱/声望/好感唯一收支口） ================= */
-function ledger(kind, dCoins, dFame, note, dFavor){
+function ledger(kind, dCoins, dFame, note, dFavor, dCoupon){
   if(dCoins < 0 && S.coins + dCoins < 0) return false;   /* 余额下限：不许透支 */
+  if(dCoupon){
+    /* 存柜券（B2-3）：券不是铜钱——不进 coins/totalEarned，只动 S.prepay.couponBal 并留 flow 流水；
+       券余额下限同守（不许透支），券账与现金账在 ledger 内分开记、分开查 */
+    if(!S.prepay || S.prepay.couponBal + dCoupon < 0) return false;
+    S.prepay.couponBal += dCoupon;
+    S.prepay.flow.push({ day: dayStr(), amt: dCoupon, note: note || kind });
+    if(S.prepay.flow.length > 30) S.prepay.flow = S.prepay.flow.slice(-30);
+  }
   S.coins += dCoins;
   if(dCoins > 0){ S.totalEarned += dCoins; S.dayStats.earned += dCoins; }
   if(dFame) S.fame = Math.max(0, S.fame + dFame);
@@ -2325,13 +2384,13 @@ function specXpOf(id){
   }
   return 0;
 }
-/* 升阶应付判定（唯一口）：fee＝CONFIG 阶梯价；voucher＝存柜券抵扣额（B2-3，11/29 接入券账
-   本体后只改此函数）；due＝实付。满阶返回 null */
+/* 升阶应付判定（唯一口）：fee＝CONFIG 阶梯价（本体价格不变）；voucher＝存柜券抵扣额
+   （B2-3 已接入：prepayCouponDue 读券余额，无券恒 0）；due＝铜钱实付。满阶返回 null */
 function specFeeDue(id){
   const tier = staffSpec(id);
   if(tier >= CONFIG.specialty.fees.length) return null;
   const fee = CONFIG.specialty.fees[tier];
-  const voucher = 0;   /* B2-3 抵扣口预留：本批无券账，恒 0 */
+  const voucher = prepayCouponDue(fee);
   return { tier: tier, fee: fee, voucher: voucher, due: fee - voucher };
 }
 function specReady(id){
@@ -2348,8 +2407,9 @@ function buySpec(id){
   const line = CONFIG.specialty.lines[id];
   const xp = specXpOf(id), need = line.xpNeed[due.tier];
   if(xp < need){ showToast('历练还差 ' + (need - xp) + ' ' + line.xpUnit + '（' + line.xpName + '）'); return false; }
-  if(!ledger('staffSpec', -due.due, 0, t.label + (due.tier === 0 ? '入专精' : '专精升阶') + '至「' + CONFIG.specialty.tierNames[due.tier + 1] + '」，花费 ' + due.due + ' 铜钱')){
-    showToast('铜钱不足，还差 ' + (due.due - S.coins) + ' 文');
+  const pay = couponPay('staffSpec', due.fee, t.label + (due.tier === 0 ? '入专精' : '专精升阶') + '至「' + CONFIG.specialty.tierNames[due.tier + 1] + '」');
+  if(!pay){
+    showToast('铜钱不足，还差 ' + (due.due - S.coins) + ' 文' + (due.voucher > 0 ? '（已含存柜券抵 ' + due.voucher + '）' : ''));
     return false;
   }
   S.staff[id].spec = due.tier + 1;
@@ -2848,6 +2908,7 @@ function rollDayIfNeeded(){
   S.urgent = null;   /* 加急单跨日作废，新一日由 ensureUrgent 重新刷 */
   S.urgent2 = null;   /* 广告再唤的第二张加急单同口径跨日作废（体验券按 trialDay 日戳比对、天然跨日失效，不在此清） */
   settleResidentMorning();   /* 驻店晨间结算（B2-1）：置送别旗/过日自动送别/说书人入驻，须在排卡之前 */
+  settlePrepayMorning();   /* 存柜晨间结算（B2-3）：补齐昨晚未领份额＋今日晨半返券，须在排卡之前同账 */
   S.eventsToday = pickEventsForDay();
   S.eventsDone = 0;
   ensureQuests();   /* 日课随日界滚动：questsNext 转正＋生成新的明日预告 */
@@ -2866,8 +2927,9 @@ let tickTimer = null;
 function tick(){
   if(!S || !S.name) return;
   let changed = false;
-  if(rollDayIfNeeded()){ changed = true; renderMorning(); renderResident(); renderEvents(); renderAdsBox(); }
+  if(rollDayIfNeeded()){ changed = true; renderMorning(); renderResident(); renderEvents(); renderAdsBox(); renderPrepay(); }
   if(settleEntrust()) changed = true;   /* 离线托付到期结算（走 ledger，与晨间小结同账） */
+  if(settlePrepayEvening()){ changed = true; renderPrepay(); }   /* 存柜晚间结算（B2-3）：18 点后首个 tick 到账晚半＋声望好感，停在图鉴页也即时刷新券余额 */
   if(S.guests.length < S.rooms.count && Math.random() < arrivalChance()){
     if(arriveGuest()) changed = true;
   }
@@ -3049,12 +3111,12 @@ function claimCommission(id){
 function expeditionRouteDef(id){ return CONFIG.expeditionRoutes.find(r => r.id === id) || null; }
 function expeditionEventDef(id){ return CONFIG.expeditionEvents.find(e => e.id === id) || null; }
 function expeditionReward(route){ return { coins: route.coins, fame: route.fame }; }
-/* 补给费应付判定（唯一口）：fee＝CONFIG 路线表价；voucher＝存柜券抵扣额（B2-3 老客存柜，
-   11/29 接入券账本体后只改此函数）；due＝实付。与 A2 补购、specFeeDue 两口同构 */
+/* 补给费应付判定（唯一口）：fee＝CONFIG 路线表价（本体价格不变）；voucher＝存柜券抵扣额
+   （B2-3 已接入：prepayCouponDue 读券余额，无券恒 0）；due＝铜钱实付。与 A2 补购、specFeeDue 两口同构 */
 function expeditionFeeDue(routeId){
   const route = expeditionRouteDef(routeId);
   if(!route) return null;
-  const voucher = 0;   /* B2-3 抵扣口预留：本批无券账，恒 0 */
+  const voucher = prepayCouponDue(route.fee);
   return { fee: route.fee, voucher: voucher, due: route.fee - voucher };
 }
 function expeditionOf(staffId){ return (S && S.expeditions || []).find(e => e.staffId === staffId) || null; }
@@ -3073,8 +3135,8 @@ function startExpedition(routeId){
   const due = expeditionFeeDue(routeId);
   if(!due) return false;
   const t = staffDef(staffId);
-  if(!ledger('expedition', -due.due, 0, '远征补给：派' + (t ? t.label : staffId) + '走「' + route.name + '」，补给费 ' + due.due + ' 文')){
-    showToast('补给费不足，还差 ' + (due.due - S.coins) + ' 文');
+  if(!couponPay('expedition', due.fee, '远征补给：派' + (t ? t.label : staffId) + '走「' + route.name + '」')){
+    showToast('补给费不足，还差 ' + (due.due - S.coins) + ' 文' + (due.voucher > 0 ? '（已含存柜券抵 ' + due.voucher + '）' : ''));
     return false;
   }
   const now = Date.now();
@@ -3194,10 +3256,191 @@ function expeditionSectionHtml(){
       const due = expeditionFeeDue(r.id);
       return '<div class="up-row"><div class="info"><div class="t">' + esc(r.name) + ' · ' + r.hours + ' 小时</div>' +
         '<div class="d">' + esc(r.blurb) + '</div><div class="d">报酬 ' + r.coins + ' 铜钱 / 声望 ' + r.fame + '</div></div>' +
-        '<button class="small exp-start-btn" onclick="startExpedition(\'' + r.id + '\')"' + (due && S.coins >= due.due ? '' : ' disabled') + '>派出 · 补给费 ' + (due ? due.due : r.fee) + ' 文</button></div>';
+        '<button class="small exp-start-btn" onclick="startExpedition(\'' + r.id + '\')"' + (due && S.coins >= due.due ? '' : ' disabled') + '>派出 · ' + (due && due.voucher > 0 ? '券抵 ' + due.voucher + '＋补给费 ' + due.due + ' 文' : '补给费 ' + (due ? due.due : r.fee) + ' 文') + '</button></div>';
     }).join('') +
     '<div class="small-note">出发先交补给费（走账明示）；伙计在外期间，他的那份岗位加成照常生效。</div>';
   return html;
+}
+
+/* ================= 老客存柜（B2-3，v1.4.12，2026-11-29 开门） =================
+   本金快照定价 prepayPrice（incomeRate 只读、存入即锁定，存续期速率变化不改已锁价与返还额）；
+   返还结算 settlePrepayMorning（晨间，rollDayIfNeeded 排卡前）＋settlePrepayEvening（晚间窗口，
+   tick/boot 触发）：每日返额拆晨/晚两半，晚半＋声望/好感挂 eveningHour 后，漏领次晨并入，
+   Σ券＝本金×couponMult 分文守恒（末日补齐除不尽的余数）；券支付唯一口 couponPay（券优先、
+   铜钱补差、ledger 双行），只有 A2 补购／专精收费／远征补给费三处出口许调用，其余消费口不读券 */
+function prepayTierDef(i){ return CONFIG.prepay.tiers[i] || null; }
+function prepayPrice(i){
+  const t = prepayTierDef(i);
+  if(!t) return 0;
+  return Math.max(1, Math.round(incomeRate() * t.minutes));   /* 只读 incomeRate 定价，绝不回写任何乘区 */
+}
+function prepayDayAmount(a, idx){   /* 第 idx 个返还日（0 起）的日额：前 days-1 日 per、末日补齐余数 */
+  return idx < a.days - 1 ? a.per : a.total - a.per * (a.days - 1);
+}
+function prepayCouponDue(price){   /* 券可抵额（判定口）：余额与价格取小；无券账恒 0 */
+  if(!S || !S.prepay) return 0;
+  return Math.min(S.prepay.couponBal, Math.max(0, Math.floor(price)));
+}
+/* 三口统一支付：券优先抵、铜钱补差；可付返回 {voucher, due}，铜钱不足返回 null 且分文不动 */
+function couponPay(kind, price, label){
+  const voucher = prepayCouponDue(price);
+  const due = price - voucher;
+  if(S.coins < due) return null;
+  if(voucher > 0 && !ledger(kind, 0, 0, label + '（存柜券抵 ' + voucher + '）', 0, -voucher)) return null;
+  if(due > 0 && !ledger(kind, -due, 0, label + ' -' + due + ' 铜钱')) return null;
+  if(voucher === 0 && due === 0) return null;
+  return { voucher: voucher, due: due };
+}
+function startPrepay(i){
+  if(!packActive('prepay')){ showToast('老客存柜将于 2026-11-29 开张'); return false; }
+  if(!CONFIG.prepay.enabled){ showToast('存柜暂未开放新存（在存的照常返券）'); return false; }
+  const t = prepayTierDef(i);
+  if(!t) return false;
+  if(S.prepay.active){ showToast('柜上已有一笔在存，返完才能再存（防叠档）'); return false; }
+  const price = prepayPrice(i);
+  if(!ledger('prepay', -price, 0, '老客存柜「' + t.label + '」存入本金 ' + price + ' 铜钱（本金不退，分 ' + t.days + ' 日返券）')){
+    showToast('铜钱不足，还差 ' + (price - S.coins) + ' 文');
+    return false;
+  }
+  const total = Math.round(price * CONFIG.prepay.couponMult);
+  S.prepay.active = { tier: i, principal: price, startDay: dayStr(), days: t.days,
+    total: total, per: Math.floor(total / t.days), paid: 0, mornDay: '', eveDay: '', eveDue: 0 };
+  pushLog('存柜开张：' + t.days + ' 日内共返券 ' + total + '（本金 ' + price + ' ×110%），晨晚各半到账');
+  setCoachFlag('tourPrepay');   /* 真实存入即落旗（coach 口径同既有情境引导） */
+  save();
+  renderPrepay();
+  updateDynamic();
+  showToast('已存入 ' + price + ' 铜钱：明日起晨晚返券，共 ' + total + ' 券');
+  sfxPlay('coins');
+  return true;
+}
+/* 一笔在存的返还推进：把「截至今日晨间」应结的账结清——
+   ①先补齐昨日（含更早）未领的晚间份额（券＋声望/好感一并，不作废不惩罚）；
+   ②已整日错过的返还日逐日全额补齐；③今日若是返还日，结晨间一半、晚半挂 eveDue 等晚间窗口 */
+function settlePrepayMorning(){
+  const a = S && S.prepay && S.prepay.active;
+  if(!a) return false;
+  const today = dayStr();
+  let changed = false;
+  const grantEve = () => {   /* 晚间份额落账：券＋当日声望/好感（走 ledger 既有入账口） */
+    if(a.eveDue > 0){ ledger('prepayCoupon', 0, 0, '存柜返券（补齐昨晚份额） +' + a.eveDue, 0, a.eveDue); a.paid += a.eveDue; a.eveDue = 0; }
+    ledger('prepayDaily', 0, CONFIG.prepay.dailyFame, '存柜晨间并入昨晚份额：声望 +' + CONFIG.prepay.dailyFame + ' / 好感 +' + CONFIG.prepay.dailyFavor, CONFIG.prepay.dailyFavor);
+    a.eveDay = '';
+  };
+  if(a.eveDue > 0 && a.eveDay && a.eveDay < today){ grantEve(); changed = true; }
+  /* 返还日序号：startDay 次日为第 0 日；从 mornDay 已结到的下一日续结（mornDay 空＝从第 0 日起） */
+  let idx = a.mornDay ? prepayIdxOf(a, a.mornDay) + 1 : 0;
+  while(idx < a.days){
+    const dayAmt = prepayDayAmount(a, idx);
+    const isToday = prepayDateOf(a, idx) === today;
+    if(prepayDateOf(a, idx) > today) break;
+    if(isToday){
+      const morn = Math.ceil(dayAmt / 2);
+      if(morn > 0) ledger('prepayCoupon', 0, 0, '存柜返券（晨间一半） +' + morn, 0, morn);
+      a.paid += morn;
+      a.eveDue = dayAmt - morn;
+      a.eveDay = today;
+      a.mornDay = today;
+      S.prepay.lastReturn = { day: today, amt: morn };
+      changed = true;
+      break;
+    }
+    /* 整日错过：全额补齐（晨半＋晚半＋声望好感），守恒不变 */
+    if(dayAmt > 0) ledger('prepayCoupon', 0, 0, '存柜返券（补齐错过日） +' + dayAmt, 0, dayAmt);
+    a.paid += dayAmt;
+    ledger('prepayDaily', 0, CONFIG.prepay.dailyFame, '存柜补齐错过日返还：声望 +' + CONFIG.prepay.dailyFame + ' / 好感 +' + CONFIG.prepay.dailyFavor, CONFIG.prepay.dailyFavor);
+    a.mornDay = prepayDateOf(a, idx);
+    changed = true;
+    idx++;
+  }
+  if(prepayFinishIfDone()) changed = true;
+  if(changed) save();
+  return changed;
+}
+function prepayIdxOf(a, ds){   /* 日期 → 返还日序号（startDay 次日＝0）；未到返还期回 -1；本地日历日差，不用 UTC 解析 */
+  const p = a.startDay.split('-').map(Number), q = String(ds).split('-').map(Number);
+  if(q.length < 3) return -1;
+  return Math.round((new Date(q[0], q[1] - 1, q[2]) - new Date(p[0], p[1] - 1, p[2])) / 86400000) - 1;
+}
+function prepayDateOf(a, idx){
+  const p = a.startDay.split('-').map(Number);
+  return dayStr(new Date(p[0], p[1] - 1, p[2] + idx + 1));
+}
+/* 返完判定：paid 结清 total 且无待结晚间份额 → active 收官，记 lastDoneDay 供晨间小结「可再存」行 */
+function prepayFinishIfDone(){
+  const a = S && S.prepay && S.prepay.active;
+  if(!a || a.paid < a.total || a.eveDue > 0) return false;
+  S.prepay.active = null;
+  S.prepay.lastDoneDay = dayStr();
+  pushLog('老客存柜已返完：共返券 ' + a.total + '，柜上又能存了');
+  return true;
+}
+/* 晚间结算窗口：当日 18:00 后首次触发（tick/boot 调用，幂等）——晚半券＋声望/好感到账 */
+function settlePrepayEvening(){
+  const a = S && S.prepay && S.prepay.active;
+  if(!a || a.eveDue <= 0 || a.eveDay !== dayStr()) return false;
+  if(new Date().getHours() < CONFIG.prepay.eveningHour) return false;
+  ledger('prepayCoupon', 0, 0, '存柜返券（晚间一半） +' + a.eveDue, 0, a.eveDue);
+  a.paid += a.eveDue;
+  a.eveDue = 0;
+  a.eveDay = '';
+  ledger('prepayDaily', 0, CONFIG.prepay.dailyFame, '存柜晚间到账：声望 +' + CONFIG.prepay.dailyFame + ' / 好感 +' + CONFIG.prepay.dailyFavor, CONFIG.prepay.dailyFavor);
+  prepayFinishIfDone();
+  save();
+  renderPrepay();
+  return true;
+}
+/* 晨间小结存柜行：今日晨半已到账→明示晚间另一半；昨夜刚返完→「可再存」＋三档当前快照价预览 */
+function prepayMorningHtml(){
+  if(!S || !S.prepay || !packActive('prepay')) return '';
+  const today = dayStr();
+  let h = '';
+  const lr = S.prepay.lastReturn;
+  if(lr && lr.day === today && lr.amt > 0)
+    h += '<div class="small-note" style="margin-top:4px;">老客存柜：今晨返券 <b>' + lr.amt + '</b> 已到账；今晚 ' + CONFIG.prepay.eveningHour + ' 点后再来，另一半连同声望 +' + CONFIG.prepay.dailyFame + ' / 好感 +' + CONFIG.prepay.dailyFavor + ' 一起到账（不来次晨自动补齐）。</div>';
+  if(S.prepay.lastDoneDay === today && !S.prepay.active)
+    h += '<div class="small-note" style="margin-top:4px;">老客存柜已返完，可再存：现价 短存 ' + prepayPrice(0) + ' ／ 旬存 ' + prepayPrice(1) + ' ／ 久存 ' + prepayPrice(2) + ' 铜钱（按当前收入速率，存入锁定）。</div>';
+  return h;
+}
+
+/* 存柜卡渲染（图鉴页 codex 子页，谢礼段下方）：日期门未开只渲染挂牌（文案按 B2-3 定案：
+   存钱返定向消费券，不是预存房钱）；门开后实态——口径三行、券余额与流水、在存进度或三档存入钮 */
+function renderPrepay(){
+  const box = document.getElementById('prepayBox');
+  if(!box || !S || !S.prepay) return;
+  if(!packActive('prepay')){
+    const plaque = '<button class="soon-plaque" data-soon="prepay" onclick="showSoon(\'prepay\')"><span class="soon-tag">待开放</span><span class="soon-name">老客存柜</span><span class="soon-date">11月29日开放</span></button>';
+    if(box.innerHTML !== plaque) box.innerHTML = plaque;
+    return;
+  }
+  const P = CONFIG.prepay, pp = S.prepay, a = pp.active;
+  let h = '<div class="small-note">把闲钱存进柜上：<b>本金不退</b>，按日返<b>定向消费券</b>——券面总额是本金的 110%，晨间返一半、晚间（' + P.eveningHour + ' 点后）返另一半，晚间没来次晨自动补齐。券只能抵三处账：<b>图鉴缺片补购／伙计专精升阶／远征补给费</b>，付账时券优先、铜钱补差。<b>存柜不加收入</b>，存前存后一个价。</div>';
+  h += '<div class="up-row" style="margin-top:8px;"><div class="info"><div class="t">存 柜 券 余 额</div>' +
+    '<div class="d">' + pp.couponBal + ' 券（只能抵上面三处账，不是铜钱）</div></div></div>';
+  if(a){
+    const t = prepayTierDef(a.tier);
+    const remainDays = a.days - (a.mornDay ? prepayIdxOf(a, a.mornDay) + 1 : 0);
+    h += '<div class="up-row" style="margin-top:6px;"><div class="info"><div class="t">在 存 · ' + (t ? t.label : '') + '</div>' +
+      '<div class="d">本金 ' + a.principal + ' 铜钱（已锁定、不退）· 券面共 ' + a.total + '，已返 ' + a.paid + '，还剩 ' + (a.total - a.paid) + ' 券' +
+      (remainDays > 0 ? '，约 ' + remainDays + ' 日返完' : '，今日返完') +
+      (a.eveDue > 0 && a.eveDay === dayStr() ? '；今晚 ' + P.eveningHour + ' 点后还有 ' + a.eveDue + ' 券＋声望 +' + P.dailyFame + ' / 好感 +' + P.dailyFavor + ' 到账' : '') +
+      '</div></div></div>';
+  }else if(P.enabled){
+    h += '<div style="margin-top:6px;">' + P.tiers.map((t, i) => {
+      const price = prepayPrice(i), total = Math.round(price * P.couponMult);
+      return '<div class="up-row"><div class="info"><div class="t">' + t.label + ' · ' + t.days + ' 日</div>' +
+        '<div class="d">存 ' + price + ' 铜钱（按当前收入速率 ×' + t.minutes + ' 分钟额），分 ' + t.days + ' 日返券 ' + total + '</div></div>' +
+        '<button class="small prepay-act-btn" onclick="startPrepay(' + i + ')"' + (S.coins >= price ? '' : ' disabled') + '>存入 ' + price + '</button></div>';
+    }).join('') + '</div>' +
+    '<div class="small-note" style="margin-top:6px;">同时只许一笔在存，返完才能再存。闲钱打哪来：加工成品直售／商队委托报酬。</div>';
+  }else{
+    h += '<div class="small-note" style="margin-top:6px;">存柜暂未开放新存（券余额照常可用）。</div>';
+  }
+  if(pp.flow.length){
+    h += '<div class="small-note" style="margin-top:8px;">券流水（最近 ' + Math.min(pp.flow.length, 8) + ' 笔）：' +
+      pp.flow.slice(-8).reverse().map(f => '<br>' + esc(f.day.slice(5)) + ' · ' + (f.amt > 0 ? '+' : '') + f.amt + ' 券 · ' + esc(f.note)).join('') + '</div>';
+  }
+  box.innerHTML = h;
 }
 
 /* ================= 加急单 / 离线托付 / 好感谢礼（v1.4 经济加厚批 B3/B5/B4） ================= */
@@ -3459,7 +3702,11 @@ const COACH_DEFS = [
   { flag:'tourExpedition', tab:'affair', sub:null, when:() => packActive('expedition'),
     target:() => document.querySelector('.exp-start-btn') || document.getElementById('commissionsBox'),
     title:'伙计远征：派自家的人走一趟远路',
-    body:'委托卡下新开「伙计远征」：选一位已雇佣的伙计带队，三条路线明码——出发先交补给费，归来领铜钱和声望。同时只一支队伍在外，伙计在外期间他那份岗位加成照常生效、不占用。归来时三成机会遇上见闻二选一，帮人还是护货你说了算。' }
+    body:'委托卡下新开「伙计远征」：选一位已雇佣的伙计带队，三条路线明码——出发先交补给费，归来领铜钱和声望。同时只一支队伍在外，伙计在外期间他那份岗位加成照常生效、不占用。归来时三成机会遇上见闻二选一，帮人还是护货你说了算。' },
+  { flag:'tourPrepay', tab:'collect', sub:'codex', when:() => packActive('prepay'),
+    target:() => document.querySelector('.prepay-act-btn') || document.getElementById('soonPrepayCard'),
+    title:'老客存柜：闲钱存柜，返的是定向券',
+    body:'三句话讲清：①本金不退，存入即锁定；②返的不是铜钱、是定向消费券（比本金多一成），只能抵图鉴缺片补购、伙计专精、远征补给三处账，付账时券优先、铜钱补差；③存柜不加收入——存前存后收入一个价。每天返券晨晚各半，晚上没来次晨自动补齐。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
@@ -5171,7 +5418,7 @@ function refreshOnSwitch(){
   if(window.__pfForceFull) window.__pfForceFull(); else { renderRooms(); renderLog(); }
   updateDynamic();
   renderMorning(); renderResident(); renderQuests(); renderEvents(); renderCommissions();
-  renderMilestones(); renderCodex(); renderCollect(); renderStaff(); renderUpgrades(); renderAdsBox();
+  renderMilestones(); renderCodex(); renderCollect(); renderPrepay(); renderProcess(); renderStaff(); renderUpgrades(); renderAdsBox();
   renderIntroCard(); renderWelcome();
 }
 function switchTab(tab){
@@ -5284,8 +5531,7 @@ function renderMain(){
       '</div>' +
       '<div id="sub-collect-codex">' +
         '<div class="card" id="codexCard"><h3>旅 客 图 鉴（<span id="seenCount">0</span>/' + CONFIG.guestTypes.length + '）</h3><div id="codexBox"></div></div>' +
-        '<div class="card" id="soonPrepayCard"><h3>老 客 预 存</h3>' +
-          '<button class="soon-plaque" data-soon="prepay" onclick="showSoon(\'prepay\')"><span class="soon-tag">待开放</span><span class="soon-name">老客预存</span><span class="soon-date">11月29日开放</span></button></div>' +
+        '<div class="card" id="soonPrepayCard"><h3>老 客 存 柜</h3><div id="prepayBox"></div></div>' +
       '</div>' +
       '<div id="sub-collect-sets" style="display:none">' +
         '<div class="card" id="collectCard"><h3>收 藏 套 装</h3><div id="collectBox"></div></div>' +
@@ -5340,13 +5586,15 @@ function renderMain(){
   document.body.classList.add('has-tabbar');
   todaySig = ''; offlineSig = ''; questSig = ''; residentSig = '';
   settleResidentMorning();   /* 驻店晨间兜底（B2-1）：首日建档等错过 roll 的场合在此补结算，重复调用幂等 */
+  settlePrepayMorning();   /* 存柜晨间兜底（B2-3）：同口径补结算，重复调用幂等 */
+  settlePrepayEvening();   /* 存柜晚间兜底（B2-3）：晚间打开即到账，不必等 tick */
   renderMorning(); renderResident(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderDecor(); renderWelcome(); renderEvents(); renderUpgrades();
   renderShout(); renderDish(); renderGarden(); renderProcess();
-  renderStaff(); renderCommissions(); renderMilestones(); renderCodex(); renderCollect();
+  renderStaff(); renderCommissions(); renderMilestones(); renderCodex(); renderCollect(); renderPrepay();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
 }
-const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', specialty:'伙计专精', noble:'贵客图鉴段', process:'后厨加工坊' };
+const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', specialty:'伙计专精', noble:'贵客图鉴段', process:'后厨加工坊', expedition:'伙计远征', prepay:'老客存柜' };
 /* 明日预告（纯展示）：首段为「明日上新」——读 CONFIG.calendar 明日条目（预告本身即留存钩子）；
    日历无明日条目时回退到日期门派生；不发奖、不写存档 */
 function tomorrowPreview(){
@@ -5390,7 +5638,8 @@ function renderMorning(){
       (function(){ const w = weatherOf(); return '<div class="small-note" style="margin-top:6px;">今日天气：<b>' + esc(w.label) + '</b>——' + esc(w.desc) + '（全天进账 ×' + w.rateMult + '）。</div>'; })() +
       '<div class="small-note" style="margin-top:6px;">' + esc(tomorrowPreview()) + '</div>' +
       (S.entrust ? '<div class="small-note" style="margin-top:4px;">托付在途：本金 ' + S.entrust.amt + ' 铜钱，约 ' + fmtLeft(S.entrust.end - Date.now()) + '后结回 ' + entrustPayout() + ' 铜钱（结回当日计入晨间小结）。</div>' : '') +
-      residentMorningHtml();   /* 驻店行（B2-1）：驻店中/今日送别＋回礼预告，数值与 CONFIG.resident 同源 */
+      residentMorningHtml() +   /* 驻店行（B2-1）：驻店中/今日送别＋回礼预告，数值与 CONFIG.resident 同源 */
+      prepayMorningHtml();   /* 存柜行（B2-3）：今晨返券到账＋晚间预告／返完可再存＋三档现价，数值与 CONFIG.prepay 同源 */
   }else{
     card.style.display = 'none';
   }
@@ -5493,7 +5742,7 @@ function hideNotice(){
 const SOON_SPOTS = {
   kitchen:  { name: '后厨加工链',        date: '11月27日开放',              blurb: '菜园的收成送进后厨，腌、晒、酿成能卖钱的好物——后厨从此多一条加工链。' },
   resident: { name: '名厨 · 说书人驻店', date: '11月26日开放',              blurb: '贵客、名厨、说书人会住进驿站一两天：驻店期间同类客人来得更勤，送别还有回礼。和贵客深谈到「知交」，便能邀他驻店。' },
-  prepay:   { name: '老客预存',          date: '11月29日开放',              blurb: '熟客可以预存房钱了：投店优先留房，往来更亲近，老客关系再进一步。' },
+  prepay:   { name: '老客存柜',          date: '11月29日开放',              blurb: '把闲钱存进柜上，本金不退，按日返定向消费券：券面比本金多出一成，只能抵图鉴缺片补购、伙计专精、远征补给三处账。存柜不加收入，是给闲钱找个去处。' },
   rival:    { name: '同行斗店',          date: '11月30日开放（先开评分榜）', blurb: '跟十里八乡的同行比一比：先开评分榜见高下，看谁家驿站更得人心。' }
 };
 function showSoon(key){
@@ -5820,6 +6069,7 @@ function eventAnyAffordable(){
   return ev.choices.some(choiceAffordable);
 }
 let evAffordSig = '';   /* 事件选项可负担签名：updateDynamic 比对变化才重绘，防置灰随铜钱过期失真 */
+let cmReadySig = '';   /* 委托/远征可领签名（O1）：updateDynamic 比对翻转才整表重渲 renderCommissions */
 function chainStatusHtml(){
   const rows = [];
   for(const c of CONFIG.chains){
@@ -6077,7 +6327,7 @@ function specCardHtml(t){
     (xp >= need ? ' · 历练已满，可升阶' : ' · 还差 ' + (need - xp) + ' ' + line.xpUnit + '升阶') + '</div>';
   h += (xp >= need)
     ? '<button class="small spec-act-btn' + (S.coins >= due.due ? ' accent' : '') + '" onclick="buySpec(\'' + t.id + '\')">' +
-      (due.tier === 0 ? '入专精' : '升阶') + ' · ' + due.due + ' 文</button>'
+      (due.tier === 0 ? '入专精' : '升阶') + ' · ' + (due.voucher > 0 ? '券抵 ' + due.voucher + '＋现金 ' + due.due + ' 文' : due.due + ' 文') + '</button>'
     : '<button class="small" disabled>历练不足 · 还差 ' + (need - xp) + ' ' + line.xpUnit + '</button>';
   return h;
 }
@@ -6319,15 +6569,22 @@ function shardExchangePiece(typeId){
   save(); renderCollect(); renderCodex(); updateDynamic();
   return true;
 }
+/* A2 补购应付判定（唯一口）：price＝档位明码价（本体价格不变）；voucher＝存柜券抵扣额
+   （B2-3 已接入：prepayCouponDue 读券余额，无券恒 0）；due＝铜钱实付。与 specFeeDue/expeditionFeeDue 同构 */
+function collectBuyDue(t){
+  const price = collectPriceOf(t);
+  const voucher = prepayCouponDue(price);
+  return { price: price, voucher: voucher, due: price - voucher };
+}
 function buyPiece(typeId){
   if(!packActive('collect')){ showToast('收藏副线 2026-11-22 开启'); return false; }
   const t = CONFIG.guestTypes.find(x => x.id === typeId);
   if(!t || S.guestsSeen[typeId]) return false;
-  const price = collectPriceOf(t);
-  if(!ledger('collectBuy', -price, 0, '明码补购缺片「' + t.label + '」 -' + price + ' 铜钱')){ showToast('铜钱不足（需 ' + price + '）'); return false; }
+  const due = collectBuyDue(t);
+  if(!couponPay('collectBuy', due.price, '明码补购缺片「' + t.label + '」')){ showToast('铜钱不足（需 ' + due.due + ' 铜钱' + (due.voucher > 0 ? '，已含券抵 ' + due.voucher : '') + '）'); return false; }
   S.guestsSeen[typeId] = true;
   pushLog('「' + t.label + '」已点亮图鉴（补购只补进度，不产出资源）');
-  showToast('补购成功：' + t.label + ' 已点亮（-' + price + ' 铜钱）');
+  showToast('补购成功：' + t.label + ' 已点亮（-' + due.due + ' 铜钱' + (due.voucher > 0 ? '、券抵 ' + due.voucher : '') + '）');
   save(); renderCollect(); renderCodex(); updateDynamic();
   return true;
 }
@@ -6371,10 +6628,11 @@ function renderCollect(){
       if(S.guestsSeen[t.id]) return '<span class="tag seen">' + esc(t.label) + '</span>';
       const tier = collectTierOf(t);
       const sc = collectShardCost(t), price = collectPriceOf(t);
+      const bd = collectBuyDue(t);
       const half = missing.length === 1;
       return '<div style="margin:5px 0;"><span class="tag">' + esc(t.label) + ' · ' + C.tierLabels[tier] + '</span> ' +
         '<button class="small collect-ex-btn" onclick="shardExchangePiece(\'' + t.id + '\')"' + (S.collect.shards >= sc ? '' : ' disabled') + '>碎片换 ' + sc + ' 枚' + (half ? '（保底半价）' : '') + '</button> ' +
-        '<button class="small collect-buy-btn" onclick="buyPiece(\'' + t.id + '\')"' + (S.coins >= price ? '' : ' disabled') + '>补购 ' + price + ' 铜钱</button></div>';
+        '<button class="small collect-buy-btn" onclick="buyPiece(\'' + t.id + '\')"' + (S.coins >= bd.due ? '' : ' disabled') + '>补购 ' + (bd.voucher > 0 ? '券抵 ' + bd.voucher + '＋' + bd.due + ' 铜钱' : price + ' 铜钱') + '</button></div>';
     }).join('');
   }
   html += '<div class="group-line" style="margin-top:10px;">陈设收藏（与客房布置同一库存）</div>';
@@ -6419,7 +6677,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:6px;">把驿站放回桌面：离线房钱攒满 12 小时就溢出了，点桌面图标一键回来领取（需在虎扑 App 内使用）。</div>' +
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
-    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '；驻店新规矩：与贵客深谈到「知交」可邀其驻店 ' + CONFIG.resident.days + ' 日，驻店期间其同类客群到访权重 ×' + CONFIG.resident.weightMult + '，送别回礼＝声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，说书人故事日驻店期间好感入账 ×' + CONFIG.resident.storyFavorMult + '；后厨加工新规矩（11月27日起）：收获可分流送加工坊做成品，成品直售价＝当前收入速率×' + CONFIG.process.sellMinutes + ' 分钟/件（快腌按四分之一计），腌菜急单报酬在急单翻倍之上再 ×' + CONFIG.process.urgentMult + '、接单扣成品 1 件。</div>' +
+    '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '；驻店新规矩：与贵客深谈到「知交」可邀其驻店 ' + CONFIG.resident.days + ' 日，驻店期间其同类客群到访权重 ×' + CONFIG.resident.weightMult + '，送别回礼＝声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，说书人故事日驻店期间好感入账 ×' + CONFIG.resident.storyFavorMult + '；后厨加工新规矩（11月27日起）：收获可分流送加工坊做成品，成品直售价＝当前收入速率×' + CONFIG.process.sellMinutes + ' 分钟/件（快腌按四分之一计），腌菜急单报酬在急单翻倍之上再 ×' + CONFIG.process.urgentMult + '、接单扣成品 1 件；老客存柜新规矩（11月29日起）：三档本金＝当前收入速率×' + CONFIG.prepay.tiers[0].minutes + '／' + CONFIG.prepay.tiers[1].minutes + '／' + CONFIG.prepay.tiers[2].minutes + ' 分钟额、存入锁定、本金不退，分 ' + CONFIG.prepay.tiers[0].days + '／' + CONFIG.prepay.tiers[1].days + '／' + CONFIG.prepay.tiers[2].days + ' 日返定向消费券（券面＝本金×' + Math.round(CONFIG.prepay.couponMult * 100) + '%），每日晨晚各半、晚半 ' + CONFIG.prepay.eveningHour + ' 点后到账并附声望 +' + CONFIG.prepay.dailyFame + ' / 好感 +' + CONFIG.prepay.dailyFavor + '，券只抵缺片补购、专精升阶、远征补给费三处、券优先铜钱补差，存柜不改变收入速率。</div>' +
     '<div class="small-note" style="margin-top:8px;">伙计专精公示（11/24 起）：历练不另设账——掌柜看累计接待、小二看奉茶＋深谈待客、厨子看掌勺次数、马夫看累计完成委托；入专精 ' + CONFIG.specialty.fees[0] + ' 文、升阶 ' + CONFIG.specialty.fees[1] + ' / ' + CONFIG.specialty.fees[2] + ' 文（四岗全满共 ' + (CONFIG.specialty.fees[0] + CONFIG.specialty.fees[1] + CONFIG.specialty.fees[2]) * 4 + ' 文）；每阶加成：掌柜总收入 +' + Math.round(CONFIG.specialty.lines.innkeeper.per * 100) + '%、小二总收入 +' + Math.round(CONFIG.specialty.lines.waiter.per * 100) + '%、厨子总收入 +' + Math.round(CONFIG.specialty.lines.cook.per * 100) + '%、马夫委托报酬 +' + Math.round(CONFIG.specialty.lines.groom.per * 100) + '%，均并入原加成口径、不另开乘区；从不升阶者收益与从前一致。</div>' +
     '<div class="small-note" style="margin-top:8px;">伙计远征公示（11/28 起）：任一已雇佣伙计可派出，同时只 1 支队伍在外，在外期间其岗位加成照常生效；三条路线与补给费——' + CONFIG.expeditionRoutes.map(r => r.name + ' ' + r.hours + ' 小时：补给费 ' + r.fee + ' 文、归来报酬 ' + r.coins + ' 文＋声望 ' + r.fame).join('；') + '；报酬为固定明码，不吃马厩/马夫/日历加成；归来时 ' + Math.round(CONFIG.expeditionEventChance * 100) + '% 概率遇见闻二选一（护货全额，或铜钱减半换声望/好感，选项效果当场明示）；远行贩茶归来另掉收藏碎片 1 枚。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
@@ -6553,7 +6811,15 @@ function updateDynamic(){
   renderShout();
   renderDish();
   renderGarden();
+  renderProcess();   /* 加工坊（横扫第二例修复）：processSig 分钟签名守卫，到期切页/留页都刷出收取钮 */
   renderWelcome();
+  renderResident();   /* 驻店（观察项 O2）：residentSig 守卫含茶叙资格，留页跨午间茶叙卡自动出现 */
+  /* 委托/远征可领签名（观察项 O1）：tick 只刷倒计时文本，到点翻转才整表重渲启用领取钮 */
+  if(document.getElementById('commissionsBox')){
+    const cmSig = S.commissions.map(c => c.id + (commissionReady(c) ? 'R' : '')).join(',') + '|' +
+      (S.expeditions || []).map(e => e.id + (expeditionReady(e) ? 'R' : '')).join(',');
+    if(cmSig !== cmReadySig){ cmReadySig = cmSig; renderCommissions(); }
+  }
   updateTabDots();
   /* 事件选项置灰随铜钱实时对齐：可负担签名变化才重绘事件卡（买得起的零变化、不扰阅读） */
   if(document.getElementById('eventsBox')){
@@ -6949,6 +7215,9 @@ window.YZ = {
   buyUpgrade: buyUpgrade, buyStaff: buyStaff,
   currentEvent: currentEvent, doEventChoice: doEventChoice,
   startCommission: startCommission, claimCommission: claimCommission, instantCommission: instantCommission,
+  prepayPrice: prepayPrice, prepayTierDef: prepayTierDef, startPrepay: startPrepay, couponPay: couponPay,
+  prepayCouponDue: prepayCouponDue, collectBuyDue: collectBuyDue, settlePrepayMorning: settlePrepayMorning,
+  settlePrepayEvening: settlePrepayEvening, prepayMorningHtml: prepayMorningHtml, renderPrepay: renderPrepay,
   expeditionRouteDef: expeditionRouteDef, expeditionReward: expeditionReward, expeditionFeeDue: expeditionFeeDue,
   expeditionOf: expeditionOf, expeditionReady: expeditionReady, startExpedition: startExpedition,
   claimExpedition: claimExpedition, expeditionEventPick: expeditionEventPick, pickExpStaff: pickExpStaff,
