@@ -7416,10 +7416,15 @@ function startApp(){
   tickTimer = setInterval(tick, CONFIG.tickMs);
 }
 /* 全屏顶部安全距（技能 colorbox-fullscreen-safe-top 原文口径，v1.3.6）：
-   同步调用 window.ColorboxAI.getFullscreenSafeTop()，启动时读一次、直接返回 CSS px；
+   同步调用 window.ColorboxAI.getFullscreenSafeTop()，直接返回 CSS px；
    以 max(env, 返回值) 写入 --sat：宿主未预留空间时按返回值避让，env 已给值时不叠加双计。
-   无该 API（非壳/旧版）时静默保持 env 口径。返回值同时存 shellSafeTopPx 供探针核。 */
+   无该 API（非壳/旧版）时静默保持 env 口径。返回值同时存 shellSafeTopPx 供探针核。
+   v1.4.15（横扫第二例·逐鹿第 38 批口径）：壳桥可能晚于 boot 注入、或先返 0 后才给真实值，
+   只在 boot 读一次会让 --sat 永远停在 env（壳内恒 0）→ 主界面与各罩顶栏被状态栏压。
+   故 boot 后加 bounded 轮询补读（400ms×20≈8s，拿到正值即停）＋回前台/获焦离散补读一次；
+   --sat 仍只由 applyShellSafeTop 内一处 setProperty 写，不另起第二事实源、不叠加。 */
 let shellSafeTopPx = -1;
+let shellSafeTopTimer = null;
 function applyShellSafeTop(){
   try{
     if(typeof window !== 'undefined' && window.ColorboxAI && typeof window.ColorboxAI.getFullscreenSafeTop === 'function'){
@@ -7432,8 +7437,19 @@ function applyShellSafeTop(){
   }catch(e){}
   return shellSafeTopPx;
 }
+function armShellSafeTopRetry(){
+  if(shellSafeTopTimer || shellSafeTopPx > 0) return;
+  let n = 0;
+  shellSafeTopTimer = setInterval(() => {
+    n++;
+    if(applyShellSafeTop() > 0 || n >= 20){
+      clearInterval(shellSafeTopTimer); shellSafeTopTimer = null;
+    }
+  }, 400);
+}
 function boot(){
   applyShellSafeTop();
+  armShellSafeTopRetry();
   const loaded = load();
   if(loaded && loaded.name){
     S = loaded;
@@ -7447,9 +7463,9 @@ function boot(){
 }
 document.addEventListener('visibilitychange', () => {
   if(document.hidden) save();
-  else if(S && S.adPending) recoverAdPending();   /* 回前台触发对账（永不落定横扫）：壳内改道 reconcile、只认账本差量，内部有陈旧门与忙闩防重复查 */
+  else { applyShellSafeTop(); if(S && S.adPending) recoverAdPending(); }   /* 回前台：安全距补读（桥晚到兜底）＋广告对账（永不落定横扫）：壳内改道 reconcile、只认账本差量，内部有陈旧门与忙闩防重复查 */
 });
-window.addEventListener('focus', () => { if(S && S.adPending) recoverAdPending(); });   /* 获焦同触发对账（触发点均为离散事件、非轮询） */
+window.addEventListener('focus', () => { applyShellSafeTop(); if(S && S.adPending) recoverAdPending(); });   /* 获焦同触发补读＋对账（触发点均为离散事件、非轮询） */
 window.addEventListener('beforeunload', save);
 boot();
 
