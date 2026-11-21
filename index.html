@@ -613,7 +613,7 @@ const CONFIG = {
     { id:'groom',     face:'groom',     label:'马夫', desc:'委托报酬 +8%/级', hire:100, upBase:70,  maxLv:5, commissionPerLv:0.08 }
   ],
   /* 日期门（真实本地日期，packActive 口径：本地日期 >= 门日即开） */
-  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26', process:'2026-11-27', expedition:'2026-11-28', prepay:'2026-11-29' },
+  gates: { commission:'2026-11-19', journey:'2026-11-20', faces:'2026-11-21', banquet:'2026-11-22', collect:'2026-11-22', specialty:'2026-11-24', noble:'2026-11-26', process:'2026-11-27', expedition:'2026-11-28', prepay:'2026-11-29', score:'2026-11-30' },
   /* 每日上新日历（v1.3）：运营期 2026-11-17～11-30 逐日一条，{date,title,kind,mod?} 为唯一事实源。
      晨间小结「明日上新」与今日清单「今日上新」小条都读此表；单日修正 mod 只在既有公式/结算出口
      被 calMod() 读取（eventMult 抉择正奖励倍率 / commissionMult 委托报酬倍率 / kitchenDouble 厨房
@@ -1036,14 +1036,39 @@ const CONFIG = {
     dailyFame: 2, dailyFavor: 3,
     eveningHour: 18
   },
+  /* 成色自评（B2-4 斗店先行段，牌面 11/30 随 gates.score 开门）：经营成色分由既有累计量
+     派生——声望等级 rep（等级/10）＋图鉴完成度 dex（已收/总数）＋累计接待 guests＋累计委托
+     comms，后两项按开业天数归一化成日均再封顶（防老玩家靠累计量碾压、防新玩家首日爆表）；
+     开业天数自 openEpoch（11/17 开业日）起算、页面明牌。派生唯一口 scorePartsOf()/scoreOf()，
+     页面列值与结算同源、玩家可逐项验算。快照只存分数与分项（S.scoreSnap），每日晨间结算
+     落一份、保留 snapKeep 份滚动；首份快照＝开业总评（retro）；定版破自家最佳回礼走声望/
+     好感（recordGift，ledger 既有口）——刻意不用存柜券（券面来源唯一，见 B2-3 红线）。
+     红线写死：纯单机零联机——不拉取、不展示、不虚构任何他人数据，文案只许「自家最佳/
+     较昨日」口径；enabled=false 关收集页入口，快照字段保留无副作用 */
+  score: {
+    enabled: true,
+    openEpoch: '2026-11-17',
+    weights: { rep: 30, dex: 30, guests: 20, comms: 20 },
+    guestsPerDayCap: 40,
+    commsPerDayCap: 3,
+    snapKeep: 30,
+    recordGift: { fame: 5, favor: 8 },
+    eveningHour: 18,
+    grades: [
+      { min: 80, name: '十里闻名' },
+      { min: 60, name: '宾客盈门' },
+      { min: 40, name: '小有名气' },
+      { min: 20, name: '渐有客来' },
+      { min: 0,  name: '初挂灯笼' }
+    ]
+  },
   /* 开始页「本版新内容」卡（交付四件套③基础设施，本批提前落地）：单一事实源——
      换版＝换 ver＋换 lines，旧卡自动作废；看过即消走 S.seenIntro（展开即记），绝不自动弹窗。
-     goto 形态 '页签:卡id'，经 introGoto 走 gotoCard 跳转。 */
-  introCard: { ver: 'prepay-1129', lines: [
-    { name:'老客存柜', how:'11月29日起，收集页图鉴下方开「老客存柜」：把闲钱存进柜上，本金不退，按日返还定向消费券——券面比本金多出一成', goto:'collect:soonPrepayCard' },
-    { name:'返券晨晚各半', how:'每天的返券拆两半：晨间到账一半，晚间（18 点后）另一半连同声望、好感一起到账；晚上没来，次日晨间自动并入补齐，一文不少', goto:'collect:soonPrepayCard' },
-    { name:'券只抵三处账', how:'存柜券只能花在三处：图鉴缺片补购、伙计专精升阶、远征补给费——付账时券优先抵、铜钱补差，两笔账在存柜页都查得到', goto:'collect:soonPrepayCard' },
-    { name:'不加收入，明码在先', how:'存柜不碰收入速率一文：存之前收入多少，存续期间还是多少。三档价钱按你当下的收入速率明码标在按钮上，存入即锁定', goto:'collect:soonPrepayCard' }
+     goto 形态 '页签:卡id' 或 '页签:子页:卡id'，经 introGoto 跳转。 */
+  introCard: { ver: 'score-1130', lines: [
+    { name:'成色自评', how:'11月30日起，收集页里程碑下方开「自家评分榜」：每天给自家驿站算一份经营成色分，声望、图鉴、接待、委托四项明码计分，只和昨天的自己比', goto:'collect:miles:soonRivalCard' },
+    { name:'今日可涨', how:'评分榜顶上有一行「今日可涨」：四项成色各差多少、做什么能涨，逐项写明——照着做，分数就往上走', goto:'collect:miles:soonRivalCard' },
+    { name:'破纪录有回礼', how:'哪天的定版分破了自家最佳，次日晨间小结里就有回礼：声望、好感当场到账，明牌发放', goto:'collect:miles:soonRivalCard' }
   ] },
   /* 后院菜园 lite（竞品调研 P1-lite）：plots 块田、crops 三种作物（短/中/长时，睡前种长时、明早收）；
      收获入食材 stock，后厨每日 roll 日界用去 dailyUse 份；stock 经 gardenStockMult 给总收入
@@ -1453,6 +1478,9 @@ function defaultState(){
     /* B2-3 老客存柜（v1.4.12 加法字段）：prepay 存柜账（sanitizePrepay）——active 在存一笔、
        couponBal 定向券余额、flow 券流水（页面明牌用）、lastReturn/lastDoneDay 晨间小结呈现 */
     prepay: { active: null, couponBal: 0, flow: [], lastReturn: null, lastDoneDay: '' },
+    /* B2-4 成色自评（v1.4.13 加法字段）：scoreSnap 自评账（sanitizeScoreSnap）——snaps 每日
+       定版快照（只存分数与分项，不存可刷状态）、best 自家最佳、lastGift 破纪录回礼到账留痕 */
+    scoreSnap: { snaps: [], best: 0, lastGift: null },
     cook: { done: 0, best: 0 },
     tea: { served: 0, perfect: 0, day: '', count: 0 },
     decor: { owned: {}, rooms: [], granted: {} },
@@ -1591,6 +1619,33 @@ function sanitizePrepay(raw){
       if(out.active.eveDue === 0) out.active.eveDay = '';
     }
   }
+  return out;
+}
+/* B2-4 成色自评账清洗：快照只留 {day,score,parts{rep,dex,guests,comms},openDays,retro} 形状，
+   非法条目整条丢弃、分数夹紧 0..100、保留最近 snapKeep 份；best 与快照脱钩时取大（只上不下） */
+function sanitizeScoreSnap(raw){
+  const out = { snaps: [], best: 0, lastGift: null };
+  if(!raw || typeof raw !== 'object') return out;
+  const dsOk = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const part = v => { const n = +v; return isFinite(n) ? Math.round(Math.min(100, Math.max(0, n)) * 10) / 10 : 0; };
+  if(Array.isArray(raw.snaps)){
+    const seen = {};
+    for(const x of raw.snaps){
+      if(!x || typeof x !== 'object' || !dsOk(x.day) || seen[x.day]) continue;
+      if(!x.parts || typeof x.parts !== 'object') continue;
+      seen[x.day] = true;
+      out.snaps.push({ day: x.day, score: clampInt(x.score, 0, 100, 0),
+        parts: { rep: part(x.parts.rep), dex: part(x.parts.dex), guests: part(x.parts.guests), comms: part(x.parts.comms) },
+        openDays: clampInt(x.openDays, 1, 9999, 1), retro: x.retro === true });
+    }
+    out.snaps.sort((a, b) => a.day < b.day ? -1 : (a.day > b.day ? 1 : 0));
+    out.snaps = out.snaps.slice(-CONFIG.score.snapKeep);
+  }
+  out.best = clampInt(raw.best, 0, 100, 0);
+  for(const x of out.snaps) if(x.score > out.best) out.best = x.score;
+  if(raw.lastGift && typeof raw.lastGift === 'object' && dsOk(raw.lastGift.day))
+    out.lastGift = { day: raw.lastGift.day, fame: clampInt(raw.lastGift.fame, 0, 9999, 0),
+                     favor: clampInt(raw.lastGift.favor, 0, 9999, 0), score: clampInt(raw.lastGift.score, 0, 100, 0) };
   return out;
 }
 function sanitizeDecor(raw){
@@ -1760,6 +1815,7 @@ function normalize(raw){
   s.resident = sanitizeResident(raw.resident);   /* B2-1 驻店：非法形状回 null，老档无字段即无驻店 */
   s.process = sanitizeProcess(raw.process);       /* 加工物料账（B2-2 形状先行）：老档补空账 */
   s.prepay = sanitizePrepay(raw.prepay);          /* B2-3 存柜账：老档无字段补空账，券余额零丢失 */
+  s.scoreSnap = sanitizeScoreSnap(raw.scoreSnap); /* B2-4 自评账：老档无字段补空账，快照/best 只上不下 */
   const rc145 = (raw.cook && typeof raw.cook === 'object') ? raw.cook : {};
   s.cook = { done: Math.max(0, Math.floor(+rc145.done || 0)), best: Math.max(0, Math.floor(+rc145.best || 0)) };
   const rte145 = (raw.tea && typeof raw.tea === 'object') ? raw.tea : {};
@@ -2909,6 +2965,7 @@ function rollDayIfNeeded(){
   S.urgent2 = null;   /* 广告再唤的第二张加急单同口径跨日作废（体验券按 trialDay 日戳比对、天然跨日失效，不在此清） */
   settleResidentMorning();   /* 驻店晨间结算（B2-1）：置送别旗/过日自动送别/说书人入驻，须在排卡之前 */
   settlePrepayMorning();   /* 存柜晨间结算（B2-3）：补齐昨晚未领份额＋今日晨半返券，须在排卡之前同账 */
+  settleScoreMorning();   /* 成色定版快照（B2-4）：落昨日定版一份＋破自家最佳回礼，同账、须在排卡之前 */
   S.eventsToday = pickEventsForDay();
   S.eventsDone = 0;
   ensureQuests();   /* 日课随日界滚动：questsNext 转正＋生成新的明日预告 */
@@ -2927,7 +2984,7 @@ let tickTimer = null;
 function tick(){
   if(!S || !S.name) return;
   let changed = false;
-  if(rollDayIfNeeded()){ changed = true; renderMorning(); renderResident(); renderEvents(); renderAdsBox(); renderPrepay(); }
+  if(rollDayIfNeeded()){ changed = true; renderMorning(); renderResident(); renderEvents(); renderAdsBox(); renderPrepay(); renderScore(); }
   if(settleEntrust()) changed = true;   /* 离线托付到期结算（走 ledger，与晨间小结同账） */
   if(settlePrepayEvening()){ changed = true; renderPrepay(); }   /* 存柜晚间结算（B2-3）：18 点后首个 tick 到账晚半＋声望好感，停在图鉴页也即时刷新券余额 */
   if(S.guests.length < S.rooms.count && Math.random() < arrivalChance()){
@@ -3443,6 +3500,184 @@ function renderPrepay(){
   box.innerHTML = h;
 }
 
+/* ================= 成色自评（B2-4 斗店先行段，v1.4.13） =================
+   成色分派生唯一口 scorePartsOf()/scoreOf()：声望等级＋图鉴完成度＋日均接待＋日均委托
+   四项加权（权重/封顶全在 CONFIG.score），页面明牌列值与结算快照同源、玩家可逐项验算。
+   快照只存分数与分项（S.scoreSnap.snaps），晨间结算 settleScoreMorning 落定版——首份恒为
+   开业总评（retro、不发回礼）；定版破自家最佳，回礼声望/好感走 ledger 既有口当场到账、
+   晨间小结明牌（scoreMorningHtml）。全程纯本地计算：无任何网络调用、无他人数据。 */
+function scoreDayDiff(a, b){   /* 本地日历日差（b - a，天），不用 UTC 解析（同 prepayIdxOf 口径） */
+  const p = String(a).split('-').map(Number), q = String(b).split('-').map(Number);
+  if(p.length < 3 || q.length < 3) return 0;
+  return Math.round((new Date(q[0], q[1] - 1, q[2]) - new Date(p[0], p[1] - 1, p[2])) / 86400000);
+}
+function scoreOpenDays(ds){   /* 开业天数：自 CONFIG.score.openEpoch 起算含首日，恒 ≥1（不除零） */
+  return Math.max(1, scoreDayDiff(CONFIG.score.openEpoch, ds || dayStr()) + 1);
+}
+function scorePartsOf(ds){
+  const C = CONFIG.score, W = C.weights;
+  const day = ds || dayStr();
+  const openDays = scoreOpenDays(day);
+  const seen = Object.keys(S.guestsSeen || {}).length;
+  const repScore = S.level / CONFIG.fameThresholds.length * W.rep;
+  const dexScore = seen / CONFIG.guestTypes.length * W.dex;
+  const gRate = (S.totalGuests || 0) / openDays;
+  const guestsScore = Math.min(gRate / C.guestsPerDayCap, 1) * W.guests;
+  const cRate = (S.totalCommissions || 0) / openDays;
+  const commsScore = Math.min(cRate / C.commsPerDayCap, 1) * W.comms;
+  const r1 = x => Math.round(x * 10) / 10;
+  const parts = {
+    rep:    { raw: S.level,        score: r1(repScore) },
+    dex:    { raw: seen,           score: r1(dexScore) },
+    guests: { raw: S.totalGuests || 0,       rate: r1(gRate), score: r1(guestsScore) },
+    comms:  { raw: S.totalCommissions || 0,  rate: r1(cRate), score: r1(commsScore) }
+  };
+  return { day: day, openDays: openDays, parts: parts,
+           total: Math.round(parts.rep.score + parts.dex.score + parts.guests.score + parts.comms.score) };
+}
+function scoreOf(){ return scorePartsOf().total; }
+function scoreGradeOf(score){
+  for(const g of CONFIG.score.grades) if(score >= g.min) return g.name;
+  return CONFIG.score.grades[CONFIG.score.grades.length - 1].name;
+}
+/* 「今日可涨」：四分项各给距下一档的具名差额，差额与分值全部由 scorePartsOf 同源派生 */
+function scoreNextSteps(p){
+  const C = CONFIG.score, W = C.weights;
+  const f1 = x => '' + (Math.round(x * 10) / 10);
+  const out = [];
+  if(S.level < CONFIG.fameThresholds.length){
+    const nf = nextLevelFame();
+    out.push('声望再攒 ' + Math.max(0, nf - S.fame) + ' 点升到 ' + (S.level + 1) + ' 级，成色 +' + f1(W.rep / CONFIG.fameThresholds.length));
+  } else out.push('声望等级已满档');
+  if(p.parts.dex.raw < CONFIG.guestTypes.length)
+    out.push('图鉴再收 1 位新过客，成色 +' + f1(W.dex / CONFIG.guestTypes.length));
+  else out.push('图鉴已收满');
+  if(p.parts.guests.score < W.guests)
+    out.push('再接待 ' + Math.max(1, Math.ceil(C.guestsPerDayCap * p.openDays / W.guests)) + ' 位旅客，成色 +1');
+  else out.push('接待成色已满档');
+  if(p.parts.comms.score < W.comms)
+    out.push('再完成 ' + Math.max(1, Math.ceil(C.commsPerDayCap * p.openDays / W.comms)) + ' 支委托，成色 +1');
+  else out.push('委托成色已满档');
+  return out;
+}
+/* 晨间定版快照（rollDayIfNeeded 排卡前调用，与存柜晨间结算同账）：落昨日定版一份；
+   同日已有快照（含首开回算）即跳过——日界只留一份、晨间重入不重复 */
+function settleScoreMorning(){
+  if(!S || !S.scoreSnap || !CONFIG.score.enabled || !packActive('score')) return false;
+  const forDay = (S.morning && S.morning.date) ? S.morning.date : dayStr();
+  const ss = S.scoreSnap;
+  if(ss.snaps.some(x => x.day === forDay)) return false;
+  const p = scorePartsOf(forDay);
+  const retro = ss.snaps.length === 0;   /* 首份恒为开业总评：只立最佳、不发回礼 */
+  const snap = { day: forDay, score: p.total,
+    parts: { rep: p.parts.rep.score, dex: p.parts.dex.score, guests: p.parts.guests.score, comms: p.parts.comms.score },
+    openDays: p.openDays, retro: retro };
+  const prevBest = ss.best;
+  ss.snaps.push(snap);
+  if(ss.snaps.length > CONFIG.score.snapKeep) ss.snaps = ss.snaps.slice(-CONFIG.score.snapKeep);
+  if(snap.score > ss.best) ss.best = snap.score;
+  if(!retro && prevBest > 0 && snap.score > prevBest){
+    const g = CONFIG.score.recordGift, fv = favorIn(g.favor);
+    ledger('scoreRecord', 0, g.fame,
+      '成色自评：' + forDay.slice(5) + ' 定版 ' + snap.score + ' 分，破了自家最佳——回礼声望 +' + g.fame + ' / 好感 +' + fv, fv);
+    ss.lastGift = { day: dayStr(), fame: g.fame, favor: fv, score: snap.score };
+  }
+  save();
+  return true;
+}
+/* 首开回算兜底（boot 调用，幂等）：门已开而一份快照都没有（同日已玩过、不会再滚日），
+   以开业以来数据回算一份「开业总评」作首份快照；晨间结算已落过则直接跳过 */
+function settleScoreBoot(){
+  if(!S || !S.scoreSnap || !CONFIG.score.enabled || !packActive('score')) return false;
+  if(S.day !== dayStr()) return false;   /* 有待滚日：让晨间结算落昨日定版（兼首份总评），不在此抢落今日 */
+  if(S.scoreSnap.snaps.length > 0) return false;
+  const today = dayStr();
+  const p = scorePartsOf(today);
+  S.scoreSnap.snaps.push({ day: today, score: p.total,
+    parts: { rep: p.parts.rep.score, dex: p.parts.dex.score, guests: p.parts.guests.score, comms: p.parts.comms.score },
+    openDays: p.openDays, retro: true });
+  if(p.total > S.scoreSnap.best) S.scoreSnap.best = p.total;
+  save();
+  return true;
+}
+/* 晨间小结自评行：回礼到账明牌＋昨日定版分数行（数值与 scorePartsOf/快照同源） */
+function scoreMorningHtml(){
+  if(!S || !S.scoreSnap || !packActive('score')) return '';
+  const ss = S.scoreSnap, today = dayStr();
+  let h = '';
+  if(ss.lastGift && ss.lastGift.day === today)
+    h += '<div class="small-note" style="margin-top:4px;">成色自评：昨日定版 <b>' + ss.lastGift.score + '</b> 分破了自家最佳，回礼声望 <b>+' + ss.lastGift.fame + '</b> / 好感 <b>+' + ss.lastGift.favor + '</b> 已到账（自家最佳现为 ' + ss.best + ' 分）。</div>';
+  if(S.morning && ss.snaps.length){
+    const last = ss.snaps[ss.snaps.length - 1];
+    if(last.day === S.morning.date && !(ss.lastGift && ss.lastGift.day === today))
+      h += '<div class="small-note" style="margin-top:4px;">成色自评：昨日定版 <b>' + last.score + '</b> 分（' + scoreGradeOf(last.score) + (last.retro ? '，开业总评' : '') + '），自家最佳 ' + ss.best + ' 分；今日预览分在收集页「自家评分榜」实时可看。</div>';
+  }
+  return h;
+}
+/* 自家评分榜渲染（收集页里程碑子页 soonRivalCard 内）：门未开/回退关闭只挂牌；
+   门开后牌面让位——预览分（晚间改标定版口径）、定版与最佳、四分项明牌、今日可涨、自家走势。
+   scoreSig 签名守卫：预览分/快照数/最佳/晚间翻转变化才重渲（updateDynamic 每 tick 调用安全） */
+let scoreSig = '';
+function renderScore(){
+  const card = document.getElementById('soonRivalCard');
+  const box = document.getElementById('scoreBox');
+  if(!card || !box || !S || !S.scoreSnap) return;
+  const plaque = card.querySelector('.soon-plaque');
+  const h3 = card.querySelector('h3');
+  if(!packActive('score') || !CONFIG.score.enabled){
+    if(plaque) plaque.style.display = '';
+    if(h3) h3.textContent = '同 行 斗 店';
+    if(box.innerHTML) box.innerHTML = '';
+    scoreSig = '';
+    return;
+  }
+  const p = scorePartsOf(), ss = S.scoreSnap, W = CONFIG.score.weights;
+  const evening = new Date().getHours() >= CONFIG.score.eveningHour;
+  const sig = [p.day, evening ? 1 : 0, p.total, ss.snaps.length, ss.best, ss.lastGift ? ss.lastGift.day : ''].join('|');
+  if(sig === scoreSig) return;
+  scoreSig = sig;
+  if(plaque) plaque.style.display = 'none';
+  if(h3) h3.textContent = '成 色 自 评';
+  const f1 = x => '' + (Math.round(x * 10) / 10);
+  const delta = d => d > 0 ? '+' + d : (d < 0 ? '' + d : '持平');
+  let h = '<div class="up-row"><div class="info"><div class="t">今日预览分 <b>' + p.total + '</b> 分 · ' + scoreGradeOf(p.total) + '</div>' +
+    '<div class="d">' + (evening ? '今夜结算后定版' : '边经营边涨，今夜结算后定版') + ' · 开业第 ' + p.openDays + ' 天（自 ' + CONFIG.score.openEpoch.slice(5).replace('-', ' 月 ') + ' 日开业起算）</div></div></div>';
+  const snaps = ss.snaps;
+  if(snaps.length){
+    const last = snaps[snaps.length - 1];
+    const prev = snaps.length > 1 ? snaps[snaps.length - 2] : null;
+    const avgN = Math.min(7, snaps.length);
+    const avg7 = snaps.slice(-avgN).reduce((a, x) => a + x.score, 0) / avgN;
+    h += '<div class="small-note" style="margin-top:6px;">' + (last.retro ? '开业总评' : '昨日定版') + '（' + last.day.slice(5) + '）<b>' + last.score + '</b> 分' +
+      (prev ? '，较上一份 ' + delta(last.score - prev.score) : '') +
+      ' · 自家最佳 <b>' + ss.best + '</b> 分' + (ss.best - last.score > 0 ? '，距最佳还差 ' + (ss.best - last.score) + ' 分' : '，就是最佳') +
+      ' · 近 ' + avgN + ' 份平均 ' + f1(avg7) + ' 分</div>';
+  } else {
+    h += '<div class="small-note" style="margin-top:6px;">暂无定版快照：明晨结算后落下首份定版。</div>';
+  }
+  h += '<div style="margin-top:8px;"><b>今日可涨</b>' +
+    scoreNextSteps(p).map(t => '<div class="small-note">· ' + esc(t) + '</div>').join('') + '</div>';
+  const line = (label, formula, score) =>
+    '<div class="small-note">· ' + label + '：' + formula + ' ＝ <b>' + f1(score) + '</b> 分</div>';
+  h += '<div style="margin-top:8px;"><b>成色怎么算（明牌）</b>' +
+    line('声望', '驿站等级 ' + p.parts.rep.raw + ' / ' + CONFIG.fameThresholds.length + ' × ' + W.rep + ' 分', p.parts.rep.score) +
+    line('图鉴', '已收 ' + p.parts.dex.raw + ' / ' + CONFIG.guestTypes.length + ' 位 × ' + W.dex + ' 分', p.parts.dex.score) +
+    line('接待', '累计 ' + p.parts.guests.raw + ' 位 ÷ 开业 ' + p.openDays + ' 天 ＝ 日均 ' + f1(p.parts.guests.rate) + '，按日均 ' + CONFIG.score.guestsPerDayCap + ' 封顶 × ' + W.guests + ' 分', p.parts.guests.score) +
+    line('委托', '累计 ' + p.parts.comms.raw + ' 支 ÷ 开业 ' + p.openDays + ' 天 ＝ 日均 ' + f1(p.parts.comms.rate) + '，按日均 ' + CONFIG.score.commsPerDayCap + ' 封顶 × ' + W.comms + ' 分', p.parts.comms.score) +
+    '<div class="small-note">四项相加即总分，满分 100；分档：' + CONFIG.score.grades.slice().reverse().map(g => g.min + ' 分起「' + g.name + '」').join('、') + '。</div></div>';
+  if(snaps.length){
+    const rows = snaps.map((x, i) => {
+      const d = i > 0 ? x.score - snaps[i - 1].score : null;
+      return '<div class="small-note">' + x.day.slice(5) + (x.retro ? '（开业总评）' : '') + ' · <b>' + x.score + '</b> 分 · ' + scoreGradeOf(x.score) +
+        (d !== null ? '（较上一份 ' + delta(d) + '）' : '') +
+        '<span style="display:inline-block; vertical-align:middle; margin-left:6px; height:6px; background:var(--accent-ink); width:' + x.score + '%; max-width:160px;"></span></div>';
+    });
+    h += '<div style="margin-top:8px;"><b>自家走势（近 ' + snaps.length + ' 份）</b>' + rows.reverse().join('') + '</div>';
+  }
+  h += '<div class="small-note" style="margin-top:8px;">这份榜上只有你自家的记录。成色分是 12 月斗店的入场口径——先把自家成色养起来。</div>';
+  box.innerHTML = h;
+}
+
 /* ================= 加急单 / 离线托付 / 好感谢礼（v1.4 经济加厚批 B3/B5/B4） ================= */
 function activeCommissionCount(){ return S.commissions.length + (S.entrust ? 1 : 0); }
 function commissionPayout(c){
@@ -3706,7 +3941,11 @@ const COACH_DEFS = [
   { flag:'tourPrepay', tab:'collect', sub:'codex', when:() => packActive('prepay'),
     target:() => document.querySelector('.prepay-act-btn') || document.getElementById('soonPrepayCard'),
     title:'老客存柜：闲钱存柜，返的是定向券',
-    body:'三句话讲清：①本金不退，存入即锁定；②返的不是铜钱、是定向消费券（比本金多一成），只能抵图鉴缺片补购、伙计专精、远征补给三处账，付账时券优先、铜钱补差；③存柜不加收入——存前存后收入一个价。每天返券晨晚各半，晚上没来次晨自动补齐。' }
+    body:'三句话讲清：①本金不退，存入即锁定；②返的不是铜钱、是定向消费券（比本金多一成），只能抵图鉴缺片补购、伙计专精、远征补给三处账，付账时券优先、铜钱补差；③存柜不加收入——存前存后收入一个价。每天返券晨晚各半，晚上没来次晨自动补齐。' },
+  { flag:'tourScore', tab:'collect', sub:'miles', when:() => packActive('score'),
+    target:() => document.getElementById('soonRivalCard'),
+    title:'成色自评：只和昨天的自己比',
+    body:'成色分由四项经营实绩派生：声望等级、图鉴完成度、日均接待、日均委托，公式与权重在榜上逐项明牌，自己就能验算。这份榜只记你自家的分数：晨间落一份定版快照，日里还有实时预览分；定版破了自家最佳，次日晨间有声望、好感回礼。榜顶「今日可涨」会告诉你今天做啥能涨分。' }
 ];
 let coachCur = null, coachTimer = null;
 function setCoachFlag(flag){
@@ -5418,7 +5657,7 @@ function refreshOnSwitch(){
   if(window.__pfForceFull) window.__pfForceFull(); else { renderRooms(); renderLog(); }
   updateDynamic();
   renderMorning(); renderResident(); renderQuests(); renderEvents(); renderCommissions();
-  renderMilestones(); renderCodex(); renderCollect(); renderPrepay(); renderProcess(); renderStaff(); renderUpgrades(); renderAdsBox();
+  renderMilestones(); renderCodex(); renderCollect(); renderPrepay(); renderScore(); renderProcess(); renderStaff(); renderUpgrades(); renderAdsBox();
   renderIntroCard(); renderWelcome();
 }
 function switchTab(tab){
@@ -5539,7 +5778,7 @@ function renderMain(){
       '<div id="sub-collect-miles" style="display:none">' +
         '<div class="card" id="milesCard"><h3>里 程 碑</h3><div id="milesBox"></div></div>' +
         '<div class="card" id="soonRivalCard"><h3>同 行 斗 店</h3>' +
-          '<button class="soon-plaque" data-soon="rival" onclick="showSoon(\'rival\')"><span class="soon-tag">待开放</span><span class="soon-name">同行斗店</span><span class="soon-date">11月30日开放</span></button></div>' +
+          '<button class="soon-plaque" data-soon="rival" onclick="showSoon(\'rival\')"><span class="soon-tag">待开放</span><span class="soon-name">同行斗店</span><span class="soon-date">11月30日开放</span></button><div id="scoreBox"></div></div>' +
       '</div>' +
     '</div>' +
     '<div class="tabpage" id="page-save">' +
@@ -5584,17 +5823,18 @@ function renderMain(){
     '<div id="coachBubble" style="display:none"></div>';
   document.getElementById('innNameView').textContent = S.name;
   document.body.classList.add('has-tabbar');
-  todaySig = ''; offlineSig = ''; questSig = ''; residentSig = '';
+  todaySig = ''; offlineSig = ''; questSig = ''; residentSig = ''; scoreSig = '';
   settleResidentMorning();   /* 驻店晨间兜底（B2-1）：首日建档等错过 roll 的场合在此补结算，重复调用幂等 */
   settlePrepayMorning();   /* 存柜晨间兜底（B2-3）：同口径补结算，重复调用幂等 */
   settlePrepayEvening();   /* 存柜晚间兜底（B2-3）：晚间打开即到账，不必等 tick */
+  settleScoreBoot();   /* 成色首开回算兜底（B2-4）：门开且无快照时回算开业总评一份，重复调用幂等 */
   renderMorning(); renderResident(); renderOffline(); renderToday(); renderQuests(); renderRooms(); renderDecor(); renderWelcome(); renderEvents(); renderUpgrades();
   renderShout(); renderDish(); renderGarden(); renderProcess();
-  renderStaff(); renderCommissions(); renderMilestones(); renderCodex(); renderCollect(); renderPrepay();
+  renderStaff(); renderCommissions(); renderMilestones(); renderCodex(); renderCollect(); renderPrepay(); renderScore();
   renderAdsBox(); renderSettings(); renderSaveBox(); renderLog(); updateDynamic();
   applyTabs();
 }
-const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', specialty:'伙计专精', noble:'贵客图鉴段', process:'后厨加工坊', expedition:'伙计远征', prepay:'老客存柜' };
+const GATE_LABELS = { commission:'商队委托', journey:'远行季限定委托', faces:'新面孔', banquet:'宴会厅事件池', collect:'收藏副线', specialty:'伙计专精', noble:'贵客图鉴段', process:'后厨加工坊', expedition:'伙计远征', prepay:'老客存柜', score:'成色自评' };
 /* 明日预告（纯展示）：首段为「明日上新」——读 CONFIG.calendar 明日条目（预告本身即留存钩子）；
    日历无明日条目时回退到日期门派生；不发奖、不写存档 */
 function tomorrowPreview(){
@@ -5639,7 +5879,8 @@ function renderMorning(){
       '<div class="small-note" style="margin-top:6px;">' + esc(tomorrowPreview()) + '</div>' +
       (S.entrust ? '<div class="small-note" style="margin-top:4px;">托付在途：本金 ' + S.entrust.amt + ' 铜钱，约 ' + fmtLeft(S.entrust.end - Date.now()) + '后结回 ' + entrustPayout() + ' 铜钱（结回当日计入晨间小结）。</div>' : '') +
       residentMorningHtml() +   /* 驻店行（B2-1）：驻店中/今日送别＋回礼预告，数值与 CONFIG.resident 同源 */
-      prepayMorningHtml();   /* 存柜行（B2-3）：今晨返券到账＋晚间预告／返完可再存＋三档现价，数值与 CONFIG.prepay 同源 */
+      prepayMorningHtml() +   /* 存柜行（B2-3）：今晨返券到账＋晚间预告／返完可再存＋三档现价，数值与 CONFIG.prepay 同源 */
+      scoreMorningHtml();   /* 自评行（B2-4）：昨日定版分数＋破自家最佳回礼到账明牌，数值与快照同源 */
   }else{
     card.style.display = 'none';
   }
@@ -5743,7 +5984,7 @@ const SOON_SPOTS = {
   kitchen:  { name: '后厨加工链',        date: '11月27日开放',              blurb: '菜园的收成送进后厨，腌、晒、酿成能卖钱的好物——后厨从此多一条加工链。' },
   resident: { name: '名厨 · 说书人驻店', date: '11月26日开放',              blurb: '贵客、名厨、说书人会住进驿站一两天：驻店期间同类客人来得更勤，送别还有回礼。和贵客深谈到「知交」，便能邀他驻店。' },
   prepay:   { name: '老客存柜',          date: '11月29日开放',              blurb: '把闲钱存进柜上，本金不退，按日返定向消费券：券面比本金多出一成，只能抵图鉴缺片补购、伙计专精、远征补给三处账。存柜不加收入，是给闲钱找个去处。' },
-  rival:    { name: '同行斗店',          date: '11月30日开放（先开评分榜）', blurb: '跟十里八乡的同行比一比：先开评分榜见高下，看谁家驿站更得人心。' }
+  rival:    { name: '同行斗店',          date: '11月30日开放（先开评分榜）', blurb: '先开自家评分榜：每天给自家驿站算一份经营成色分——声望、图鉴、接待、委托四项明码计分，只和昨天的自己比。' }
 };
 function showSoon(key){
   const s = SOON_SPOTS[key];
@@ -5939,6 +6180,13 @@ function introGoto(i){
   const l = CONFIG.introCard && CONFIG.introCard.lines[i];
   if(!l) return;
   const parts = String(l.goto || 'home:').split(':');
+  /* goto 形态 '页签:卡id' 或 '页签:子页:卡id'（B2-4 自评卡在里程碑子页，须先切子页才看得见） */
+  if(parts.length >= 3){
+    switchTab(parts[0] || 'home');
+    switchSub(parts[0], parts[1]);
+    setTimeout(() => { const el = document.getElementById(parts[2]); if(el) el.scrollIntoView(); }, 30);
+    return;
+  }
   gotoCard(parts[0] || 'home', parts[1] || '');
 }
 /* 掌柜日课分组（今日清单卡内）：进度条＋逐项领取＋全清宝箱；数据全走 quests 状态与 CONFIG，不另造口径 */
@@ -6678,6 +6926,7 @@ function renderSettings(){
     '<div class="small-note" style="margin-top:8px;">旅客出现权重公示（仅当前可出现旅客，权重为相对值）：</div>' +
     '<div>' + pool.map(t => '<span class="tag">' + t.label + ' · 权重 ' + t.weight + '（约 ' + Math.round(t.weight / totalW * 100) + '%）</span>').join('') + '</div>' +
     '<div class="small-note" style="margin-top:8px;">经营新规矩公示：每日天气由晨间小结与今日清单播报，天气修正全天进账并影响客流构成；今日招牌在建设页选定，对味客人房钱按菜谱倍率加成；住客心愿遂愿奖励＝小费（房价×客价系数×' + CONFIG.wish.tipMult + '）＋声望 ' + CONFIG.wish.fame + '＋好感 ' + CONFIG.wish.favor + '；吆喝高峰 ' + CONFIG.shout.durMin + ' 分钟、冷却 ' + CONFIG.shout.cooldownMin + ' 分钟；菜园食材每份 + ' + Math.round(CONFIG.garden.bonusPerUnit * 100) + '% 总收入（上限 +' + Math.round(CONFIG.garden.bonusCap * 100) + '%），后厨每日用 ' + CONFIG.garden.dailyUse + ' 份；亲手操控新规矩：深谈只叙交情不扣钱、沏茶只奖不罚、掌勺翻车赔料钱上限＝房价×' + CONFIG.cook.feeMult + '、喂马备料报酬按配料档 ×1.15/×1.0/×0.9、陈设合客群口味时该客群到访权重 ×' + CONFIG.decor.weightMult + '；驻店新规矩：与贵客深谈到「知交」可邀其驻店 ' + CONFIG.resident.days + ' 日，驻店期间其同类客群到访权重 ×' + CONFIG.resident.weightMult + '，送别回礼＝声望 +' + CONFIG.resident.farewellFame + ' / 好感 +' + CONFIG.resident.farewellFavor + '，说书人故事日驻店期间好感入账 ×' + CONFIG.resident.storyFavorMult + '；后厨加工新规矩（11月27日起）：收获可分流送加工坊做成品，成品直售价＝当前收入速率×' + CONFIG.process.sellMinutes + ' 分钟/件（快腌按四分之一计），腌菜急单报酬在急单翻倍之上再 ×' + CONFIG.process.urgentMult + '、接单扣成品 1 件；老客存柜新规矩（11月29日起）：三档本金＝当前收入速率×' + CONFIG.prepay.tiers[0].minutes + '／' + CONFIG.prepay.tiers[1].minutes + '／' + CONFIG.prepay.tiers[2].minutes + ' 分钟额、存入锁定、本金不退，分 ' + CONFIG.prepay.tiers[0].days + '／' + CONFIG.prepay.tiers[1].days + '／' + CONFIG.prepay.tiers[2].days + ' 日返定向消费券（券面＝本金×' + Math.round(CONFIG.prepay.couponMult * 100) + '%），每日晨晚各半、晚半 ' + CONFIG.prepay.eveningHour + ' 点后到账并附声望 +' + CONFIG.prepay.dailyFame + ' / 好感 +' + CONFIG.prepay.dailyFavor + '，券只抵缺片补购、专精升阶、远征补给费三处、券优先铜钱补差，存柜不改变收入速率。</div>' +
+    '<div class="small-note" style="margin-top:8px;">成色自评新规矩（11月30日起）：经营成色分满分 100——声望等级占 ' + CONFIG.score.weights.rep + ' 分（等级÷10）、图鉴完成度占 ' + CONFIG.score.weights.dex + ' 分（已收÷总数）、日均接待占 ' + CONFIG.score.weights.guests + ' 分（累计接待÷开业天数，日均 ' + CONFIG.score.guestsPerDayCap + ' 位封顶）、日均委托占 ' + CONFIG.score.weights.comms + ' 分（日均 ' + CONFIG.score.commsPerDayCap + ' 支封顶），开业天数自 ' + CONFIG.score.openEpoch.slice(5).replace('-', '月') + ' 日开业起算；每日晨间落一份定版快照（保留 ' + CONFIG.score.snapKeep + ' 份），定版破自家最佳次日晨间回礼声望 +' + CONFIG.score.recordGift.fame + ' / 好感 +' + CONFIG.score.recordGift.favor + '；评分榜只记自家分数、纯本地计算，不联网、不与他人比较。</div>' +
     '<div class="small-note" style="margin-top:8px;">伙计专精公示（11/24 起）：历练不另设账——掌柜看累计接待、小二看奉茶＋深谈待客、厨子看掌勺次数、马夫看累计完成委托；入专精 ' + CONFIG.specialty.fees[0] + ' 文、升阶 ' + CONFIG.specialty.fees[1] + ' / ' + CONFIG.specialty.fees[2] + ' 文（四岗全满共 ' + (CONFIG.specialty.fees[0] + CONFIG.specialty.fees[1] + CONFIG.specialty.fees[2]) * 4 + ' 文）；每阶加成：掌柜总收入 +' + Math.round(CONFIG.specialty.lines.innkeeper.per * 100) + '%、小二总收入 +' + Math.round(CONFIG.specialty.lines.waiter.per * 100) + '%、厨子总收入 +' + Math.round(CONFIG.specialty.lines.cook.per * 100) + '%、马夫委托报酬 +' + Math.round(CONFIG.specialty.lines.groom.per * 100) + '%，均并入原加成口径、不另开乘区；从不升阶者收益与从前一致。</div>' +
     '<div class="small-note" style="margin-top:8px;">伙计远征公示（11/28 起）：任一已雇佣伙计可派出，同时只 1 支队伍在外，在外期间其岗位加成照常生效；三条路线与补给费——' + CONFIG.expeditionRoutes.map(r => r.name + ' ' + r.hours + ' 小时：补给费 ' + r.fee + ' 文、归来报酬 ' + r.coins + ' 文＋声望 ' + r.fame).join('；') + '；报酬为固定明码，不吃马厩/马夫/日历加成；归来时 ' + Math.round(CONFIG.expeditionEventChance * 100) + '% 概率遇见闻二选一（护货全额，或铜钱减半换声望/好感，选项效果当场明示）；远行贩茶归来另掉收藏碎片 1 枚。</div>' +
     '<div class="small-note" style="margin-top:8px;">事件池公示：日常事件 ' + CONFIG.events.filter(e => e.pool === 'daily').length + ' 张' +
@@ -6814,6 +7063,7 @@ function updateDynamic(){
   renderProcess();   /* 加工坊（横扫第二例修复）：processSig 分钟签名守卫，到期切页/留页都刷出收取钮 */
   renderWelcome();
   renderResident();   /* 驻店（观察项 O2）：residentSig 守卫含茶叙资格，留页跨午间茶叙卡自动出现 */
+  renderScore();   /* 成色自评（B2-4）：scoreSig 守卫含预览分/晚间定版翻转，留页分数随经营自涨 */
   /* 委托/远征可领签名（观察项 O1）：tick 只刷倒计时文本，到点翻转才整表重渲启用领取钮 */
   if(document.getElementById('commissionsBox')){
     const cmSig = S.commissions.map(c => c.id + (commissionReady(c) ? 'R' : '')).join(',') + '|' +
@@ -7218,6 +7468,8 @@ window.YZ = {
   prepayPrice: prepayPrice, prepayTierDef: prepayTierDef, startPrepay: startPrepay, couponPay: couponPay,
   prepayCouponDue: prepayCouponDue, collectBuyDue: collectBuyDue, settlePrepayMorning: settlePrepayMorning,
   settlePrepayEvening: settlePrepayEvening, prepayMorningHtml: prepayMorningHtml, renderPrepay: renderPrepay,
+  scorePartsOf: scorePartsOf, scoreOf: scoreOf, scoreGradeOf: scoreGradeOf, scoreOpenDays: scoreOpenDays,
+  settleScoreMorning: settleScoreMorning, settleScoreBoot: settleScoreBoot, scoreMorningHtml: scoreMorningHtml, renderScore: renderScore,
   expeditionRouteDef: expeditionRouteDef, expeditionReward: expeditionReward, expeditionFeeDue: expeditionFeeDue,
   expeditionOf: expeditionOf, expeditionReady: expeditionReady, startExpedition: startExpedition,
   claimExpedition: claimExpedition, expeditionEventPick: expeditionEventPick, pickExpStaff: pickExpStaff,
